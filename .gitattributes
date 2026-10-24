@@ -1,0 +1,4 @@
+* text=auto
+*.user.js text eol=lf
+*.js text eol=lf
+*.md text eol=lf
