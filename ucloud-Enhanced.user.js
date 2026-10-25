@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.3
+// @version      1.3.4
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -1499,40 +1499,51 @@
     });
   }
 
-  function checkForUpdates() {
+  function checkForUpdates(force = false, onDone) {
     const lastCheckTime = GM_getValue("lastUpdateCheck", 0);
     const now = Date.now();
     const ONE_DAY = 24 * 60 * 60 * 1000; // 一天的毫秒数
 
-    if (now - lastCheckTime > ONE_DAY) {
-      GM_setValue("lastUpdateCheck", now);
-      GM_xmlhttpRequest({
-        method: "GET",
-        url: GM_info.script.updateURL,
-        onload: function (response) {
-          const versionMatch = response.responseText.match(
-            /@version\s+([\d.]+)/
-          );
-          if (versionMatch && versionMatch[1]) {
-            const latestVersion = versionMatch[1];
-            const currentVersion = GM_info.script.version;
-            // 逐段按数值比较，避免 "1.10" < "1.9" 这类字符串比较误判
-            const isNewer = (a, b) => {
-              const pa = a.split(".").map(Number);
-              const pb = b.split(".").map(Number);
-              for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-                const d = (pa[i] || 0) - (pb[i] || 0);
-                if (d) return d > 0;
-              }
-              return false;
-            };
-            if (isNewer(latestVersion, currentVersion)) {
-              showUpdateNotification(latestVersion);
-            }
-          }
-        },
-      });
+    if (!force && now - lastCheckTime <= ONE_DAY) {
+      if (onDone) onDone();
+      return;
     }
+    GM_setValue("lastUpdateCheck", now);
+    GM_xmlhttpRequest({
+      method: "GET",
+      url: GM_info.script.updateURL,
+      onload: function (response) {
+        const versionMatch = response.responseText.match(
+          /@version\s+([\d.]+)/
+        );
+        if (versionMatch && versionMatch[1]) {
+          const latestVersion = versionMatch[1];
+          const currentVersion = GM_info.script.version;
+          // 逐段按数值比较，避免 "1.10" < "1.9" 这类字符串比较误判
+          const isNewer = (a, b) => {
+            const pa = a.split(".").map(Number);
+            const pb = b.split(".").map(Number);
+            for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+              const d = (pa[i] || 0) - (pb[i] || 0);
+              if (d) return d > 0;
+            }
+            return false;
+          };
+          if (isNewer(latestVersion, currentVersion)) {
+            showUpdateNotification(latestVersion);
+          } else if (force) {
+            showNotification("已是最新版本", "当前版本 v" + currentVersion);
+          }
+        } else if (force) {
+          showNotification("检查失败", "无法解析远端版本信息");
+        }
+        if (onDone) onDone();
+      },
+      onerror: function () {
+        if (force) showNotification("检查失败", "网络错误，请稍后再试");
+        if (onDone) onDone();
+      },
+    });
   }
 
   function loadui() {
@@ -1846,6 +1857,35 @@
       #section-about .github-icon {
           margin-right: 6px;
           fill: currentColor;
+      }
+
+      #section-about .about-update-row {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-top: 10px;
+      }
+      #section-about .about-btn {
+          background: var(--ue-accent);
+          color: #fff;
+          border: none;
+          border-radius: 8px;
+          padding: 7px 14px;
+          font-size: 12.5px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: background 0.15s;
+      }
+      #section-about .about-btn:hover {
+          background: #1f4fe0;
+      }
+      #section-about .about-btn:disabled {
+          opacity: 0.6;
+          cursor: default;
+      }
+      #section-about .about-update-tip {
+          font-size: 12px;
+          color: var(--ue-text-2);
       }
 
 
@@ -2281,6 +2321,11 @@
               </a>
             </p>
 
+            <div class="about-update-row">
+              <button id="yzHelper-check-update" class="about-btn">立即检查更新</button>
+              <span class="about-update-tip">每天自动检查一次，也可手动检查</span>
+            </div>
+
             <p class="feedback-note">
               如有问题或建议，请通过
               <a href="https://github.com/WTYJ/ucloud-Enhanced/issues" target="_blank">GitHub Issues</a>
@@ -2389,6 +2434,18 @@
 
     // 主面板设置项即改即存
     bindAutoSave(document.getElementById("yzHelper-settings-content"));
+
+    // 关于页：立即检查更新（强制绕过每日一次的节流）
+    const checkUpdateBtn = document.getElementById("yzHelper-check-update");
+    checkUpdateBtn.addEventListener("click", () => {
+      checkUpdateBtn.disabled = true;
+      const originalText = checkUpdateBtn.textContent;
+      checkUpdateBtn.textContent = "检查中…";
+      checkForUpdates(true, () => {
+        checkUpdateBtn.disabled = false;
+        checkUpdateBtn.textContent = originalText;
+      });
+    });
 
     const ul_observer = new MutationObserver((mutations) => {
       const dropdownMenus = document.querySelectorAll(
@@ -3243,26 +3300,26 @@
         align-items: center;
         flex-wrap: wrap;
         gap: 8px 12px;
-        padding: 10px 24px 0;
+        padding: 12px 24px 0;
         box-sizing: border-box;
       }
       .yz-lesson-search {
         position: relative;
-        width: 240px;
+        width: 260px;
         max-width: 100%;
       }
       .yz-lesson-search-input {
         width: 100%;
-        height: 30px;
+        height: 34px;
         box-sizing: border-box;
-        padding: 0 26px 0 10px;
-        border: 1px solid #e4e6eb;
-        border-radius: 4px;
-        background: #fafafb;
+        padding: 0 12px 0 32px;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        background: #f2f3f7;
         color: #171725;
         font-size: 13px;
         outline: none;
-        transition: border-color .2s, background .2s;
+        transition: border-color .2s, background .2s, box-shadow .2s;
       }
       .yz-lesson-search-input::placeholder {
         color: #b2b7c2;
@@ -3270,42 +3327,48 @@
       .yz-lesson-search-input:focus {
         border-color: #2962ff;
         background: #fff;
+        box-shadow: 0 0 0 3px rgba(41, 98, 255, .12);
       }
       .yz-lesson-search-icon {
         position: absolute;
         top: 50%;
-        right: 8px;
+        left: 10px;
         display: flex;
         transform: translateY(-50%);
         pointer-events: none;
       }
       .yz-lesson-search-results {
         position: absolute;
-        top: 34px;
+        top: 40px;
         left: 0;
         z-index: 100;
-        width: 320px;
+        width: 340px;
         max-width: 70vw;
-        max-height: 280px;
+        max-height: 300px;
         overflow-y: auto;
-        padding: 4px;
+        padding: 6px;
         box-sizing: border-box;
         background: #fff;
-        border: 1px solid #eceef2;
-        border-radius: 6px;
-        box-shadow: 0 6px 20px rgba(0, 0, 0, .12);
+        border: 1px solid rgba(31, 35, 41, .08);
+        border-radius: 12px;
+        box-shadow: 0 10px 30px rgba(31, 35, 41, .16);
       }
       .yz-lesson-search-item {
-        padding: 7px 10px;
-        border-radius: 4px;
+        padding: 8px 10px;
+        border-radius: 8px;
         cursor: pointer;
+        transition: background .15s;
       }
       .yz-lesson-search-item:hover,
       .yz-lesson-search-item.active {
-        background: rgba(41, 98, 255, .08);
+        background: rgba(41, 98, 255, .09);
+      }
+      .yz-lesson-search-item.active .yz-lesson-search-name {
+        color: #2962ff;
       }
       .yz-lesson-search-name {
         font-size: 13px;
+        font-weight: 500;
         line-height: 18px;
         color: #171725;
         white-space: nowrap;
@@ -3322,7 +3385,7 @@
         text-overflow: ellipsis;
       }
       .yz-lesson-search-empty {
-        padding: 12px 8px;
+        padding: 18px 8px;
         text-align: center;
         font-size: 12px;
         color: #92929d;

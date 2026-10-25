@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.3-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.4-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,11 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.4
+
+- 新增："关于助手"页的"立即检查更新"按钮——强制检查（绕过每日节流），最新/失败均有明确反馈
+- 重设计：主页"搜索课程"框——圆角胶囊 + 聚焦光环 + 卡片式结果下拉，键盘选中项品牌蓝高亮，与助手整体设计语言统一
 
 ### 1.3.3
 
