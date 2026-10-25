@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.2.0-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.2.1-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -35,6 +35,10 @@
 - 或使用 Tampermonkey 图标菜单中的「深色模式」一键切换
 
 ## 🔄 更新日志
+
+### 1.2.1
+
+- 修复：深色模式下鼠标划过后元素停留在悬停样式——处理期间临时禁用该元素的过渡动画，避免读到插值中间色、以及摘除/写入覆盖时反复重启动画；离开恢复的双保险调整为 80/320ms，悬停祖先链扩至 6 层
 
 ### 1.2.0
 

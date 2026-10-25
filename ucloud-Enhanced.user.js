@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.2.0
+// @version      1.2.1
 // @description  主页作业显示所属课程（含测试类待办），深色模式，主页课程搜索与最近使用，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -1177,6 +1177,10 @@
   }
 
   function darkenElement(el) {
+    // 处理期间临时禁用过渡动画：避免读到插值中的中间色、以及摘除/写入覆盖时反复重启动画
+    // （这是悬停样式"卡死不恢复"的根源）；同一次 JS 执行内还原，用户无感知
+    const prevTransition = el.style.transition;
+    el.style.transition = "none";
     // 先摘除本脚本上次写入的 !important 覆盖，确保读到平台当前真实样式（含 hover/激活态）
     ["background-color", "color", "border-color"].forEach((p) => {
       if (el.style.getPropertyPriority(p) === "important") {
@@ -1202,6 +1206,7 @@
       const nb = remapColor(bd, "border");
       if (nb) el.style.setProperty("border-color", nb, "important");
     }
+    el.style.transition = prevTransition;
     el.dataset.ueDark = "1";
   }
 
@@ -1234,7 +1239,7 @@
   function buildAncestorChain(el) {
     const chain = [];
     let node = el;
-    for (let i = 0; node && node !== document.body && i < 4; i++) {
+    for (let i = 0; node && node !== document.body && i < 6; i++) {
       chain.push(node);
       node = node.parentElement;
     }
@@ -1260,10 +1265,10 @@
         const chain = buildAncestorChain(e.target);
         // 鼠标只是移入链内子元素：交给后续 pointerover，此处不处理
         if (e.relatedTarget && chain.includes(e.relatedTarget)) return;
-        // 真正离开：延迟重映射恢复正常态；双保险覆盖过渡动画与 hover 状态更新时序。
-        // darkenElement 每次都读实时计算样式，重复处理天然自纠错
+        // 真正离开：延迟重映射恢复正常态；双保险覆盖 hover 状态更新与残余动画时序。
+        // darkenElement 每次都读实时计算样式且处理期间禁用过渡，重复处理天然自纠错
         setTimeout(() => chain.forEach(darkenElement), 80);
-        setTimeout(() => chain.forEach(darkenElement), 300);
+        setTimeout(() => chain.forEach(darkenElement), 320);
       },
       true
     );
