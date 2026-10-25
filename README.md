@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.0.0-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.1.0-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -13,6 +13,7 @@
 - **修复**：测试类待办无法显示所属课程的问题（原版 [#12](https://github.com/uarix/ucloud-Evolved/issues/12)）——课程匹配现在同时扫描作业与测试列表
 - **修复**：待办课程名偶发与条目错位——改为按活动标题与页面卡片对齐
 - **新增**：深色模式（智能反色实现，图片、视频、文档预览保持原样），设置面板或油猴菜单均可开关
+- **新增**：解除作业附件 50MB 上传限制（原版 [#4](https://github.com/uarix/ucloud-Evolved/issues/4)）——限制仅存在于前端校验，后端支持大文件；默认开启，可在系统设置关闭
 - **改进**：自动更新检查的版本比较按数值逐段进行（原版的字符串比较在 x.10 这类版本号上会误判）
 
 ## 🧩 继承自原版的功能
@@ -33,6 +34,18 @@
 
 - 设置面板 → 系统设置 → 深色模式，保存后刷新生效
 - 或使用 Tampermonkey 图标菜单中的「深色模式」一键切换
+
+## 🔄 更新日志
+
+### 1.1.0
+
+- 新增：解除作业附件 50MB 上传限制（Webpack Hook 运行时移除前端校验，默认开启，系统设置可关）
+
+### 1.0.0
+
+- 首个版本：基于 ucloud-Evolved 0.39 二次开发
+- 修复：测试类待办无法显示所属课程、课程名偶发错位
+- 新增：深色模式；改进自动更新版本比较
 
 ## 🙏 致谢
 

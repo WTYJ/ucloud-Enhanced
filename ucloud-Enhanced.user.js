@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.0.0
-// @description  主页作业显示所属课程（含测试类待办），深色模式，主页课程搜索与最近使用，使用Office 365预览课件，增加通知显示数量，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
+// @version      1.1.0
+// @description  主页作业显示所属课程（含测试类待办），深色模式，解除作业附件大小限制，主页课程搜索与最近使用，使用Office 365预览课件，增加通知显示数量，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
 // @match        https://ucloud.bupt.edu.cn/uclass/course.html*
@@ -66,6 +66,15 @@
             /window\.location\.href\s*=\s*(["']course\.html#\/courseCenterDetail_fullpage["'])/g,
             'window.open($1, "_blank")',
           ],
+        ],
+      },
+      {
+        // 解除作业附件上传的 50MB 前端校验（上游 issue #4：限制仅存在于前端，后端支持大文件）
+        name: "assignmentUploadLimit",
+        identifiers: ["附件大小不能超过50M"],
+        patched: !GM_getValue("system_removeUploadLimit", true),
+        replacements: [
+          [/e\.file\.size\/1048576<=50/g, "e.file.size/1048576<=1e9"],
         ],
       },
       // ,{
@@ -1094,6 +1103,12 @@
           label: '深色模式',
           description: '全局深色配色（智能反色实现，图片、视频与文档预览保持原样），保存设置后刷新页面生效。',
           defaultValue: false
+        },
+        removeUploadLimit: {
+          type: 'checkbox',
+          label: '解除作业附件大小限制',
+          description: '移除作业附件上传的 50MB 前端校验（后端本身支持大文件），保存设置后刷新页面生效。',
+          defaultValue: true
         },
         autoUpdate: {
           type: 'checkbox',
