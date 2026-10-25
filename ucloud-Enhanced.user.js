@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.0
+// @version      1.3.1
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -1710,29 +1710,6 @@
           color: var(--ue-text);
       }
 
-      #yzHelper-searchbar {
-          padding: 10px 16px;
-          border-bottom: 1px solid var(--ue-border);
-      }
-      #yzHelper-search {
-          width: 100%;
-          box-sizing: border-box;
-          padding: 8px 12px;
-          border: 1px solid var(--ue-border);
-          border-radius: 10px;
-          background: var(--ue-bg-2);
-          color: var(--ue-text);
-          font-size: 13px;
-          outline: none;
-          transition: border-color 0.15s;
-      }
-      #yzHelper-search:focus {
-          border-color: var(--ue-accent);
-      }
-      #yzHelper-search::placeholder {
-          color: var(--ue-text-2);
-      }
-
       #yzHelper-main {
           display: flex;
           flex: 1;
@@ -1796,15 +1773,6 @@
 
       #yzHelper-settings-content .settings-section.active {
           display: block;
-      }
-
-      /* 搜索态：所有分区平铺展示，未命中的设置项隐藏 */
-      #yzHelper-settings-content.searching .settings-section {
-          display: block;
-      }
-      #yzHelper-settings-content.searching #section-about,
-      #yzHelper-settings-content .setting-item.hidden-by-search {
-          display: none;
       }
 
       #section-about .about-content {
@@ -2361,9 +2329,6 @@
         </div>
         <button class="hd-close" id="yzHelper-close" title="关闭">✕</button>
       </div>
-      <div id="yzHelper-searchbar">
-        <input id="yzHelper-search" type="text" placeholder="搜索设置项…" autocomplete="off">
-      </div>
     `;
 
     const mainContent = `
@@ -2448,34 +2413,6 @@
 
     // 主面板设置项即改即存
     bindAutoSave(document.getElementById("yzHelper-settings-content"));
-
-    // 搜索过滤：命中设置项平铺展示，未命中的分区整体隐藏
-    const searchInput = document.getElementById("yzHelper-search");
-    const contentArea = document.getElementById("yzHelper-settings-content");
-    searchInput.addEventListener("input", () => {
-      const q = searchInput.value.trim().toLowerCase();
-      contentArea.classList.toggle("searching", q.length > 0);
-      contentArea.querySelectorAll(".setting-item").forEach((item) => {
-        if (!q) {
-          item.classList.remove("hidden-by-search");
-          return;
-        }
-        item.classList.toggle(
-          "hidden-by-search",
-          !item.textContent.toLowerCase().includes(q)
-        );
-      });
-      contentArea.querySelectorAll(".settings-section").forEach((section) => {
-        if (!q) {
-          section.style.display = "";
-          return;
-        }
-        const hasVisible = Array.from(
-          section.querySelectorAll(".setting-item")
-        ).some((i) => !i.classList.contains("hidden-by-search"));
-        section.style.display = hasVisible ? "" : "none";
-      });
-    });
 
     const ul_observer = new MutationObserver((mutations) => {
       const dropdownMenus = document.querySelectorAll(
