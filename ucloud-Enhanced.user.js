@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.7
+// @version      1.3.8
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -2122,6 +2122,29 @@
     };
     ball.addEventListener("pointerup", finishDrag);
     ball.addEventListener("pointercancel", finishDrag);
+
+    // 窗口尺寸变化时把悬浮球收回可视区内：
+    // 拖到右/下边缘后缩小窗口会让球悬在视口外无法点击，这里实时钳制并防抖持久化
+    let ballResizePersist = null;
+    window.addEventListener("resize", () => {
+      if (!ball.style.left) return; // 未拖动过的球用 right/bottom 定位，浏览器自动跟随
+      const maxLeft = window.innerWidth - 54;
+      const maxTop = window.innerHeight - 54;
+      const curLeft = parseFloat(ball.style.left) || 0;
+      const curTop = parseFloat(ball.style.top) || 0;
+      const newLeft = Math.max(8, Math.min(curLeft, maxLeft));
+      const newTop = Math.max(8, Math.min(curTop, maxTop));
+      if (newLeft !== curLeft || newTop !== curTop) {
+        ball.classList.add("snap-anim");
+        ball.style.left = newLeft + "px";
+        ball.style.top = newTop + "px";
+        clearTimeout(ballResizePersist);
+        ballResizePersist = setTimeout(() => {
+          ball.classList.remove("snap-anim");
+          GM_setValue("ui_ballPos", { left: newLeft, top: newTop });
+        }, 300);
+      }
+    });
     if (settings.system.showConfigButton) {
       document.body.appendChild(ball);
     }

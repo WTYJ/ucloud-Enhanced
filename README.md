@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.7-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.8-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,10 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.8
+
+- 修复：缩小浏览器窗口后悬浮球可能悬在可视区外无法点击——窗口尺寸变化时实时将悬浮球钳回可视区内（带吸附动画，防抖持久化新位置）
 
 ### 1.3.7
 
