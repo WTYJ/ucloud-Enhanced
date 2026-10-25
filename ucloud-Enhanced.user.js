@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.8
+// @version      1.3.9
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -2067,11 +2067,19 @@
     ball.innerHTML = "⚙";
 
     const savedBallPos = GM_getValue("ui_ballPos", null);
+    // side 记录吸附侧（left/right）：窗口放大时据此跟随对应边缘；旧存储无 side 时按位置推断
+    let ballSide = null;
     if (savedBallPos && typeof savedBallPos.left === "number") {
+      ballSide =
+        savedBallPos.side === "left" || savedBallPos.side === "right"
+          ? savedBallPos.side
+          : savedBallPos.left > window.innerWidth / 2
+          ? "right"
+          : "left";
       ball.style.left =
-        Math.max(0, Math.min(savedBallPos.left, window.innerWidth - 46)) + "px";
+        (ballSide === "right" ? window.innerWidth - 54 : 8) + "px";
       ball.style.top =
-        Math.max(0, Math.min(savedBallPos.top, window.innerHeight - 46)) + "px";
+        Math.max(8, Math.min(savedBallPos.top, window.innerHeight - 54)) + "px";
     } else {
       ball.style.right = "20px";
       ball.style.bottom = "20px";
@@ -2114,7 +2122,12 @@
         const targetLeft = toLeft ? 8 : window.innerWidth - 54;
         ball.classList.add("snap-anim");
         ball.style.left = targetLeft + "px";
-        GM_setValue("ui_ballPos", { left: targetLeft, top: rect.top });
+        ballSide = toLeft ? "left" : "right";
+        GM_setValue("ui_ballPos", {
+          left: targetLeft,
+          top: rect.top,
+          side: ballSide,
+        });
         setTimeout(() => ball.classList.remove("snap-anim"), 300);
       } else {
         toggleQuickPanel();
@@ -2123,8 +2136,8 @@
     ball.addEventListener("pointerup", finishDrag);
     ball.addEventListener("pointercancel", finishDrag);
 
-    // 窗口尺寸变化时把悬浮球收回可视区内：
-    // 拖到右/下边缘后缩小窗口会让球悬在视口外无法点击，这里实时钳制并防抖持久化
+    // 窗口尺寸变化时修正悬浮球位置：
+    // 缩小时钳回可视区，放大时按吸附侧跟随对应边缘（右吸附跟右缘，左吸附不动）
     let ballResizePersist = null;
     window.addEventListener("resize", () => {
       if (!ball.style.left) return; // 未拖动过的球用 right/bottom 定位，浏览器自动跟随
@@ -2132,7 +2145,8 @@
       const maxTop = window.innerHeight - 54;
       const curLeft = parseFloat(ball.style.left) || 0;
       const curTop = parseFloat(ball.style.top) || 0;
-      const newLeft = Math.max(8, Math.min(curLeft, maxLeft));
+      let newLeft = Math.max(8, Math.min(curLeft, maxLeft));
+      if (ballSide === "right") newLeft = maxLeft;
       const newTop = Math.max(8, Math.min(curTop, maxTop));
       if (newLeft !== curLeft || newTop !== curTop) {
         ball.classList.add("snap-anim");
@@ -2141,7 +2155,11 @@
         clearTimeout(ballResizePersist);
         ballResizePersist = setTimeout(() => {
           ball.classList.remove("snap-anim");
-          GM_setValue("ui_ballPos", { left: newLeft, top: newTop });
+          GM_setValue("ui_ballPos", {
+            left: newLeft,
+            top: newTop,
+            side: ballSide,
+          });
         }, 300);
       }
     });

@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.8-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.9-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,10 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.9
+
+- 修复：窗口放大后悬浮球不再跟随边缘——位置记录新增吸附侧标记，放大时右吸附球贴新右缘跟随、缩小仍钳回可视区；旧位置数据自动按位置推断吸附侧，跨会话的窗口尺寸变化也能正确归位
 
 ### 1.3.8
 
