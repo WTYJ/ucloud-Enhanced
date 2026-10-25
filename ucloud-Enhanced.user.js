@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.5
+// @version      1.3.6
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -1932,15 +1932,6 @@
           font-size: 85%;
       }
 
-      #yzHelper-settings h3 {
-          margin: 0 0 12px;
-          font-size: 15px;
-          font-weight: 700;
-          color: var(--ue-text);
-          display: flex;
-          align-items: center;
-          gap: 8px;
-      }
       #yzHelper-settings .setting-item {
           margin-bottom: 10px;
           background: var(--ue-bg-2);
@@ -2268,17 +2259,16 @@
       `;
     }
 
-    // 生成设置区块的HTML
+    // 生成设置区块的HTML（标题不在内容区重复显示，由侧边栏高亮指示当前分类）
     function generateSettingsSection(category, config, isActive = false) {
       const activeClass = isActive ? 'active' : '';
       const items = config.items;
-      const itemsHTML = Object.keys(items).map(key => 
+      const itemsHTML = Object.keys(items).map(key =>
         generateSettingItem(category, key, items[key])
       ).join('');
-      
+
       return `
         <div class="settings-section ${activeClass}" id="section-${category}">
-          <h3>${config.emoji} ${config.title}</h3>
           ${itemsHTML}
         </div>
       `;
@@ -2318,7 +2308,6 @@
       // 添加关于助手区块
       sectionsHTML += `
         <div class="settings-section" id="section-about">
-          <h3>ℹ️ 关于云邮教学空间助手</h3>
           <div class="about-content">
             <p>云邮教学空间助手是一款专为云邮教学空间平台设计的浏览器增强脚本。</p>
 
