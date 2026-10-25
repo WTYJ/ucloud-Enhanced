@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.4-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.5-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,11 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.5
+
+- 修复：手动/自动检查更新报"网络错误"——@connect 白名单补齐重定向目标（raw.githubusercontent.com），并改为多源按序尝试：jsdelivr 直连（无重定向、国内可达性好）优先，github.com 官方源兜底；劫持页等无效响应也自动降级
+- 修复：深色模式下主页课程搜索下拉与页面底色融为一体——搜索工具栏改为自带深色主题（引擎豁免），下拉卡片加浅色描边与页面明确分层
 
 ### 1.3.4
 

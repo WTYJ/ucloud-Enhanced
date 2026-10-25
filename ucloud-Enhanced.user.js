@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.4
+// @version      1.3.5
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -12,6 +12,8 @@
 // @require      https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/nprogress/0.2.0/nprogress.min.js#sha512-bUg5gaqBVaXIJNuebamJ6uex//mjxPk8kljQTdM1SwkNrQD7pjS+PerntUSD+QRWPNJ0tq54/x4zRV8bLrLhZg==
 // @resource     NPROGRESS_CSS https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/nprogress/0.2.0/nprogress.min.css#sha512-42kB9yDlYiCEfx2xVwq0q7hT4uf26FUgSIZBK8uiaEnTdShXjwr8Ip1V4xGJMg3mHkUt9nNuTDxunHF0/EgxLQ==
 // @connect      github.com
+// @connect      raw.githubusercontent.com
+// @connect      cdn.jsdelivr.net
 // @grant        GM_getResourceText
 // @grant        GM_addStyle
 // @grant        GM_setValue
@@ -1156,10 +1158,12 @@
   }
 
   function darkenElement(el) {
-    // 脚本自身的 UI（悬浮球/面板/通知）自带亮暗双主题配色，不参与引擎重映射
+    // 脚本自身的 UI（悬浮球/面板/通知/主页课程搜索工具栏）自带亮暗双主题配色，不参与引擎重映射
     if (
       el.closest &&
-      el.closest("#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify")
+      el.closest(
+        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar"
+      )
     )
       return;
     // 处理期间临时禁用过渡动画：避免读到插值中的中间色、以及摘除/写入覆盖时反复重启动画
@@ -1499,6 +1503,13 @@
     });
   }
 
+  // 更新检查源：jsdelivr 直连优先（直接返回文件、无重定向、国内可达性好），
+  // github.com 官方源兜底（302 到 raw.githubusercontent.com，需 @connect 白名单覆盖重定向目标）
+  const UPDATE_CHECK_SOURCES = [
+    "https://cdn.jsdelivr.net/gh/WTYJ/ucloud-Enhanced@main/ucloud-Enhanced.user.js",
+    GM_info.script.updateURL,
+  ];
+
   function checkForUpdates(force = false, onDone) {
     const lastCheckTime = GM_getValue("lastUpdateCheck", 0);
     const now = Date.now();
@@ -1509,14 +1520,27 @@
       return;
     }
     GM_setValue("lastUpdateCheck", now);
-    GM_xmlhttpRequest({
-      method: "GET",
-      url: GM_info.script.updateURL,
-      onload: function (response) {
-        const versionMatch = response.responseText.match(
-          /@version\s+([\d.]+)/
-        );
-        if (versionMatch && versionMatch[1]) {
+
+    const trySource = (index) => {
+      if (index >= UPDATE_CHECK_SOURCES.length) {
+        if (force) {
+          showNotification("检查失败", "所有更新源均无法访问，请稍后再试");
+        }
+        if (onDone) onDone();
+        return;
+      }
+      GM_xmlhttpRequest({
+        method: "GET",
+        url: UPDATE_CHECK_SOURCES[index],
+        onload: function (response) {
+          const versionMatch = (response.responseText || "").match(
+            /@version\s+([\d.]+)/
+          );
+          if (!versionMatch || !versionMatch[1]) {
+            // 响应异常（网络劫持页/错误页），降级下一个源
+            trySource(index + 1);
+            return;
+          }
           const latestVersion = versionMatch[1];
           const currentVersion = GM_info.script.version;
           // 逐段按数值比较，避免 "1.10" < "1.9" 这类字符串比较误判
@@ -1534,16 +1558,14 @@
           } else if (force) {
             showNotification("已是最新版本", "当前版本 v" + currentVersion);
           }
-        } else if (force) {
-          showNotification("检查失败", "无法解析远端版本信息");
-        }
-        if (onDone) onDone();
-      },
-      onerror: function () {
-        if (force) showNotification("检查失败", "网络错误，请稍后再试");
-        if (onDone) onDone();
-      },
-    });
+          if (onDone) onDone();
+        },
+        onerror: function () {
+          trySource(index + 1);
+        },
+      });
+    };
+    trySource(0);
   }
 
   function loadui() {
@@ -3389,6 +3411,33 @@
         text-align: center;
         font-size: 12px;
         color: #92929d;
+      }
+
+      /* 深色模式：本工具栏已豁免页面深色引擎，显式指定深色配色，
+         下拉卡片用浅色描边与页面底色明确分层 */
+      html.ue-dark-mode .yz-lesson-search-input {
+        background: #2a2e31;
+        border-color: transparent;
+        color: #e8eaed;
+      }
+      html.ue-dark-mode .yz-lesson-search-input::placeholder {
+        color: #8a9099;
+      }
+      html.ue-dark-mode .yz-lesson-search-input:focus {
+        background: #202325;
+        border-color: #2962ff;
+      }
+      html.ue-dark-mode .yz-lesson-search-results {
+        background: #202325;
+        border-color: rgba(232, 234, 237, 0.16);
+        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55);
+      }
+      html.ue-dark-mode .yz-lesson-search-name {
+        color: #e8eaed;
+      }
+      html.ue-dark-mode .yz-lesson-search-meta,
+      html.ue-dark-mode .yz-lesson-search-empty {
+        color: #9aa0a6;
       }
     `);
     }
