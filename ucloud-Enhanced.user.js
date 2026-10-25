@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.2
+// @version      1.3.3
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -1049,8 +1049,8 @@
         autoUpdate: {
           type: 'checkbox',
           label: '自动检查更新',
-          description: '定期检查脚本更新，确保您始终使用最新版本的功能和修复。',
-          defaultValue: false
+          description: '每天检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
+          defaultValue: true
         },
         showConfigButton: {
           type: 'checkbox',
@@ -1156,10 +1156,10 @@
   }
 
   function darkenElement(el) {
-    // 脚本自身的 UI（悬浮球/快捷面板/设置面板）自带亮暗双主题配色，不参与引擎重映射
+    // 脚本自身的 UI（悬浮球/面板/通知）自带亮暗双主题配色，不参与引擎重映射
     if (
       el.closest &&
-      el.closest("#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,#yzHelper-toast")
+      el.closest("#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify")
     )
       return;
     // 处理期间临时禁用过渡动画：避免读到插值中的中间色、以及摘除/写入覆盖时反复重启动画
@@ -1419,41 +1419,84 @@
       }
     }
   }
+  // ===== 通知组件（更新提醒 / 通用提示）：与助手 UI 同一套设计语言，亮/暗自适应 =====
+  const NOTIFY_CSS = `
+    .yz-notify {
+      position: fixed;
+      bottom: 84px;
+      right: 20px;
+      z-index: 10002;
+      max-width: 300px;
+      box-sizing: border-box;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid rgba(31, 35, 41, 0.09);
+      background: #ffffff;
+      color: #1f2329;
+      box-shadow: 0 10px 34px rgba(31, 35, 41, 0.2);
+      font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      font-size: 13px;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    .yz-notify.visible { opacity: 1; transform: none; }
+    .yz-notify .notify-title {
+      font-weight: 700; font-size: 14px;
+      display: flex; align-items: center; gap: 8px; margin-bottom: 4px;
+    }
+    .yz-notify .notify-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #2962ff; flex-shrink: 0;
+    }
+    .yz-notify .notify-msg { color: #646a73; line-height: 1.6; }
+    .yz-notify .notify-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .yz-notify .notify-btn {
+      border: none; border-radius: 8px; padding: 6px 14px;
+      font-size: 12.5px; font-weight: 600; cursor: pointer;
+    }
+    .yz-notify .notify-btn.primary { background: #2962ff; color: #fff; }
+    .yz-notify .notify-btn.primary:hover { background: #1f4fe0; }
+    .yz-notify .notify-btn.ghost {
+      background: transparent; color: #646a73;
+      border: 1px solid rgba(31, 35, 41, 0.14);
+    }
+    .yz-notify .notify-btn.ghost:hover { color: #1f2329; }
+    html.ue-dark-mode .yz-notify {
+      background: #202325;
+      color: #e8eaed;
+      border-color: rgba(232, 234, 237, 0.12);
+      box-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+    }
+    html.ue-dark-mode .yz-notify .notify-msg { color: #9aa0a6; }
+    html.ue-dark-mode .yz-notify .notify-btn.ghost {
+      color: #9aa0a6; border-color: rgba(232, 234, 237, 0.16);
+    }
+    html.ue-dark-mode .yz-notify .notify-btn.ghost:hover { color: #e8eaed; }
+  `;
+  GM_addStyle(NOTIFY_CSS);
+
   function showUpdateNotification(newVersion) {
     const notification = document.createElement("div");
-    notification.style.cssText = `
-        position: fixed;
-        bottom: 80px;
-        right: 20px;
-        background: #4a6cf7;
-        color: white;
-        padding: 15px 20px;
-        border-radius: 8px;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-        z-index: 10000;
-        font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-        max-width: 300px;
-    `;
-
+    notification.className = "yz-notify";
     notification.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 5px;">发现新版本 v${newVersion}</div>
-        <div style="font-size: 14px; margin-bottom: 10px;">当前版本 v${GM_info.script.version}</div>
-        <button id="updateNow" style="background: white; color: #4a6cf7; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; margin-right: 10px;">立即更新</button>
-        <button id="updateLater" style="background: transparent; color: white; border: 1px solid white; padding: 5px 10px; border-radius: 4px; cursor: pointer;">稍后提醒</button>
+      <div class="notify-title"><span class="notify-dot"></span>发现新版本 v${newVersion}</div>
+      <div class="notify-msg">当前版本 v${GM_info.script.version}，更新后可在 README 查看变更内容。</div>
+      <div class="notify-actions">
+        <button class="notify-btn primary" data-act="update">立即更新</button>
+        <button class="notify-btn ghost" data-act="later">稍后提醒</button>
+      </div>
     `;
-
     document.body.appendChild(notification);
-
-    document.getElementById("updateNow").addEventListener("click", function () {
-      openTab(GM_info.script.downloadURL, { active: true });
-      document.body.removeChild(notification);
+    requestAnimationFrame(() => notification.classList.add("visible"));
+    notification.addEventListener("click", (e) => {
+      const act = e.target.dataset && e.target.dataset.act;
+      if (act === "update") openTab(GM_info.script.downloadURL, { active: true });
+      if (act) {
+        notification.classList.remove("visible");
+        setTimeout(() => notification.remove(), 300);
+      }
     });
-
-    document
-      .getElementById("updateLater")
-      .addEventListener("click", function () {
-        document.body.removeChild(notification);
-      });
   }
 
   function checkForUpdates() {
@@ -2378,41 +2421,16 @@
   // 通知函数
   function showNotification(title, message) {
     const notification = document.createElement("div");
-    notification.style.cssText = `
-          position: fixed;
-          bottom: 80px;
-          right: 20px;
-          background: #4CAF50;
-          color: white;
-          padding: 15px 20px;
-          border-radius: 8px;
-          box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-          z-index: 10000;
-          font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-          max-width: 300px;
-          opacity: 0;
-          transform: translateY(-10px);
-          transition: all 0.3s ease;
-      `;
-
+    notification.className = "yz-notify";
     notification.innerHTML = `
-          <div style="font-weight: bold; margin-bottom: 5px;">${title}</div>
-          <div style="font-size: 14px;">${message}</div>
-      `;
-
+      <div class="notify-title"><span class="notify-dot"></span>${title}</div>
+      <div class="notify-msg">${message}</div>
+    `;
     document.body.appendChild(notification);
-
-    void notification.offsetWidth;
-
-    notification.style.opacity = "1";
-    notification.style.transform = "translateY(0)";
-
+    requestAnimationFrame(() => notification.classList.add("visible"));
     setTimeout(() => {
-      notification.style.opacity = "0";
-      notification.style.transform = "translateY(-10px)";
-      setTimeout(() => {
-        document.body.removeChild(notification);
-      }, 300);
+      notification.classList.remove("visible");
+      setTimeout(() => notification.remove(), 300);
     }, 3000);
   }
 

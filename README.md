@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.2-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.3-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,11 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.3
+
+- 调整：自动检查更新默认开启——弹窗提醒能让用户感知版本变化（油猴原生更新是静默的）
+- 重设计：更新提醒与通用提示弹窗——品牌蓝卡片风格，亮/暗双主题自适应；修复全局 ID 绑定事件的撞名隐患
 
 ### 1.3.2
 
