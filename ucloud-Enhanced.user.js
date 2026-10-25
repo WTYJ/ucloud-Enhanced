@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.1.0
-// @description  主页作业显示所属课程（含测试类待办），深色模式，解除作业附件大小限制，主页课程搜索与最近使用，使用Office 365预览课件，增加通知显示数量，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
+// @version      1.2.0
+// @description  主页作业显示所属课程（含测试类待办），深色模式，主页课程搜索与最近使用，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
 // @match        https://ucloud.bupt.edu.cn/uclass/course.html*
@@ -33,12 +33,7 @@
    */
   function patchModules(modules) {
     const patchJobs = [
-      {
-        name: "setNotice",
-        identifiers: ['name:"setNotice"', "size:10"],
-        patched: !GM_getValue("notification_showMoreNotification", true),
-        replacements: [[/size\s*:\s*10/g, `size: ${GM_getValue("notification_notificationPageSize", 1000)}`]],
-      },
+      // 原“通知列表 size:10→1000”补丁已移除：大分页疑似导致“标记已读”失效，且展示上千条通知并无必要
       {
         name: "studentHomepage",
         identifiers: ['name:"studentHomepage"', "tapUndone", "tapSiteItem"],
@@ -66,15 +61,6 @@
             /window\.location\.href\s*=\s*(["']course\.html#\/courseCenterDetail_fullpage["'])/g,
             'window.open($1, "_blank")',
           ],
-        ],
-      },
-      {
-        // 解除作业附件上传的 50MB 前端校验（上游 issue #4：限制仅存在于前端，后端支持大文件）
-        name: "assignmentUploadLimit",
-        identifiers: ["附件大小不能超过50M"],
-        patched: !GM_getValue("system_removeUploadLimit", true),
-        replacements: [
-          [/e\.file\.size\/1048576<=50/g, "e.file.size/1048576<=1e9"],
         ],
       },
       // ,{
@@ -892,20 +878,12 @@
     user,
     password
   ) {
-    // hook XMR
-    if (GM_getValue("notification_showMoreNotification", true)) {
-      // if (
-      //   typeof url === "string" &&
-      //   url.includes("/ykt-basics/api/inform/news/list")
-      // ) {
-      //   url = url.replace(/size=\d+/, "size=1000");
-      // } else
-      if (
-        typeof url === "string" &&
-        url.includes("/ykt-site/site/list/student/history")
-      ) {
-        url = url.replace(/size=\d+/, "size=15");
-      }
+    // hook XHR：课程历史列表单页数量调整为 15 条
+    if (
+      typeof url === "string" &&
+      url.includes("/ykt-site/site/list/student/history")
+    ) {
+      url = url.replace(/size=\d+/, "size=15");
     }
 
     return originalOpen.call(this, method, url, async, user, password);
@@ -1047,21 +1025,6 @@
       emoji: '📢',
       title: '消息通知',
       items: {
-        showMoreNotification: {
-          type: 'checkbox',
-          label: '显示更多历史通知',
-          description: '在通知列表中显示更多的历史通知，不再受限于默认显示数量。',
-          defaultValue: true,
-        },
-        notificationPageSize: {
-          type: 'number',
-          label: '单页显示通知数量',
-          description: '设置通知列表单页显示的通知条数（范围：10-2000）。',
-          defaultValue: 1000,
-          min: 10,
-          max: 2000,
-          enabledBy: 'showMoreNotification'
-        },
         sortNotificationsByTime: {
           type: 'checkbox',
           label: '通知按时间排序',
@@ -1104,12 +1067,6 @@
           description: '全局深色配色（智能反色实现，图片、视频与文档预览保持原样），保存设置后刷新页面生效。',
           defaultValue: false
         },
-        removeUploadLimit: {
-          type: 'checkbox',
-          label: '解除作业附件大小限制',
-          description: '移除作业附件上传的 50MB 前端校验（后端本身支持大文件），保存设置后刷新页面生效。',
-          defaultValue: true
-        },
         autoUpdate: {
           type: 'checkbox',
           label: '启用自动更新检查',
@@ -1138,20 +1095,196 @@
     });
   });
 
-  // 深色模式：智能反色（图片、视频、iframe 文档预览等媒体二次反色还原原貌）
-  const DARK_MODE_CSS = `
-    html.ue-dark-mode { filter: invert(1) hue-rotate(180deg); background: #ffffff; }
-    html.ue-dark-mode img, html.ue-dark-mode video, html.ue-dark-mode embed,
-    html.ue-dark-mode object, html.ue-dark-mode iframe, html.ue-dark-mode canvas,
-    html.ue-dark-mode [style*="background-image"] { filter: invert(1) hue-rotate(180deg); }
-  `;
+  // 深色模式（Dynamic 主题引擎，处理思路参考 Dark Reader）
+  // 不用整页像素级滤镜：遍历元素读取计算样式，在 HSL 空间只重映射亮度——
+  // 浅色背景→深色、深色文字→浅色，色相与饱和度原样保留。
+  // 彩色内容（品牌蓝、彩色按钮）、图片、渐变装饰天然不受影响，无整体降饱和的"灰蒙蒙"
+  const DARK_CANVAS = "#1f2223"; // 页面画布目标色
+
+  function parseRGB(str) {
+    if (!str) return null;
+    const m = str.match(
+      /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+)\s*)?\)/
+    );
+    if (!m) return null;
+    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+  }
+
+  function rgbToHsl(r, g, b) {
+    r /= 255;
+    g /= 255;
+    b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const l = (max + min) / 2;
+    let h = 0;
+    let s = 0;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r:
+          h = (g - b) / d + (g < b ? 6 : 0);
+          break;
+        case g:
+          h = (b - r) / d + 2;
+          break;
+        default:
+          h = (r - g) / d + 4;
+      }
+      h /= 6;
+    }
+    return [h, s, l];
+  }
+
+  function hue2rgb(p, q, t) {
+    if (t < 0) t += 1;
+    if (t > 1) t -= 1;
+    if (t < 1 / 6) return p + (q - p) * 6 * t;
+    if (t < 1 / 2) return q;
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+    return p;
+  }
+
+  function hslToRGB(h, s, l) {
+    if (s === 0) {
+      const v = Math.round(l * 255);
+      return [v, v, v];
+    }
+    const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    const p = 2 * l - q;
+    return [
+      Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+      Math.round(hue2rgb(p, q, h) * 255),
+      Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+    ];
+  }
+
+  // 背景/边框：接近白的浅色映射为深色（纯白落在 #1f2223 的亮度档）；彩色（饱和度高）与深色保持原样
+  // 文字：偏深及中灰的文字映射为浅色，保证深底上的可读性；浅色文字保持原样
+  function remapColor(c, kind) {
+    const [h, s, l] = rgbToHsl(c.r, c.g, c.b);
+    let nl = l;
+    if (kind === "text") {
+      if (l < 0.62) nl = Math.min(0.86, 0.66 + (0.62 - l) * 0.6);
+    } else {
+      const grayish = s < 0.25;
+      if (l > 0.86 || (grayish && l > 0.6)) nl = 0.115 + (1 - l) * 0.06;
+    }
+    if (Math.abs(nl - l) < 0.01) return null;
+    const [r, g, b] = hslToRGB(h, s, nl);
+    return `rgba(${r}, ${g}, ${b}, ${c.a})`;
+  }
+
+  function darkenElement(el) {
+    // 先摘除本脚本上次写入的 !important 覆盖，确保读到平台当前真实样式（含 hover/激活态）
+    ["background-color", "color", "border-color"].forEach((p) => {
+      if (el.style.getPropertyPriority(p) === "important") {
+        el.style.removeProperty(p);
+      }
+    });
+    const cs = getComputedStyle(el);
+    // 有背景图/渐变的元素整体保留原样（品牌装饰、彩色横幅、图片纹理）
+    if (cs.backgroundImage === "none") {
+      const bg = parseRGB(cs.backgroundColor);
+      if (bg && bg.a > 0) {
+        const nb = remapColor(bg, "bg");
+        if (nb) el.style.setProperty("background-color", nb, "important");
+      }
+    }
+    const fg = parseRGB(cs.color);
+    if (fg) {
+      const nc = remapColor(fg, "text");
+      if (nc) el.style.setProperty("color", nc, "important");
+    }
+    const bd = parseRGB(cs.borderTopColor);
+    if (bd && bd.a > 0) {
+      const nb = remapColor(bd, "border");
+      if (nb) el.style.setProperty("border-color", nb, "important");
+    }
+    el.dataset.ueDark = "1";
+  }
+
+  let darkThemeObserver = null;
+
+  function applyDynamicDarkTheme() {
+    if (darkThemeObserver) {
+      darkThemeObserver.disconnect();
+      darkThemeObserver = null;
+    }
+    if (!settings.system.darkMode || !document.body) return;
+    document.querySelectorAll("html, body, body *").forEach(darkenElement);
+    // SPA 动态渲染的元素在 MutationObserver 回调内同步处理：
+    // 回调运行在 DOM 变更之后、浏览器绘制之前，处理完才绘制，从原理上消除闪白
+    darkThemeObserver = new MutationObserver((records) => {
+      for (const r of records) {
+        r.addedNodes.forEach((node) => {
+          if (node.nodeType !== Node.ELEMENT_NODE) return;
+          darkenElement(node);
+          node.querySelectorAll("*").forEach(darkenElement);
+        });
+      }
+    });
+    darkThemeObserver.observe(document.body, { childList: true, subtree: true });
+  }
+
+  // 悬停处理：hover 是 CSS 伪类改变计算样式，MutationObserver 感知不到；
+  // 在 pointerover 时对目标及少量祖先链当场重跑映射（此刻读到的即悬停色），
+  // pointerout 后延迟重跑恢复常态
+  function buildAncestorChain(el) {
+    const chain = [];
+    let node = el;
+    for (let i = 0; node && node !== document.body && i < 4; i++) {
+      chain.push(node);
+      node = node.parentElement;
+    }
+    return chain;
+  }
+
+  function installHoverHandler() {
+    document.addEventListener(
+      "pointerover",
+      (e) => {
+        if (!settings.system.darkMode || !e.target || e.target === document)
+          return;
+        // 悬停发生的瞬间处理目标及其祖先链，此刻读到的即悬停色
+        buildAncestorChain(e.target).forEach(darkenElement);
+      },
+      true
+    );
+    document.addEventListener(
+      "pointerout",
+      (e) => {
+        if (!settings.system.darkMode || !e.target || e.target === document)
+          return;
+        const chain = buildAncestorChain(e.target);
+        // 鼠标只是移入链内子元素：交给后续 pointerover，此处不处理
+        if (e.relatedTarget && chain.includes(e.relatedTarget)) return;
+        // 真正离开：延迟重映射恢复正常态；双保险覆盖过渡动画与 hover 状态更新时序。
+        // darkenElement 每次都读实时计算样式，重复处理天然自纠错
+        setTimeout(() => chain.forEach(darkenElement), 80);
+        setTimeout(() => chain.forEach(darkenElement), 300);
+      },
+      true
+    );
+  }
+
   function applyDarkMode() {
     document.documentElement.classList.toggle(
       "ue-dark-mode",
       !!settings.system.darkMode
     );
+    applyDynamicDarkTheme();
   }
-  // document-start 阶段尽早注入并应用，避免刷新时先白屏再变暗的闪烁
+
+  const DARK_MODE_CSS = `
+    html.ue-dark-mode, html.ue-dark-mode body { background: ${DARK_CANVAS} !important; }
+    /* SPA 路由切换时新容器先于引擎处理渲染，静态深色兜底消除白屏闪烁 */
+    html.ue-dark-mode #layout-container,
+    html.ue-dark-mode .main-content,
+    html.ue-dark-mode .router-container { background-color: ${DARK_CANVAS} !important; }
+  `;
+  // document-start 阶段先铺画布色，DOM 就绪后由引擎做完整处理（见 initializeExtension）
   GM_addStyle(DARK_MODE_CSS);
   applyDarkMode();
 
@@ -1162,6 +1295,25 @@
   let gpage = -1;
   let glist = null;
   let onlinePreview = null;
+
+  // 修复：主页"在新标签页打开"的详情页没有历史记录，页面内任何返回入口（标题栏左箭头等，
+  // 底层都是 $router.back() → history.go(-1)）都是空操作。这里直接拦截 history.go/back：
+  // 无历史可退且本页由 window.open 打开时改为关闭标签页，行为上等同返回。不依赖按钮选择器
+  function installBackButtonFix() {
+    const win = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
+    const hist = win.history;
+    const originalGo = hist.go.bind(hist);
+    const originalBack = hist.back.bind(hist);
+    const noHistory = () => hist.length <= 1 && win.opener;
+    hist.go = function (delta) {
+      if (delta === -1 && noHistory()) return win.close();
+      return originalGo(delta);
+    };
+    hist.back = function () {
+      if (noHistory()) return win.close();
+      return originalBack();
+    };
+  }
 
   // 初始化扩展功能
   function initializeExtension() {
@@ -1174,6 +1326,9 @@
     loadui();
 
     addFunctionalCSS();
+    installBackButtonFix();
+    applyDynamicDarkTheme();
+    installHoverHandler();
     setTimeout(main, 100);
 
     if (settings.system.autoUpdate) {
@@ -2050,6 +2205,26 @@
     return [userid, token];
   }
 
+  // 平台 API 请求统一封装：公共鉴权头 + JSON 解析
+  // 所有 apiucloud.bupt.edu.cn 的接口调用都应走这里（getPreviewURL 除外：其 CORS 不带鉴权头，保持原样）
+  const API_BASE = "https://apiucloud.bupt.edu.cn/";
+
+  async function apiFetch(path, { method = "GET", body, headers = {} } = {}) {
+    const [, token] = getToken();
+    const res = await fetch(API_BASE + path, {
+      method,
+      headers: Object.assign(
+        {
+          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
+          "blade-auth": token,
+        },
+        headers
+      ),
+      body: body === undefined ? null : body,
+    });
+    return res.json();
+  }
+
   // 文件下载相关函数
   async function downloadFile(url, filename) {
     console.log("Call download");
@@ -2099,110 +2274,50 @@
   }
 
   // 任务搜索函数
-  async function searchTask(siteId, keyword, token) {
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/work/student/list",
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-          "content-type": "application/json;charset=UTF-8",
-        },
-        body: JSON.stringify({
-          siteId,
-          keyword,
-          current: 1,
-          size: 5,
-        }),
-        method: "POST",
-      }
-    );
-    const json = await res.json();
-    return json;
+  async function searchTask(siteId, keyword) {
+    return apiFetch("ykt-site/work/student/list", {
+      method: "POST",
+      headers: { "content-type": "application/json;charset=UTF-8" },
+      body: JSON.stringify({ siteId, keyword, current: 1, size: 5 }),
+    });
   }
 
-  // 课程搜索函数
-  async function searchCourse(userId, id, keyword, token) {
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/site/list/student/current?size=999999&current=1&userId=" +
-        userId +
-        "&siteRoleCode=2",
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-        },
-        body: null,
-        method: "GET",
-      }
-    );
-    const json = await res.json();
-    const list = json.data.records.map((x) => ({
-      id: x.id,
-      name: x.siteName,
-      teachers: x.teachers.map((y) => y.name).join(", "),
-    }));
-
-    async function searchWithLimit(list, id, keyword, token, limit = 5) {
-      for (let i = 0; i < list.length; i += limit) {
-        const batch = list.slice(i, i + limit);
-        const jobs = batch.map((x) => searchTask(x.id, keyword, token));
-        const ress = await Promise.all(jobs);
-        for (let j = 0; j < ress.length; j++) {
-          const res = ress[j];
-          if (res.data && res.data.records && res.data.records.length > 0) {
-            for (const item of res.data.records) {
-              if (item.id == id) {
-                return batch[j];
-              }
-            }
-          }
+  // 课程搜索函数：在全部课程中定位某个活动属于哪门课（作业详情页用，按标题关键词缩小扫描范围）
+  async function searchCourse(id, keyword) {
+    const list = await getCourseList();
+    for (let i = 0; i < list.length; i += 5) {
+      const batch = list.slice(i, i + 5);
+      const ress = await Promise.all(
+        batch.map((x) => searchTask(x.id, keyword))
+      );
+      for (let j = 0; j < ress.length; j++) {
+        const records = ress[j] && ress[j].data && ress[j].data.records;
+        if (records && records.some((item) => item.id == id)) {
+          return batch[j];
         }
       }
-      return null;
     }
-    return await searchWithLimit(list, id, keyword, token);
+    return null;
   }
 
   // 获取任务列表
-  async function getTasks(siteId, token) {
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/work/student/list",
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-          "content-type": "application/json;charset=UTF-8",
-        },
-        body: JSON.stringify({
-          siteId,
-          current: 1,
-          size: 9999,
-        }),
-        method: "POST",
-      }
-    );
-    const json = await res.json();
-    return json;
+  async function getTasks(siteId) {
+    return apiFetch("ykt-site/work/student/list", {
+      method: "POST",
+      headers: { "content-type": "application/json;charset=UTF-8" },
+      body: JSON.stringify({ siteId, current: 1, size: 9999 }),
+    });
   }
 
   // 获取测试列表（学生视角）
   // 待办中的测试类活动不在 work/student/list 的返回里，需单独扫描测试列表才能匹配到课程
-  async function getExams(siteId, token) {
+  async function getExams(siteId) {
     try {
-      const res = await fetch(
-        "https://apiucloud.bupt.edu.cn/ykt-site/examination/list-stu?siteId=" +
+      const json = await apiFetch(
+        "ykt-site/examination/list-stu?siteId=" +
           siteId +
-          "&current=1&size=9999",
-        {
-          headers: {
-            authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-            "blade-auth": token,
-          },
-          method: "GET",
-        }
+          "&current=1&size=9999"
       );
-      const json = await res.json();
       const data = json && json.data;
       const records = Array.isArray(data) ? data : data && data.records;
       return Array.isArray(records) ? records : [];
@@ -2211,126 +2326,66 @@
     }
   }
 
-  // 搜索课程
+  // 搜索课程：把一批活动ID匹配到所属课程（作业与测试两类活动并行扫描）
   async function searchCourses(nids) {
     const result = {};
-    let ids = [];
-    for (let id of nids) {
+    const ids = [];
+    for (const id of nids) {
       const r = get(id);
       if (r) result[id] = r;
       else ids.push(id);
     }
+    if (ids.length === 0) return result;
 
-    if (ids.length == 0) return result;
-    const [userid, token] = getToken();
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/site/list/student/current?size=999999&current=1&userId=" +
-        userid +
-        "&siteRoleCode=2",
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-        },
-        body: null,
-        method: "GET",
-      }
-    );
-    const json = await res.json();
-    const list = json.data.records.map((x) => ({
-      id: x.id,
-      name: x.siteName,
-      teachers: x.teachers.map((y) => y.name).join(", "),
-    }));
-    const hashMap = new Map();
-    let count = ids.length;
-    for (let i = 0; i < ids.length; i++) {
-      hashMap.set(ids[i], i);
-    }
+    // 复用带缓存的课程列表（fetchCurrentSiteList），避免每次重复全量拉取
+    const list = await getCourseList();
+    const idSet = new Set(ids);
 
-    async function searchWithLimit(list, limit = 5) {
-      for (let i = 0; i < list.length; i += limit) {
-        const batch = list.slice(i, i + limit);
-        // 同时扫描作业与测试列表，测试类待办才能匹配到所属课程
-        const jobs = batch.flatMap((x) => [
-          getTasks(x.id, token),
-          getExams(x.id, token).then((records) => ({ data: { records } })),
-        ]);
-        const ress = await Promise.all(jobs);
-        for (let j = 0; j < ress.length; j++) {
-          const res = ress[j];
-          if (res.data && res.data.records && res.data.records.length > 0) {
-            for (const item of res.data.records) {
-              if (hashMap.has(item.id)) {
-                result[item.id] = batch[j];
-                set(item.id, batch[j]);
-                if (--count == 0) {
-                  return result;
-                }
-              }
-            }
+    for (let i = 0; i < list.length; i += 5) {
+      const batch = list.slice(i, i + 5);
+      const pairs = await Promise.all(
+        batch.map(async (x) => {
+          const [works, exams] = await Promise.all([
+            getTasks(x.id),
+            getExams(x.id),
+          ]);
+          const worksRecords =
+            (works && works.data && works.data.records) || [];
+          return { course: x, records: worksRecords.concat(exams) };
+        })
+      );
+      for (const { course, records } of pairs) {
+        for (const item of records) {
+          if (idSet.has(item.id)) {
+            result[item.id] = course;
+            set(item.id, course);
+            idSet.delete(item.id);
+            if (idSet.size === 0) return result;
           }
         }
       }
-      return result;
     }
-    return await searchWithLimit(list);
+    return result;
   }
 
   // 获取未完成列表
   async function getUndoneList() {
-    const [userid, token] = getToken();
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/site/student/undone?userId=" +
-        userid,
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-        },
-        method: "GET",
-      }
-    );
-    const json = await res.json();
-    return json;
+    const [userid] = getToken();
+    return apiFetch("ykt-site/site/student/undone?userId=" + userid);
   }
 
   // 获取详情
   async function getDetail(id) {
-    const [userid, token] = getToken();
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/work/detail?assignmentId=" + id,
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-        },
-        body: null,
-        method: "GET",
-      }
-    );
-    const json = await res.json();
-    return json;
+    return apiFetch("ykt-site/work/detail?assignmentId=" + id);
   }
 
   // 获取站点资源
   async function getSiteResource(id) {
-    const [userid, token] = getToken();
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/site-resource/tree/student?siteId=" +
-        id +
-        "&userId=" +
-        userid,
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-        },
-        body: null,
-        method: "POST",
-      }
+    const [userid] = getToken();
+    const json = await apiFetch(
+      "ykt-site/site-resource/tree/student?siteId=" + id + "&userId=" + userid,
+      { method: "POST" }
     );
-    const json = await res.json();
     const result = [];
     function foreach(data) {
       if (!data || !Array.isArray(data)) return;
@@ -2596,22 +2651,14 @@
       path = "teacher/current";
       siteRoleCode = roleAliase === "JS004" ? 1 : 3;
     }
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/ykt-site/site/list/" +
+    const json = await apiFetch(
+      "ykt-site/site/list/" +
         path +
         "?size=999999&current=1&userId=" +
         userid +
         "&siteRoleCode=" +
-        siteRoleCode,
-      {
-        headers: {
-          authorization: "Basic cG9ydGFsOnBvcnRhbF9zZWNyZXQ=",
-          "blade-auth": token,
-        },
-        method: "GET",
-      }
+        siteRoleCode
     );
-    const json = await res.json();
     return (json && json.data && json.data.records) || [];
   }
 
@@ -3325,7 +3372,7 @@
         } else {
           if (!id || !title) return;
           try {
-            const courseInfo = await searchCourse(userid, id, title, token);
+            const courseInfo = await searchCourse(id, title);
             if (courseInfo) {
               insert(courseInfo);
               set(id, courseInfo);
@@ -3450,24 +3497,29 @@
         if (!list || !Array.isArray(list)) return;
         glist = list;
 
-        const observer = new MutationObserver(async (mutations) => {
-          const pageElement = document.querySelector(
-            "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block"
-          );
+        let pageCheckTimer = null;
+        const observer = new MutationObserver(() => {
+          // 防抖：任何 DOM 变动都会触发回调，集中处理避免重复解析
+          clearTimeout(pageCheckTimer);
+          pageCheckTimer = setTimeout(async () => {
+            const pageElement = document.querySelector(
+              "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block"
+            );
 
-          if (!pageElement) return;
+            if (!pageElement) return;
 
-          // 解析页码
-          const currentPage = parseInt(
-            pageElement.innerHTML.trim().split("/")[0]
-          );
-          if (isNaN(currentPage)) return;
+            // 解析页码
+            const currentPage = parseInt(
+              pageElement.innerHTML.trim().split("/")[0]
+            );
+            if (isNaN(currentPage)) return;
 
-          // 页码变化则更新显示
-          if (currentPage !== gpage) {
-            gpage = currentPage;
-            await updateAssignmentDisplay(list, currentPage);
-          }
+            // 页码变化则更新显示
+            if (currentPage !== gpage) {
+              gpage = currentPage;
+              await updateAssignmentDisplay(list, currentPage);
+            }
+          }, 120);
         });
 
         observer.observe(document.body, {
