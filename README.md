@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.1-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.2-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,11 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.2
+
+- 内部清理（净减约 80 行）：移除死函数 waitChange、失效的数字输入设置机制全链路（渲染/联动/CSS）、只写不读的 data-type 属性
+- 控制台降噪：删除 9 条纯调试日志，4 条有诊断价值的输出降级为 warn（正常运行时控制台保持安静）
 
 ### 1.3.1
 

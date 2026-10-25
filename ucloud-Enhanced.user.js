@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.1
+// @version      1.3.2
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -94,13 +94,9 @@
 
     const totalPatchesNeeded = patchJobs.length;
     let patchesApplied = 0;
-    console.log(
-      `[ucloud-Enhanced] 开始 patching。需要寻找 ${totalPatchesNeeded} 个模块...`
-    );
 
     for (const moduleId in modules) {
       if (patchesApplied === totalPatchesNeeded) {
-        console.log("[ucloud-Enhanced] 所有模块均已 patch。停止遍历。");
         break;
       }
       const originalModule = modules[moduleId];
@@ -120,10 +116,6 @@
 
           if (isTarget) {
             if (modifiedSource !== currentModuleString) {
-              console.log(
-                `[ucloud-Enhanced] 目标 '${job.name}' (ID: ${moduleId}) 匹配。准备应用 patch...`
-              );
-
               currentModuleString = modifiedSource;
               moduleHasBeenModified = true;
 
@@ -138,12 +130,8 @@
         }
 
         if (moduleHasBeenModified) {
-          console.log(
-            `[ucloud-Enhanced] (ID: ${moduleId}) 所有 patches 应用完毕。正在重新构造模块...`
-          );
           const hookedModule = new Function(`return (${currentModuleString})`)();
           modules[moduleId] = hookedModule; // 在内存中替换模块
-          console.log(`[Hook Script] (ID: ${moduleId}) patch 成功!`);
         }
       } catch (error) {
         console.error(
@@ -158,8 +146,8 @@
     }
 
     if (patchesApplied < totalPatchesNeeded) {
-      console.log(
-        `[ucloud-Enhanced] Patch 结束，但未进行所有patch。已patch ${patchesApplied}/${totalPatchesNeeded} 处。`
+      console.warn(
+        `[ucloud-Enhanced] Patch 结束，但未完成全部 patch：${patchesApplied}/${totalPatchesNeeded}。`
       );
     }
   }
@@ -201,7 +189,7 @@
       return webpackJsonp_;
     },
     set(newValue) {
-      console.log("[ucloud-Enhanced] `webpackJsonp` assignment captured.");
+      console.debug("[ucloud-Enhanced] `webpackJsonp` assignment captured.");
       if (Array.isArray(newValue)) {
         webpackJsonp_ = hookWebpackArray(newValue);
       } else if (typeof newValue === "function") {
@@ -1950,23 +1938,6 @@
           padding: 6px 12px;
       }
 
-      #yzHelper-settings input[type="number"] {
-          order: 2;
-          margin-left: auto;
-          width: 84px;
-          padding: 5px 8px;
-          border: 1px solid var(--ue-border);
-          border-radius: 8px;
-          background: var(--ue-bg);
-          color: var(--ue-text);
-          font-size: 13px;
-          outline: none;
-          box-sizing: border-box;
-      }
-      #yzHelper-settings input[type="number"]:focus {
-          border-color: var(--ue-accent);
-      }
-
       #yzHelper-settings .setting-item .setting-toggle:has(input:disabled) {
           opacity: 0.55;
       }
@@ -2080,16 +2051,6 @@
         if (!settings[category]) return;
         if (input.type === "checkbox") {
           saveSettingAndApply(category, settingName, input.checked);
-          container
-            .querySelectorAll(
-              `input[type="number"][data-enabled-by="${input.id}"]`
-            )
-            .forEach((n) => {
-              n.disabled = !input.checked;
-            });
-        } else if (input.type === "number") {
-          const v = parseInt(input.value, 10);
-          if (!isNaN(v)) saveSettingAndApply(category, settingName, v);
         }
       });
     }
@@ -2110,7 +2071,7 @@
               <label class="switch">
                 <input type="checkbox" id="${settingId}" ${
             settings[category][key] ? "checked" : ""
-          } data-type="checkbox">
+          }>
                 <span class="slider"></span>
               </label>
             </div>
@@ -2180,54 +2141,26 @@
       true
     );
 
-    // 生成单个设置项的HTML
+    // 生成单个设置项的HTML（当前全部设置项均为开关型；数字输入型已随"最近使用"功能移除）
     function generateSettingItem(category, key, item) {
       const settingId = `${category}_${key}`;
       const value = settings[category][key];
       const disabledAttr = item.disabled ? 'disabled' : '';
-      
-      if (item.type === 'checkbox') {
-        const checkedAttr = value ? 'checked' : '';
-        return `
-          <div class="setting-item">
-            <div class="setting-toggle">
-              <label class="switch">
-                <input type="checkbox" id="${settingId}" ${checkedAttr} ${disabledAttr} data-type="checkbox">
-                <span class="slider"></span>
-              </label>
-              <span class="setting-label" data-for="description-${settingId}">${item.label}</span>
-            </div>
-            <div class="setting-description" id="description-${settingId}">
-              ${item.description}
-            </div>
+      const checkedAttr = value ? 'checked' : '';
+      return `
+        <div class="setting-item">
+          <div class="setting-toggle">
+            <label class="switch">
+              <input type="checkbox" id="${settingId}" ${checkedAttr} ${disabledAttr}>
+              <span class="slider"></span>
+            </label>
+            <span class="setting-label" data-for="description-${settingId}">${item.label}</span>
           </div>
-        `;
-      } else if (item.type === 'number') {
-        const enabledByCheckbox = item.enabledBy ? `${category}_${item.enabledBy}` : null;
-        const numberDisabled = enabledByCheckbox && !settings[category][item.enabledBy];
-        const numberDisabledAttr = numberDisabled || item.disabled ? 'disabled' : '';
-        const enabledByAttr = enabledByCheckbox ? `data-enabled-by="${enabledByCheckbox}"` : '';
-        
-        return `
-          <div class="setting-item">
-            <div class="setting-toggle">
-              <label class="setting-label" data-for="description-${settingId}">${item.label}</label>
-              <input type="number"
-                id="${settingId}"
-                value="${value}"
-                min="${item.min || 0}"
-                max="${item.max || 9999}"
-                ${numberDisabledAttr}
-                ${enabledByAttr}
-                data-type="number">
-            </div>
-            <div class="setting-description" id="description-${settingId}">
-              ${item.description}
-            </div>
+          <div class="setting-description" id="description-${settingId}">
+            ${item.description}
           </div>
-        `;
-      }
-      return '';
+        </div>
+      `;
     }
 
     // 生成设置区块的HTML
@@ -2517,7 +2450,7 @@
 
   // 文件下载相关函数
   async function downloadFile(url, filename) {
-    console.log("Call download");
+    console.debug("Call download");
     downloading = true;
     NProgress.configure({ trickle: false, speed: 0 });
     try {
@@ -2873,16 +2806,6 @@
     if (r) return r;
     await sleep(50);
     return await wait(func);
-  }
-
-  async function waitChange(func, value) {
-    const r = value;
-    while (1) {
-      let t = func();
-      if (t instanceof Promise) t = await t;
-      if (t != r) return t;
-      await sleep(50);
-    }
   }
 
   // 首页"本学期课程"：课程搜索框
@@ -3454,7 +3377,7 @@
             if (confirmButton) {
               confirmButton.click();
             } else {
-              console.log("未找到确认按钮");
+              console.warn("未找到确认按钮");
             }
           }
         }
@@ -3537,7 +3460,7 @@
               const filename = filenames[index];
               if (settings.preview.autoDownload) {
                 downloadFile(url, filename);
-                console.log("Autodownload");
+                console.debug("Autodownload");
               }
               if (
                 filename.endsWith(".xls") ||
@@ -3773,7 +3696,7 @@
                 async (e) => {
                   const url = await getPreviewURL(resources[index].id);
                   downloadFile(url, resources[index].name);
-                  console.log("Autodownload");
+                  console.debug("Autodownload");
                 },
                 false
               );
@@ -3889,12 +3812,12 @@
           "#layout-container > div.main-content > div.router-container > div > div > div.setNotice-body > ul"
         );
         if (!noticeContainer) {
-          console.log("通知容器未找到");
+          console.warn("通知容器未找到");
           return;
         }
         const noticeItems = Array.from(noticeContainer.querySelectorAll("li"));
         if (noticeItems.length === 0) {
-          console.log("未找到通知项");
+          console.warn("未找到通知项");
           return;
         }
         if (settings.notification.sortNotificationsByTime) {
