@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.6-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.7-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -20,7 +20,7 @@
 
 - 个人主页：作业显示来源课程、课程搜索（课程名/教师/院系）、翻页增强
 - 课件预览：Office 365 / 浏览器原生 PDF / 内置图片预览器、预览自动下载
-- 课程资源：批量下载（带进度显示）、展示全部下载选项
+- 课程资源：全部下载（带进度显示）、下载按钮常驻显示
 - 通知：按时间排序、未读高亮
 - 系统：新标签页打开、解除复制限制、页面标题优化、可配置悬浮窗
 
@@ -37,6 +37,11 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.7
+
+- 修复：推送后检查不到新版本——更新源顺序反转为 github.com 官方源优先（权威、即时），jsdelivr 降为兜底（其对分支内容有最长约 12 小时的缓存延迟）
+- 文案：设置项全面体检——"显示作业来源"改为"待办显示所属课程"（消除与作业详情页的撞名）、"课程详情"分类正名为"课程资源"、"显示插件悬浮窗"更新为"显示悬浮球"、下载功能两处改名、课件预览按"引擎选择→预览行为"重排、多处描述打磨
 
 ### 1.3.6
 

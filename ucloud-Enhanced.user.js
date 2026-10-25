@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.6
+// @version      1.3.7
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -890,7 +890,7 @@
           type: 'checkbox',
           quick: true,
           label: '加大翻页按钮尺寸',
-          description: '增大页面翻页按钮的尺寸和点击区域，提升操作便捷性。',
+          description: '增大个人主页翻页按钮的尺寸和点击区域，提升操作便捷性。',
           defaultValue: true
         },
         openInNewTab: {
@@ -903,8 +903,8 @@
         addHomeworkSource: {
           type: 'checkbox',
           quick: true,
-          label: '显示作业来源',
-          description: '为作业添加来源，直观显示发布作业的课程。',
+          label: '待办显示所属课程',
+          description: '在主页待办列表的条目上显示其所属课程。',
           defaultValue: true
         },
         useWheelPageTurner: {
@@ -933,16 +933,10 @@
       emoji: '🖼️',
       title: '课件预览',
       items: {
-        autoDownload: {
-          type: 'checkbox',
-          label: '预览课件时自动下载',
-          description: '当打开课件预览时，自动触发下载操作，方便存储课件到本地。',
-          defaultValue: false
-        },
         autoSwitchOffice: {
           type: 'checkbox',
           label: '使用 Office365 预览 Office 文件',
-          description: '使用微软 Office365 在线服务预览 Office 文档，提供更好的浏览体验。',
+          description: '使用微软 Office365 在线服务渲染预览 Office 文档，排版还原最好，但需要联网。',
           defaultValue: false
         },
         autoSwitchPdf: {
@@ -954,8 +948,14 @@
         autoSwitchImg: {
           type: 'checkbox',
           label: '使用内置阅读器预览图片文件',
-          description: '使用脚本内置的阅读器预览图片文件，提供更好的浏览体验。',
+          description: '使用脚本内置的阅读器预览图片，支持缩放、旋转与下载。',
           defaultValue: true
+        },
+        autoDownload: {
+          type: 'checkbox',
+          label: '预览课件时自动下载',
+          description: '当打开课件预览时，自动触发下载操作，方便存储课件到本地。',
+          defaultValue: false
         },
         autoClosePopup: {
           type: 'checkbox',
@@ -973,18 +973,18 @@
     },
     course: {
       emoji: '📚',
-      title: '课程详情',
+      title: '课程资源',
       items: {
         addBatchDownload: {
           type: 'checkbox',
-          label: '增加批量下载按钮',
-          description: '增加批量下载按钮，方便一键下载课程中的所有课件。',
+          label: '增加全部下载按钮',
+          description: '增加全部下载按钮，方便一键下载课程中的所有课件。',
           defaultValue: false
         },
         showAllDownloadButoon: {
           type: 'checkbox',
-          label: '显示所有下载选项',
-          description: '在资源页显示所有可用的下载按钮。',
+          label: '下载按钮常驻显示',
+          description: '在资源页让下载按钮常驻显示，无需悬停才出现。',
           defaultValue: true
         }
       }
@@ -1033,7 +1033,7 @@
         fixTicketBug: {
           type: 'checkbox',
           label: '修复 ticket 跳转问题',
-          description: '修复登录过期后，重新登录出现无法获取ticket提示的问题。',
+          description: '修复登录过期后，重新登录出现"无法获取 ticket"提示的问题。',
           defaultValue: true
         },
         betterTitle: {
@@ -1056,8 +1056,8 @@
         },
         showConfigButton: {
           type: 'checkbox',
-          label: '显示插件悬浮窗',
-          description: '在网页界面显示助手配置按钮，方便随时调整设置。',
+          label: '显示悬浮球',
+          description: '在页面显示可拖动的助手悬浮球（点击打开快捷面板）；关闭后仍可从油猴菜单打开设置。',
           defaultValue: true
         }
       }
@@ -1345,7 +1345,7 @@
   function registerMenuCommands() {
     GM_registerMenuCommand(
       (settings.system.showConfigButton ? "✅ " : "❌ ") +
-        "显示插件悬浮窗：" +
+        "显示悬浮球：" +
         (settings.system.showConfigButton ? "已启用" : "已禁用"),
       () => {
         settings.system.showConfigButton = !settings.system.showConfigButton;
@@ -1503,11 +1503,11 @@
     });
   }
 
-  // 更新检查源：jsdelivr 直连优先（直接返回文件、无重定向、国内可达性好），
-  // github.com 官方源兜底（302 到 raw.githubusercontent.com，需 @connect 白名单覆盖重定向目标）
+  // 更新检查源：github.com 官方源优先（权威、即时），jsdelivr 兜底（国内可达性好，
+  // 但对 GitHub 分支内容有最长约 12 小时的缓存延迟，仅作为官方源不可达时的降级）
   const UPDATE_CHECK_SOURCES = [
-    "https://cdn.jsdelivr.net/gh/WTYJ/ucloud-Enhanced@main/ucloud-Enhanced.user.js",
     GM_info.script.updateURL,
+    "https://cdn.jsdelivr.net/gh/WTYJ/ucloud-Enhanced@main/ucloud-Enhanced.user.js",
   ];
 
   function checkForUpdates(force = false, onDone) {
