@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.2.1
-// @description  主页作业显示所属课程（含测试类待办），深色模式，主页课程搜索与最近使用，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
+// @version      1.3.0
+// @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
 // @match        https://ucloud.bupt.edu.cn/uclass/course.html*
@@ -898,30 +898,35 @@
       items: {
         useBiggerButton: {
           type: 'checkbox',
+          quick: true,
           label: '加大翻页按钮尺寸',
           description: '增大页面翻页按钮的尺寸和点击区域，提升操作便捷性。',
           defaultValue: true
         },
         openInNewTab: {
           type: 'checkbox',
+          quick: true,
           label: '在新标签中打开详情页',
           description: '个人主页中的课程和作业详情链接将在新标签页中打开，方便多任务处理。',
           defaultValue: true
         },
         addHomeworkSource: {
           type: 'checkbox',
+          quick: true,
           label: '显示作业来源',
           description: '为作业添加来源，直观显示发布作业的课程。',
           defaultValue: true
         },
         useWheelPageTurner: {
           type: 'checkbox',
+          quick: true,
           label: '使用鼠标滚轮翻页',
           description: '可以使用鼠标滚轮来翻动个人主页的"本学期课程"和"待办"。',
           defaultValue: true
         },
         showOverdueBadge: {
           type: 'checkbox',
+          quick: true,
           label: '待办逾期提示',
           description: '在已逾期的待办旁显示红色"已逾期"标签，3天内到期的显示橙色"XXh截止"标签。',
           defaultValue: false
@@ -931,21 +936,6 @@
           label: '本学期课程搜索框',
           description: '在个人主页的"本学期课程"区域增加搜索框，可按课程名、教师或院系快速搜索并打开课程。',
           defaultValue: true
-        },
-        recentCourses: {
-          type: 'checkbox',
-          label: '最近使用课程',
-          description: '在"本学期课程"区域显示最近打开过的课程，方便快速再次进入。',
-          defaultValue: true
-        },
-        recentCoursesCount: {
-          type: 'number',
-          label: '最近使用显示数量',
-          description: '设置"最近使用"中最多显示的课程数量（范围：1-20）。',
-          defaultValue: 5,
-          min: 1,
-          max: 20,
-          enabledBy: 'recentCourses'
         }
       }
     },
@@ -1043,6 +1033,13 @@
       emoji: '⚙️',
       title: '系统设置',
       items: {
+        darkMode: {
+          type: 'checkbox',
+          quick: true,
+          label: '自动切换深色模式',
+          description: '跟随操作系统的深色外观自动切换（系统切换时即时生效）；关闭后始终使用浅色主题。',
+          defaultValue: true
+        },
         fixTicketBug: {
           type: 'checkbox',
           label: '修复 ticket 跳转问题',
@@ -1061,15 +1058,9 @@
           description: '解除全局的复制限制，方便摘录内容进行学习笔记。',
           defaultValue: true
         },
-        darkMode: {
-          type: 'checkbox',
-          label: '深色模式',
-          description: '全局深色配色（智能反色实现，图片、视频与文档预览保持原样），保存设置后刷新页面生效。',
-          defaultValue: false
-        },
         autoUpdate: {
           type: 'checkbox',
-          label: '启用自动更新检查',
+          label: '自动检查更新',
           description: '定期检查脚本更新，确保您始终使用最新版本的功能和修复。',
           defaultValue: false
         },
@@ -1177,6 +1168,12 @@
   }
 
   function darkenElement(el) {
+    // 脚本自身的 UI（悬浮球/快捷面板/设置面板）自带亮暗双主题配色，不参与引擎重映射
+    if (
+      el.closest &&
+      el.closest("#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,#yzHelper-toast")
+    )
+      return;
     // 处理期间临时禁用过渡动画：避免读到插值中的中间色、以及摘除/写入覆盖时反复重启动画
     // （这是悬停样式"卡死不恢复"的根源）；同一次 JS 执行内还原，用户无感知
     const prevTransition = el.style.transition;
@@ -1212,12 +1209,18 @@
 
   let darkThemeObserver = null;
 
+  // 自动深色：开关开启且系统为深色外观时才生效，系统切换时即时响应
+  const darkMediaQuery =
+    window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)");
+  const systemPrefersDark = () => !!(darkMediaQuery && darkMediaQuery.matches);
+  const isDarkActive = () => !!settings.system.darkMode && systemPrefersDark();
+
   function applyDynamicDarkTheme() {
     if (darkThemeObserver) {
       darkThemeObserver.disconnect();
       darkThemeObserver = null;
     }
-    if (!settings.system.darkMode || !document.body) return;
+    if (!isDarkActive() || !document.body) return;
     document.querySelectorAll("html, body, body *").forEach(darkenElement);
     // SPA 动态渲染的元素在 MutationObserver 回调内同步处理：
     // 回调运行在 DOM 变更之后、浏览器绘制之前，处理完才绘制，从原理上消除闪白
@@ -1250,7 +1253,7 @@
     document.addEventListener(
       "pointerover",
       (e) => {
-        if (!settings.system.darkMode || !e.target || e.target === document)
+        if (!isDarkActive() || !e.target || e.target === document)
           return;
         // 悬停发生的瞬间处理目标及其祖先链，此刻读到的即悬停色
         buildAncestorChain(e.target).forEach(darkenElement);
@@ -1260,7 +1263,7 @@
     document.addEventListener(
       "pointerout",
       (e) => {
-        if (!settings.system.darkMode || !e.target || e.target === document)
+        if (!isDarkActive() || !e.target || e.target === document)
           return;
         const chain = buildAncestorChain(e.target);
         // 鼠标只是移入链内子元素：交给后续 pointerover，此处不处理
@@ -1275,10 +1278,7 @@
   }
 
   function applyDarkMode() {
-    document.documentElement.classList.toggle(
-      "ue-dark-mode",
-      !!settings.system.darkMode
-    );
+    document.documentElement.classList.toggle("ue-dark-mode", isDarkActive());
     applyDynamicDarkTheme();
   }
 
@@ -1292,6 +1292,10 @@
   // document-start 阶段先铺画布色，DOM 就绪后由引擎做完整处理（见 initializeExtension）
   GM_addStyle(DARK_MODE_CSS);
   applyDarkMode();
+  // 跟随系统深色外观的变化即时切换（无需刷新）
+  if (darkMediaQuery && darkMediaQuery.addEventListener) {
+    darkMediaQuery.addEventListener("change", () => applyDarkMode());
+  }
 
   // 辅助变量
   let sumBytes = 0,
@@ -1363,7 +1367,7 @@
     
     GM_registerMenuCommand(
       (settings.system.darkMode ? "🌙 " : "☀️ ") +
-        "深色模式：" +
+        "自动深色模式：" +
         (settings.system.darkMode ? "已开启" : "已关闭"),
       () => {
         settings.system.darkMode = !settings.system.darkMode;
@@ -1502,41 +1506,231 @@
 
   function loadui() {
     GM_addStyle(`
+      /* ===== 设计变量：品牌蓝主色，亮/暗双主题（独立于页面深色引擎） ===== */
+      #yzHelper-ball, #yzHelper-quick, #yzHelper-settings {
+          --ue-accent: #2962ff;
+          --ue-accent-weak: rgba(41, 98, 255, 0.12);
+          --ue-bg: #ffffff;
+          --ue-bg-2: #f5f7fa;
+          --ue-text: #1f2329;
+          --ue-text-2: #646a73;
+          --ue-border: rgba(31, 35, 41, 0.09);
+          --ue-shadow: 0 10px 34px rgba(31, 35, 41, 0.18);
+          font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+      }
+      html.ue-dark-mode #yzHelper-ball,
+      html.ue-dark-mode #yzHelper-quick,
+      html.ue-dark-mode #yzHelper-settings {
+          --ue-bg: #202325;
+          --ue-bg-2: #2a2e31;
+          --ue-text: #e8eaed;
+          --ue-text-2: #9aa0a6;
+          --ue-border: rgba(232, 234, 237, 0.12);
+          --ue-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+      }
+
+      /* ===== 悬浮球 ===== */
+      #yzHelper-ball {
+          position: fixed;
+          width: 46px;
+          height: 46px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #3d7bff, #2962ff);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 20px;
+          cursor: pointer;
+          z-index: 10000;
+          box-shadow: 0 4px 14px rgba(41, 98, 255, 0.42);
+          opacity: 0.72;
+          transition: opacity 0.2s, transform 0.2s;
+          user-select: none;
+          touch-action: none;
+      }
+      #yzHelper-ball:hover {
+          opacity: 1;
+          transform: scale(1.07);
+      }
+      #yzHelper-ball.dragging {
+          opacity: 1;
+          transition: none;
+          cursor: grabbing;
+          transform: scale(1.12);
+      }
+      #yzHelper-ball.snap-anim {
+          transition: left 0.25s ease, top 0.25s ease, opacity 0.2s;
+      }
+
+      /* ===== 快捷面板 ===== */
+      #yzHelper-quick {
+          position: fixed;
+          width: 262px;
+          background: var(--ue-bg);
+          border: 1px solid var(--ue-border);
+          border-radius: 14px;
+          box-shadow: var(--ue-shadow);
+          z-index: 10000;
+          padding: 10px;
+          display: none;
+          color: var(--ue-text);
+          box-sizing: border-box;
+      }
+      #yzHelper-quick.visible {
+          display: block;
+          animation: ue-pop 0.18s ease;
+      }
+      @keyframes ue-pop {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: none; }
+      }
+      #yzHelper-quick .quick-title {
+          font-size: 11.5px;
+          font-weight: 600;
+          color: var(--ue-text-2);
+          letter-spacing: 0.06em;
+          padding: 4px 8px 8px;
+      }
+      #yzHelper-quick .quick-item {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 8px;
+          border-radius: 10px;
+          font-size: 13px;
+      }
+      #yzHelper-quick .quick-item:hover {
+          background: var(--ue-bg-2);
+      }
+      #yzHelper-quick .quick-item .setting-label {
+          flex: 1;
+          cursor: pointer;
+      }
+      #yzHelper-quick .quick-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          border-top: 1px solid var(--ue-border);
+          margin-top: 6px;
+          padding: 8px 8px 2px;
+      }
+      #yzHelper-quick .quick-all {
+          background: var(--ue-accent-weak);
+          color: var(--ue-accent);
+          border: none;
+          border-radius: 8px;
+          padding: 6px 12px;
+          font-size: 12.5px;
+          font-weight: 600;
+          cursor: pointer;
+      }
+      #yzHelper-quick .quick-all:hover {
+          background: var(--ue-accent);
+          color: #fff;
+      }
+      #yzHelper-quick .quick-ver {
+          font-size: 11.5px;
+          color: var(--ue-text-2);
+      }
+
+      /* ===== 设置主面板 ===== */
       #yzHelper-settings {
           position: fixed;
           bottom: 20px;
           right: 20px;
-          background: #ffffff;
-          box-shadow: 0 5px 25px rgba(0, 0, 0, 0.15);
-          border-radius: 12px;
-          z-index: 9999;
-          width: 500px;
-          height: 450px;
-          font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
-          transition: all 0.3s ease;
-          opacity: 0;
-          transform: translateY(10px);
-          color: #333;
+          background: var(--ue-bg);
+          border: 1px solid var(--ue-border);
+          box-shadow: var(--ue-shadow);
+          border-radius: 16px;
+          z-index: 10001;
+          width: 560px;
+          height: 480px;
+          color: var(--ue-text);
           overflow: hidden;
           display: flex;
           flex-direction: column;
           display: none;
+          opacity: 0;
+          transform: translateY(10px) scale(0.98);
+          transition: opacity 0.25s ease, transform 0.25s ease;
       }
       #yzHelper-settings.visible {
           opacity: 1;
-          transform: translateY(0);
+          transform: none;
       }
 
       #yzHelper-header {
-          padding: 15px 20px;
-          border-bottom: 1px solid #eee;
-          background-color: #ecb000;
-          color: white;
-          font-weight: bold;
-          font-size: 16px;
           display: flex;
-          justify-content: space-between;
           align-items: center;
+          gap: 10px;
+          padding: 13px 16px;
+          border-bottom: 1px solid var(--ue-border);
+      }
+      #yzHelper-header .hd-title {
+          font-size: 15px;
+          font-weight: 700;
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 9px;
+      }
+      #yzHelper-header .hd-logo {
+          width: 22px;
+          height: 22px;
+          border-radius: 7px;
+          background: linear-gradient(135deg, #3d7bff, #2962ff);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+      }
+      #yzHelper-header .hd-version {
+          font-size: 11px;
+          color: var(--ue-accent);
+          background: var(--ue-accent-weak);
+          padding: 2px 9px;
+          border-radius: 99px;
+          font-weight: 600;
+      }
+      #yzHelper-header .hd-close {
+          border: none;
+          background: transparent;
+          color: var(--ue-text-2);
+          font-size: 17px;
+          cursor: pointer;
+          width: 28px;
+          height: 28px;
+          border-radius: 8px;
+          line-height: 1;
+      }
+      #yzHelper-header .hd-close:hover {
+          background: var(--ue-bg-2);
+          color: var(--ue-text);
+      }
+
+      #yzHelper-searchbar {
+          padding: 10px 16px;
+          border-bottom: 1px solid var(--ue-border);
+      }
+      #yzHelper-search {
+          width: 100%;
+          box-sizing: border-box;
+          padding: 8px 12px;
+          border: 1px solid var(--ue-border);
+          border-radius: 10px;
+          background: var(--ue-bg-2);
+          color: var(--ue-text);
+          font-size: 13px;
+          outline: none;
+          transition: border-color 0.15s;
+      }
+      #yzHelper-search:focus {
+          border-color: var(--ue-accent);
+      }
+      #yzHelper-search::placeholder {
+          color: var(--ue-text-2);
       }
 
       #yzHelper-main {
@@ -1546,45 +1740,54 @@
       }
 
       #yzHelper-settings-sidebar {
-          width: 140px;
-          background: #f7f7f7;
-          padding: 15px 0;
-          border-right: 1px solid #eee;
+          width: 148px;
+          background: var(--ue-bg-2);
+          padding: 10px 8px;
+          border-right: 1px solid var(--ue-border);
           overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          box-sizing: border-box;
       }
 
       #yzHelper-settings-sidebar .menu-item {
-          padding: 12px 15px;
+          padding: 9px 10px;
           cursor: pointer;
-          transition: all 0.2s ease;
-          font-size: 14px;
-          color: #666;
+          font-size: 13px;
+          color: var(--ue-text-2);
           display: flex;
           align-items: center;
           gap: 8px;
+          border-radius: 9px;
+          transition: background 0.15s, color 0.15s;
       }
 
       #yzHelper-settings-sidebar .menu-item:hover {
-          background: #efefef;
-          color: #333;
+          color: var(--ue-text);
       }
 
       #yzHelper-settings-sidebar .menu-item.active {
-          background: #ffbe00;
-          color: #fff;
-          font-weight: 500;
+          background: var(--ue-bg);
+          color: var(--ue-accent);
+          font-weight: 600;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+      }
+
+      html.ue-dark-mode #yzHelper-settings-sidebar .menu-item.active {
+          background: var(--ue-accent-weak);
+          box-shadow: none;
       }
 
       #yzHelper-settings-sidebar .emoji {
-          font-size: 16px;
+          font-size: 15px;
       }
 
       #yzHelper-settings-content {
           flex: 1;
-          padding: 20px;
+          padding: 16px 18px;
           overflow-y: auto;
           position: relative;
-          padding-bottom: 70px; /* Space for buttons */
       }
 
       #yzHelper-settings-content .settings-section {
@@ -1595,14 +1798,23 @@
           display: block;
       }
 
+      /* 搜索态：所有分区平铺展示，未命中的设置项隐藏 */
+      #yzHelper-settings-content.searching .settings-section {
+          display: block;
+      }
+      #yzHelper-settings-content.searching #section-about,
+      #yzHelper-settings-content .setting-item.hidden-by-search {
+          display: none;
+      }
+
       #section-about .about-content {
-          line-height: 1.6;
-          font-size: 14px;
+          line-height: 1.7;
+          font-size: 13.5px;
       }
 
       #section-about h4 {
           margin: 16px 0 8px;
-          font-size: 15px;
+          font-size: 14.5px;
       }
 
       #section-about ul {
@@ -1617,18 +1829,19 @@
       #section-about .github-link {
           display: inline-flex;
           align-items: center;
-          padding: 6px 12px;
-          background: #f6f8fa;
-          border: 1px solid rgba(27, 31, 36, 0.15);
-          border-radius: 6px;
-          color: #24292f;
+          padding: 7px 13px;
+          background: var(--ue-bg-2);
+          border: 1px solid var(--ue-border);
+          border-radius: 8px;
+          color: var(--ue-text);
           text-decoration: none;
           font-weight: 500;
-          transition: background-color 0.2s;
+          transition: border-color 0.2s;
       }
 
       #section-about .github-link:hover {
-          background-color: #f3f4f6;
+          border-color: var(--ue-accent);
+          color: var(--ue-accent);
       }
 
       #section-about .github-icon {
@@ -1639,14 +1852,19 @@
 
       #section-about .feedback-note {
           margin-top: 14px;
-          border-top: 1px solid #eaecef;
+          border-top: 1px solid var(--ue-border);
           padding-top: 14px;
           font-size: 13px;
-          color: #57606a;
+          color: var(--ue-text-2);
+      }
+
+      #section-about a {
+          color: var(--ue-accent);
       }
 
       #section-about code {
-          background: rgba(175, 184, 193, 0.2);
+          background: var(--ue-bg-2);
+          color: var(--ue-text);
           padding: 0.2em 0.4em;
           border-radius: 6px;
           font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
@@ -1654,164 +1872,135 @@
       }
 
       #yzHelper-settings h3 {
-          margin-top: 0;
-          margin-bottom: 15px;
-          font-size: 18px;
-          font-weight: 600;
-          color: #2c3e50;
-          padding-bottom: 10px;
-          border-bottom: 1px solid #eee;
+          margin: 0 0 12px;
+          font-size: 15px;
+          font-weight: 700;
+          color: var(--ue-text);
+          display: flex;
+          align-items: center;
+          gap: 8px;
       }
       #yzHelper-settings .setting-item {
-          margin-bottom: 16px;
+          margin-bottom: 10px;
+          background: var(--ue-bg-2);
+          border: 1px solid transparent;
+          border-radius: 12px;
+          padding: 10px 12px;
+          transition: border-color 0.15s;
+      }
+      #yzHelper-settings .setting-item:hover {
+          border-color: var(--ue-border);
       }
       #yzHelper-settings .setting-toggle {
           display: flex;
           align-items: center;
       }
-      #yzHelper-settings .setting-item:last-of-type {
-          margin-bottom: 20px;
+      #yzHelper-settings .setting-toggle .switch {
+          order: 2;
+          margin-left: auto;
       }
-      #yzHelper-settings .switch {
+      #yzHelper-settings .setting-label {
+          flex: 1;
+          font-size: 13.5px;
+          font-weight: 500;
+          cursor: pointer;
+      }
+
+      /* ===== 开关（设置面板与快捷面板共用） ===== */
+      #yzHelper-settings .switch,
+      #yzHelper-quick .switch {
           position: relative;
           display: inline-block;
-          width: 44px;
-          height: 24px;
-          margin-right: 10px;
+          width: 40px;
+          height: 22px;
+          flex-shrink: 0;
       }
-      #yzHelper-settings .switch input {
+      #yzHelper-settings .switch input,
+      #yzHelper-quick .switch input {
           opacity: 0;
           width: 0;
           height: 0;
       }
-      #yzHelper-settings .slider {
+      #yzHelper-settings .slider,
+      #yzHelper-quick .slider {
           position: absolute;
           cursor: pointer;
           top: 0;
           left: 0;
           right: 0;
           bottom: 0;
-          background-color: #ccc;
-          transition: .3s;
-          border-radius: 24px;
+          background-color: rgba(128, 134, 142, 0.4);
+          transition: 0.25s;
+          border-radius: 22px;
       }
-      #yzHelper-settings .slider:before {
+      #yzHelper-settings .slider:before,
+      #yzHelper-quick .slider:before {
           position: absolute;
           content: "";
-          height: 18px;
-          width: 18px;
+          height: 16px;
+          width: 16px;
           left: 3px;
           bottom: 3px;
-          background-color: white;
-          transition: .3s;
+          background-color: #fff;
+          transition: 0.25s;
           border-radius: 50%;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
       }
-      #yzHelper-settings input:checked + .slider {
-          background-color: #ffbe00;
+      #yzHelper-settings input:checked + .slider,
+      #yzHelper-quick input:checked + .slider {
+          background-color: var(--ue-accent);
       }
-      #yzHelper-settings input:focus + .slider {
-          box-shadow: 0 0 1px #ffbe00;
+      #yzHelper-settings input:focus-visible + .slider,
+      #yzHelper-quick input:focus-visible + .slider {
+          box-shadow: 0 0 0 3px var(--ue-accent-weak);
       }
-      #yzHelper-settings input:checked + .slider:before {
-          transform: translateX(20px);
-      }
-      #yzHelper-settings .setting-label {
-          font-size: 14px;
-          cursor: pointer;
+      #yzHelper-settings input:checked + .slider:before,
+      #yzHelper-quick input:checked + .slider:before {
+          transform: translateX(18px);
       }
 
       #yzHelper-settings .setting-description {
-        display: block; /* 始终保持在DOM中 */
-        margin-left: 54px;
-        font-size: 12px;
-        color: #666;
-        background: #f9f9f9;
-        border-left: 3px solid #ffbe00;
-        border-radius: 0 4px 4px 0;
-        max-height: 0;
-        overflow: hidden;
-        opacity: 0;
-        transition: all 0.3s ease;
-        padding: 0 12px;
+          display: block;
+          margin-left: 0;
+          margin-top: 8px;
+          font-size: 12px;
+          line-height: 1.6;
+          color: var(--ue-text-2);
+          background: transparent;
+          border-left: 3px solid var(--ue-accent);
+          border-radius: 0 6px 6px 0;
+          max-height: 0;
+          overflow: hidden;
+          opacity: 0;
+          transition: all 0.25s ease;
+          padding: 0 12px;
       }
 
       #yzHelper-settings .setting-description.visible {
-        max-height: 100px;
-        opacity: 1;
-        margin-top: 8px;
-        padding: 8px 12px;
+          max-height: 120px;
+          opacity: 1;
+          padding: 6px 12px;
       }
 
-      #yzHelper-settings .buttons {
-          display: flex;
-          justify-content: flex-end;
-          gap: 10px;
-          position: fixed;
-          bottom: 0px;
-          right: 25px;
-          background: white;
-          padding: 10px 0;
-          width: calc(100% - 180px);
-          border-top: 1px solid #f5f5f5;
+      #yzHelper-settings input[type="number"] {
+          order: 2;
+          margin-left: auto;
+          width: 84px;
+          padding: 5px 8px;
+          border: 1px solid var(--ue-border);
+          border-radius: 8px;
+          background: var(--ue-bg);
+          color: var(--ue-text);
+          font-size: 13px;
+          outline: none;
           box-sizing: border-box;
       }
-      #yzHelper-settings button {
-          background: #ffbe00;
-          border: none;
-          padding: 8px 16px;
-          border-radius: 6px;
-          cursor: pointer;
-          font-weight: 500;
-          color: #fff;
-          transition: all 0.2s ease;
-          outline: none;
-          font-size: 14px;
+      #yzHelper-settings input[type="number"]:focus {
+          border-color: var(--ue-accent);
       }
-      #yzHelper-settings button:hover {
-          background: #e9ad00;
-      }
-      #yzHelper-settings button.cancel {
-          background: #f1f1f1;
-          color: #666;
-      }
-      #yzHelper-settings button.cancel:hover {
-          background: #e5e5e5;
-      }
-      #yzHelper-settings-toggle {
-          position: fixed;
-          bottom: 20px;
-          right: 20px;
-          background: #ffbe00;
-          color: #fff;
-          width: 50px;
-          height: 50px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 24px;
-          cursor: pointer;
-          z-index: 9998;
-          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
-          transition: all 0.3s ease;
-      }
-      #yzHelper-settings-toggle:hover {
-          transform: rotate(30deg);
-          box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-      }
-      #yzHelper-settings .setting-item.disabled .setting-toggle,
+
       #yzHelper-settings .setting-item .setting-toggle:has(input:disabled) {
-          opacity: 0.7;
-      }
-
-      #yzHelper-settings input:disabled + .slider {
-          background-color: #ffbe00;
-          opacity: 0.5;
-          cursor: not-allowed;
-      }
-
-      #yzHelper-settings input:disabled + .slider:before {
-          background-color: #f0f0f0;
+          opacity: 0.55;
       }
 
       #yzHelper-settings .setting-item:has(input:disabled) .setting-label:after {
@@ -1820,26 +2009,208 @@
       }
 
       #yzHelper-settings .setting-item:has(input:disabled) .setting-description {
-          border-left-color: #ccc;
+          border-left-color: var(--ue-border);
           font-style: italic;
       }
-      #yzHelper-version {
-          position: absolute;
-          bottom: 15px;
-          left: 20px;
-          font-size: 12px;
-          color: #999;
+
+      /* 滚动条与面板配色一致 */
+      #yzHelper-settings ::-webkit-scrollbar,
+      #yzHelper-quick ::-webkit-scrollbar {
+          width: 8px;
+      }
+      #yzHelper-settings ::-webkit-scrollbar-thumb,
+      #yzHelper-quick ::-webkit-scrollbar-thumb {
+          background: var(--ue-border);
+          border-radius: 4px;
       }
     `);
 
-    // 设置面板
-    const settingsToggle = document.createElement("div");
-    settingsToggle.id = "yzHelper-settings-toggle";
-    settingsToggle.innerHTML = "⚙️";
-    settingsToggle.title = "云邮助手设置";
-    if (settings.system.showConfigButton) {
-      document.body.appendChild(settingsToggle);
+    // ===== 悬浮球：可拖动、贴边吸附、位置记忆，点击弹出快捷面板 =====
+    const ball = document.createElement("div");
+    ball.id = "yzHelper-ball";
+    ball.title = "云邮助手 · 点击打开快捷面板，可拖动";
+    ball.innerHTML = "⚙";
+
+    const savedBallPos = GM_getValue("ui_ballPos", null);
+    if (savedBallPos && typeof savedBallPos.left === "number") {
+      ball.style.left =
+        Math.max(0, Math.min(savedBallPos.left, window.innerWidth - 46)) + "px";
+      ball.style.top =
+        Math.max(0, Math.min(savedBallPos.top, window.innerHeight - 46)) + "px";
+    } else {
+      ball.style.right = "20px";
+      ball.style.bottom = "20px";
     }
+
+    let dragState = null;
+    ball.addEventListener("pointerdown", (e) => {
+      dragState = { startX: e.clientX, startY: e.clientY, moved: false };
+      ball.setPointerCapture(e.pointerId);
+    });
+    ball.addEventListener("pointermove", (e) => {
+      if (!dragState) return;
+      const dx = e.clientX - dragState.startX;
+      const dy = e.clientY - dragState.startY;
+      if (!dragState.moved && Math.hypot(dx, dy) > 6) {
+        dragState.moved = true;
+        ball.classList.add("dragging");
+        const rect = ball.getBoundingClientRect();
+        ball.style.right = "auto";
+        ball.style.bottom = "auto";
+        ball.style.left = rect.left + "px";
+        ball.style.top = rect.top + "px";
+        closeQuickPanel();
+      }
+      if (dragState.moved) {
+        ball.style.left =
+          Math.max(8, Math.min(e.clientX - 23, window.innerWidth - 54)) + "px";
+        ball.style.top =
+          Math.max(8, Math.min(e.clientY - 23, window.innerHeight - 54)) + "px";
+      }
+    });
+    const finishDrag = () => {
+      if (!dragState) return;
+      const wasDrag = dragState.moved;
+      dragState = null;
+      ball.classList.remove("dragging");
+      if (wasDrag) {
+        const rect = ball.getBoundingClientRect();
+        const toLeft = rect.left + rect.width / 2 < window.innerWidth / 2;
+        const targetLeft = toLeft ? 8 : window.innerWidth - 54;
+        ball.classList.add("snap-anim");
+        ball.style.left = targetLeft + "px";
+        GM_setValue("ui_ballPos", { left: targetLeft, top: rect.top });
+        setTimeout(() => ball.classList.remove("snap-anim"), 300);
+      } else {
+        toggleQuickPanel();
+      }
+    };
+    ball.addEventListener("pointerup", finishDrag);
+    ball.addEventListener("pointercancel", finishDrag);
+    if (settings.system.showConfigButton) {
+      document.body.appendChild(ball);
+    }
+
+    // ===== 即改即存：改动立即写入并自动刷新生效 =====
+    let applyReloadTimer = null;
+
+    function saveSettingAndApply(category, key, value) {
+      settings[category][key] = value;
+      GM_setValue(`${category}_${key}`, value);
+      // 深色模式先即时生效，随后的刷新保证所有设置整体一致
+      if (category === "system" && key === "darkMode") applyDarkMode();
+      showNotification("已保存", "即将刷新生效…");
+      clearTimeout(applyReloadTimer);
+      applyReloadTimer = setTimeout(() => location.reload(), 700);
+    }
+
+    function bindAutoSave(container) {
+      container.addEventListener("change", (e) => {
+        const input = e.target;
+        if (!input || !input.id || !input.id.includes("_")) return;
+        const [category, settingName] = input.id.split("_");
+        if (!settings[category]) return;
+        if (input.type === "checkbox") {
+          saveSettingAndApply(category, settingName, input.checked);
+          container
+            .querySelectorAll(
+              `input[type="number"][data-enabled-by="${input.id}"]`
+            )
+            .forEach((n) => {
+              n.disabled = !input.checked;
+            });
+        } else if (input.type === "number") {
+          const v = parseInt(input.value, 10);
+          if (!isNaN(v)) saveSettingAndApply(category, settingName, v);
+        }
+      });
+    }
+
+    // ===== 快捷面板：高频开关直拨 =====
+    const quickPanel = document.createElement("div");
+    quickPanel.id = "yzHelper-quick";
+
+    function buildQuickPanel() {
+      const rows = [];
+      for (const [category, config] of Object.entries(settingsConfig)) {
+        for (const [key, item] of Object.entries(config.items)) {
+          if (!item.quick) continue;
+          const settingId = `${category}_${key}`;
+          rows.push(`
+            <div class="quick-item">
+              <span class="setting-label">${item.label}</span>
+              <label class="switch">
+                <input type="checkbox" id="${settingId}" ${
+            settings[category][key] ? "checked" : ""
+          } data-type="checkbox">
+                <span class="slider"></span>
+              </label>
+            </div>
+          `);
+        }
+      }
+      quickPanel.innerHTML = `
+        <div class="quick-title">快捷开关</div>
+        ${rows.join("")}
+        <div class="quick-footer">
+          <button class="quick-all" id="yzHelper-quick-all">⚙ 全部设置</button>
+          <span class="quick-ver">v${GM_info.script.version}</span>
+        </div>
+      `;
+    }
+
+    function positionQuickPanel() {
+      const rect = ball.getBoundingClientRect();
+      const width = 262;
+      let left = rect.left + rect.width / 2 - width / 2;
+      left = Math.max(10, Math.min(left, window.innerWidth - width - 10));
+      quickPanel.style.left = left + "px";
+      if (rect.top > 320) {
+        quickPanel.style.bottom = window.innerHeight - rect.top + 12 + "px";
+        quickPanel.style.top = "auto";
+      } else {
+        quickPanel.style.top = rect.bottom + 12 + "px";
+        quickPanel.style.bottom = "auto";
+      }
+    }
+
+    function openQuickPanel() {
+      buildQuickPanel();
+      positionQuickPanel();
+      quickPanel.classList.add("visible");
+    }
+
+    function closeQuickPanel() {
+      quickPanel.classList.remove("visible");
+    }
+
+    function toggleQuickPanel() {
+      if (quickPanel.classList.contains("visible")) closeQuickPanel();
+      else openQuickPanel();
+    }
+
+    document.body.appendChild(quickPanel);
+    bindAutoSave(quickPanel);
+    quickPanel.addEventListener("click", (e) => {
+      if (e.target.closest("#yzHelper-quick-all")) {
+        closeQuickPanel();
+        settingsTrigger();
+      }
+    });
+    // 点击快捷面板与悬浮球以外的区域时关闭快捷面板
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (!quickPanel.classList.contains("visible")) return;
+        if (
+          e.target.closest("#yzHelper-quick") ||
+          e.target.closest("#yzHelper-ball")
+        )
+          return;
+        closeQuickPanel();
+      },
+      true
+    );
 
     // 生成单个设置项的HTML
     function generateSettingItem(category, key, item) {
@@ -1873,15 +2244,14 @@
           <div class="setting-item">
             <div class="setting-toggle">
               <label class="setting-label" data-for="description-${settingId}">${item.label}</label>
-              <input type="number" 
-                id="${settingId}" 
-                value="${value}" 
-                min="${item.min || 0}" 
-                max="${item.max || 9999}" 
-                ${numberDisabledAttr} 
+              <input type="number"
+                id="${settingId}"
+                value="${value}"
+                min="${item.min || 0}"
+                max="${item.max || 9999}"
+                ${numberDisabledAttr}
                 ${enabledByAttr}
-                data-type="number"
-                style="width: 80px; padding: 4px 8px; border: 1px solid #ddd; border-radius: 4px; margin-left: 10px;">
+                data-type="number">
             </div>
             <div class="setting-description" id="description-${settingId}">
               ${item.description}
@@ -1949,7 +2319,7 @@
             <h4>🚀 主要功能</h4>
             <ul>
               <li>📍 个人主页优化 - 智能布局，提升交互体验</li>
-              <li>🔍 课程搜索 - 快速搜索"本学期课程"并记录最近使用</li>
+              <li>🔍 课程搜索 - 快速搜索并打开"本学期课程"</li>
               <li>📄 课件预览增强 - 流畅浏览，轻松获取学习资源</li>
               <li>📥 课程管理优化 - 批量下载，多样化下载选项</li>
               <li>📋 作业管理助手 - 精准显示课程归属，提高管理效率</li>
@@ -1984,8 +2354,15 @@
 
     const header = `
       <div id="yzHelper-header">
-        <span>云邮教学空间助手</span>
-        <span id="yzHelper-version">v${GM_info.script.version}</span>
+        <div class="hd-title">
+          <span class="hd-logo">⚙</span>
+          <span>云邮教学空间助手</span>
+          <span class="hd-version">v${GM_info.script.version}</span>
+        </div>
+        <button class="hd-close" id="yzHelper-close" title="关闭">✕</button>
+      </div>
+      <div id="yzHelper-searchbar">
+        <input id="yzHelper-search" type="text" placeholder="搜索设置项…" autocomplete="off">
       </div>
     `;
 
@@ -1997,10 +2374,6 @@
 
         <div id="yzHelper-settings-content">
             ${generateAllSections()}
-            <div class="buttons">
-                <button id="cancelSettings" class="cancel">取消</button>
-                <button id="saveSettings">保存设置</button>
-            </div>
         </div>
     </div>
     `;
@@ -2068,65 +2441,40 @@
       }
     }
 
-    settingsToggle.addEventListener("click", settingsTrigger);
+    // 主面板关闭按钮（与 settingsTrigger 等效切换）
+    document
+      .getElementById("yzHelper-close")
+      .addEventListener("click", settingsTrigger);
 
-    document.getElementById("cancelSettings").addEventListener("click", () => {
-      settingsPanel.classList.remove("visible");
-      setTimeout(() => {
-        settingsPanel.style.display = "none";
-      }, 300);
-    });
+    // 主面板设置项即改即存
+    bindAutoSave(document.getElementById("yzHelper-settings-content"));
 
-    // 为checkbox添加事件监听器以启用/禁用关联的number输入
-    document.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
-      checkbox.addEventListener('change', function() {
-        const checkboxId = this.id;
-        // 查找所有依赖此checkbox的number输入
-        document.querySelectorAll(`input[type="number"][data-enabled-by="${checkboxId}"]`).forEach(numberInput => {
-          numberInput.disabled = !this.checked;
-        });
-      });
-    });
-
-    document.getElementById("saveSettings").addEventListener("click", () => {
-      // 保存checkbox设置
-      Array.from(
-        document
-          .querySelector("#yzHelper-settings-content")
-          .querySelectorAll('input[type="checkbox"]:not(:disabled)')
-      ).forEach((checkbox) => {
-        const checkboxId = checkbox.id;
-        if (checkboxId.includes("_")) {
-          const [category, settingName] = checkboxId.split("_");
-          if (settings[category] && settingName !== undefined) {
-            settings[category][settingName] = checkbox.checked;
-            GM_setValue(`${category}_${settingName}`, checkbox.checked);
-          }
+    // 搜索过滤：命中设置项平铺展示，未命中的分区整体隐藏
+    const searchInput = document.getElementById("yzHelper-search");
+    const contentArea = document.getElementById("yzHelper-settings-content");
+    searchInput.addEventListener("input", () => {
+      const q = searchInput.value.trim().toLowerCase();
+      contentArea.classList.toggle("searching", q.length > 0);
+      contentArea.querySelectorAll(".setting-item").forEach((item) => {
+        if (!q) {
+          item.classList.remove("hidden-by-search");
+          return;
         }
+        item.classList.toggle(
+          "hidden-by-search",
+          !item.textContent.toLowerCase().includes(q)
+        );
       });
-      
-      // 保存number输入设置
-      Array.from(
-        document
-          .querySelector("#yzHelper-settings-content")
-          .querySelectorAll('input[type="number"]:not(:disabled)')
-      ).forEach((numberInput) => {
-        const inputId = numberInput.id;
-        if (inputId.includes("_")) {
-          const [category, settingName] = inputId.split("_");
-          if (settings[category] && settingName !== undefined) {
-            const value = parseInt(numberInput.value, 10);
-            settings[category][settingName] = value;
-            GM_setValue(`${category}_${settingName}`, value);
-          }
+      contentArea.querySelectorAll(".settings-section").forEach((section) => {
+        if (!q) {
+          section.style.display = "";
+          return;
         }
+        const hasVisible = Array.from(
+          section.querySelectorAll(".setting-item")
+        ).some((i) => !i.classList.contains("hidden-by-search"));
+        section.style.display = hasVisible ? "" : "none";
       });
-      
-      settingsPanel.classList.remove("visible");
-      setTimeout(() => {
-        settingsPanel.style.display = "none";
-        showNotification("设置已保存", "刷新页面后生效");
-      }, 300);
     });
 
     const ul_observer = new MutationObserver((mutations) => {
@@ -2600,12 +2948,10 @@
     }
   }
 
-  // 首页"本学期课程"：搜索框与最近使用
+  // 首页"本学期课程"：课程搜索框
   let courseListCache = null;
   let courseListPromise = null;
   let courseListLoading = false;
-  let courseClickTrackerInstalled = false;
-  let recentCourseRenderers = [];
 
   function getCookie(name) {
     const target = name + "=";
@@ -2687,62 +3033,8 @@
     return courseListPromise;
   }
 
-  function recentCoursesKey() {
-    const uid = getCookie("iClass-uuid") || getCookie("uuid") || "default";
-    return "home_recentCourses_" + uid;
-  }
-
-  function getRecentCourses() {
-    try {
-      const list = JSON.parse(GM_getValue(recentCoursesKey(), "[]"));
-      return Array.isArray(list) ? list : [];
-    } catch (e) {
-      return [];
-    }
-  }
-
-  function addRecentCourse(course) {
-    if (!course || !course.id) return;
-    const list = getRecentCourses().filter((x) => x.id !== course.id);
-    list.unshift({
-      id: course.id,
-      name: course.name || "",
-      teachers: course.teachers || "",
-      department: course.department || "",
-      time: Date.now(),
-    });
-    GM_setValue(recentCoursesKey(), JSON.stringify(list.slice(0, 30)));
-    recentCourseRenderers.forEach((render) => {
-      try {
-        render();
-      } catch (e) {
-        console.error("[ucloud-Enhanced] 刷新最近使用失败", e);
-      }
-    });
-  }
-
-  function formatRecentTime(time) {
-    if (!time) return "";
-    const diff = Date.now() - time;
-    if (diff < 60 * 1000) return "刚刚";
-    if (diff < 60 * 60 * 1000) return Math.floor(diff / (60 * 1000)) + " 分钟前";
-    if (diff < 24 * 60 * 60 * 1000)
-      return Math.floor(diff / (60 * 60 * 1000)) + " 小时前";
-    if (diff < 30 * 24 * 60 * 60 * 1000)
-      return Math.floor(diff / (24 * 60 * 60 * 1000)) + " 天前";
-    const d = new Date(time);
-    return (
-      d.getFullYear() +
-      "-" +
-      String(d.getMonth() + 1).padStart(2, "0") +
-      "-" +
-      String(d.getDate()).padStart(2, "0")
-    );
-  }
-
   function openCoursePage(course) {
     if (!course || !course.id) return;
-    addRecentCourse(course);
     const cached = (courseListCache || []).find((x) => x.id === course.id);
     const raw = (cached && cached.raw) || course.raw || {};
     const siteData = Object.assign({}, raw, {
@@ -2802,29 +3094,8 @@
     return null;
   }
 
-  function installCourseClickTracker() {
-    if (courseClickTrackerInstalled) return;
-    courseClickTrackerInstalled = true;
-    document.addEventListener(
-      "click",
-      (e) => {
-        if (!e.target || !e.target.closest) return;
-        const item = e.target.closest(".my-lesson-section .my-lesson-item");
-        if (!item) return;
-        const nameEl = item.querySelector(".my-lesson-name");
-        const name = nameEl ? nameEl.textContent.trim() : "";
-        if (!name) return;
-        getCourseList().then((list) => {
-          const course = list.find((c) => c.name === name);
-          if (course) addRecentCourse(course);
-        });
-      },
-      true
-    );
-  }
-
   async function setupLessonSearch() {
-    if (!settings.home.courseSearchBox && !settings.home.recentCourses) return;
+    if (!settings.home.courseSearchBox) return;
     const section = await waitForLessonSection();
     if (!section || section.querySelector(".yz-lesson-toolbar")) return;
     const header = section.querySelector(".my-lesson-header");
@@ -2978,60 +3249,6 @@
       toolbar.appendChild(searchWrap);
     }
 
-    let recentWrap = null;
-    const renderRecent = () => {
-      if (!recentWrap) return;
-      recentWrap.innerHTML = "";
-      if (!settings.home.recentCourses) {
-        recentWrap.hidden = true;
-        return;
-      }
-      const count = parseInt(settings.home.recentCoursesCount, 10) || 5;
-      const list = getRecentCourses().slice(0, Math.max(1, count));
-      if (!list.length) {
-        recentWrap.hidden = true;
-        return;
-      }
-      recentWrap.hidden = false;
-      const label = document.createElement("span");
-      label.className = "yz-lesson-recent-label";
-      label.textContent = "最近使用";
-      recentWrap.appendChild(label);
-      list.forEach((course) => {
-        const chip = document.createElement("span");
-        chip.className = "yz-lesson-recent-chip";
-        chip.textContent = course.name;
-        chip.title = [
-          course.name,
-          course.teachers,
-          course.department,
-          formatRecentTime(course.time),
-        ]
-          .filter(Boolean)
-          .join("\n");
-        chip.addEventListener("click", () => openCoursePage(course));
-        recentWrap.appendChild(chip);
-      });
-      const clear = document.createElement("span");
-      clear.className = "yz-lesson-recent-clear";
-      clear.textContent = "清空";
-      clear.title = "清空最近使用记录";
-      clear.addEventListener("click", () => {
-        GM_setValue(recentCoursesKey(), "[]");
-        renderRecent();
-      });
-      recentWrap.appendChild(clear);
-    };
-
-    if (settings.home.recentCourses) {
-      recentWrap = document.createElement("div");
-      recentWrap.className = "yz-lesson-recent";
-      toolbar.appendChild(recentWrap);
-      renderRecent();
-      recentCourseRenderers = [renderRecent];
-      installCourseClickTracker();
-    }
-
     header.appendChild(toolbar);
   }
 
@@ -3141,7 +3358,7 @@
       }
     `);
     }
-    if (settings.home.courseSearchBox || settings.home.recentCourses) {
+    if (settings.home.courseSearchBox) {
       GM_addStyle(`
       .yz-lesson-toolbar {
         display: flex;
@@ -3231,47 +3448,6 @@
         text-align: center;
         font-size: 12px;
         color: #92929d;
-      }
-      .yz-lesson-recent {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 6px;
-        min-width: 0;
-        margin-left: auto;
-      }
-      .yz-lesson-recent-label {
-        font-size: 12px;
-        color: #92929d;
-      }
-      .yz-lesson-recent-chip {
-        display: inline-block;
-        max-width: 160px;
-        padding: 3px 10px;
-        border-radius: 12px;
-        background: #f2f3f5;
-        color: #4b4b55;
-        font-size: 12px;
-        line-height: 18px;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        cursor: pointer;
-        transition: background .2s, color .2s;
-      }
-      .yz-lesson-recent-chip:hover {
-        background: rgba(41, 98, 255, .12);
-        color: #2962ff;
-      }
-      .yz-lesson-recent-clear {
-        padding: 3px 4px;
-        font-size: 12px;
-        color: #b2b7c2;
-        cursor: pointer;
-        transition: color .2s;
-      }
-      .yz-lesson-recent-clear:hover {
-        color: #f56c6c;
       }
     `);
     }
@@ -3491,7 +3667,7 @@
         const pageTitle = "个人主页 - 教学云空间";
         document.title = pageTitle;
       }
-      if (settings.home.courseSearchBox || settings.home.recentCourses) {
+      if (settings.home.courseSearchBox) {
         setupLessonSearch().catch((e) =>
           console.error("[ucloud-Enhanced] 初始化课程搜索失败", e)
         );
