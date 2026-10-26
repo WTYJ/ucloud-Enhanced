@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.9-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.10-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,10 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.10
+
+- 新增：作业详情页的课程名改为可点击链接——点击直接进入所属课程主页，打开方式遵循"在新标签页打开详情页"设置；旧版缓存的无课程 ID 记录仍按纯文本显示
 
 ### 1.3.9
 

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.9
+// @version      1.3.10
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
@@ -996,7 +996,7 @@
         showHomeworkSource: {
           type: 'checkbox',
           label: '显示作业所属课程',
-          description: '在作业详情页显示作业所属的课程名称，便于区分不同课程的作业。',
+          description: '在作业详情页显示作业所属的课程名称，便于区分不同课程的作业；点击课程名可直接进入课程主页。',
           defaultValue: true
         }
       }
@@ -2916,8 +2916,23 @@
 
     if (!existingText) {
       const p = document.createElement("p");
-      const t = document.createTextNode(x.name + "(" + x.teachers + ")");
-      p.appendChild(t);
+      const label = x.name + "(" + x.teachers + ")";
+      // 有课程 ID 时渲染成可点击链接，复用主页搜索框的跳转逻辑；
+      // 早期版本缓存下来的无 ID 记录仍按纯文本显示，避免点击无响应
+      if (x.id) {
+        const link = document.createElement("span");
+        link.className = "yz-course-link";
+        link.textContent = label;
+        link.title = "点击进入课程主页";
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openCoursePage(x);
+        });
+        p.appendChild(link);
+      } else {
+        p.appendChild(document.createTextNode(label));
+      }
       d[0].after(p);
     }
   }
@@ -3260,6 +3275,17 @@
       max-height: none !important;
     }
     `);
+    if (settings.homework.showHomeworkSource) {
+      GM_addStyle(`
+      .yz-course-link {
+        color: #0066cc;
+        cursor: pointer;
+      }
+      .yz-course-link:hover {
+        text-decoration: underline;
+      }
+      `);
+    }
     if (settings.home.showOverdueBadge) {
       GM_addStyle(`
       .yz-overdue-badge {
