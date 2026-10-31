@@ -913,6 +913,12 @@
           description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
+        todoContinuous: {
+          type: 'checkbox',
+          label: '待办不分页（连续列表）',
+          description: '把待办改为一个可连续滚动的完整列表，按截止时间从早到晚排列，不再按键翻页。',
+          defaultValue: true
+        },
         todoCardSkin: {
           type: 'checkbox',
           label: '待办卡片新样式（试验）',
@@ -2992,8 +2998,217 @@
     });
   }
 
+  // ===== 连续待办列表（不分页）=====
+  const yzTodoCountdowns = new Map();
+  let yzTodoTimer = null;
+
+  function todoIcon(type) {
+    const t = Number(type);
+    if (t === 1) return "💬";
+    if (t === 2) return "📝";
+    if (t === 4) return "❓";
+    return "📋";
+  }
+
+  function fmtDeadline(d) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return (
+      d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      " " + pad(d.getHours()) + ":" + pad(d.getMinutes())
+    );
+  }
+
+  function removeTodoContinuous() {
+    const section = document.querySelector(".in-progress-section");
+    if (section) {
+      section.classList.remove("yz-todo-continuous-on");
+      const wrap = section.querySelector(".yz-todo-continuous");
+      if (wrap) wrap.remove();
+    }
+    yzTodoCountdowns.clear();
+  }
+
+  function updateTodoCountdown(card) {
+    const rec = yzTodoCountdowns.get(card);
+    if (!rec) return;
+    const d = parseDeadline(rec.endTime);
+    if (!d) return;
+    const info = formatRemain(d - Date.now());
+    rec.badge.className = "yz-overdue-badge " + info.cls;
+    rec.badge.textContent = info.text;
+  }
+
+  function startTodoTicker() {
+    if (yzTodoTimer) return;
+    yzTodoTimer = setInterval(() => {
+      let alive = 0;
+      for (const card of yzTodoCountdowns.keys()) {
+        if (!card.isConnected) {
+          yzTodoCountdowns.delete(card);
+          continue;
+        }
+        alive++;
+        updateTodoCountdown(card);
+      }
+      if (!alive) {
+        clearInterval(yzTodoTimer);
+        yzTodoTimer = null;
+      }
+    }, 60 * 1000);
+  }
+
+  function renderTodoChips(card, task, info) {
+    const meta = card.querySelector(".yz-todo-meta");
+    if (!meta) return;
+    meta.textContent = "";
+    yzTodoCountdowns.delete(card);
+
+    const d = parseDeadline(task.endTime);
+    if (d) {
+      const chip = document.createElement("span");
+      chip.className = "yz-deadline-chip";
+      chip.textContent = "截止 " + fmtDeadline(d);
+      meta.appendChild(chip);
+
+      const badge = document.createElement("span");
+      const rem = formatRemain(d - Date.now());
+      badge.className = "yz-overdue-badge " + rem.cls;
+      badge.textContent = rem.text;
+      meta.appendChild(badge);
+      yzTodoCountdowns.set(card, { badge: badge, endTime: task.endTime });
+      startTodoTicker();
+    }
+    const mode = (info && info.mode) || pickModeName(task.assignmentType);
+    if (mode) {
+      const chip = document.createElement("span");
+      chip.className = "yz-task-chip mode";
+      chip.textContent = (mode === "小组作业" ? "👥 " : "👤 ") + mode;
+      meta.appendChild(chip);
+    }
+    if (info && info.attachments) {
+      const chip = document.createElement("span");
+      chip.className = "yz-task-chip info";
+      chip.textContent = "附件 " + info.attachments;
+      meta.appendChild(chip);
+    }
+    if (info && info.evaluation) {
+      const chip = document.createElement("span");
+      chip.className = "yz-task-chip info";
+      chip.textContent = "互评";
+      meta.appendChild(chip);
+    }
+    if (info && info.stat) {
+      const chip = document.createElement("span");
+      chip.className = "yz-task-chip";
+      chip.textContent =
+        "班级已交 " + info.stat.submitted + " / " + info.stat.total + " 人";
+      meta.appendChild(chip);
+    }
+  }
+
+  function buildTodoCard(task) {
+    const card = document.createElement("div");
+    card.className = "yz-todo-item yz-task-card";
+    card.dataset.activityId = task.activityId || task.id || "";
+
+    const icon = document.createElement("div");
+    icon.className = "yz-todo-icon";
+    icon.textContent = todoIcon(task.type);
+    card.appendChild(icon);
+
+    const box = document.createElement("div");
+    box.className = "yz-todo-box";
+    card.appendChild(box);
+
+    const title = document.createElement("div");
+    title.className = "yz-todo-title";
+    title.textContent = task.activityName || task.assignmentTitle || "未命名作业";
+    box.appendChild(title);
+
+    const course = document.createElement("div");
+    course.className = "yz-todo-course";
+    course.textContent = "课程加载中…";
+    box.appendChild(course);
+
+    const meta = document.createElement("div");
+    meta.className = "yz-todo-meta";
+    box.appendChild(meta);
+
+    card.addEventListener("click", () => {
+      const name = (task.activityName || task.assignmentTitle || "").trim();
+      const origin = Array.from(
+        document.querySelectorAll(".in-progress-body .in-progress-item")
+      ).find((n) => {
+        const el = n.querySelector(".activity-title");
+        return el && (el.textContent || "").trim() === name;
+      });
+      if (origin) origin.click();
+    });
+
+    renderTodoChips(card, task, null);
+    return card;
+  }
+
+  function renderTodoContinuous(list) {
+    const section = document.querySelector(".in-progress-section");
+    if (!section || !list || !list.length) return;
+    const body = section.querySelector(".in-progress-body");
+    if (!body) return;
+    section.classList.add("yz-todo-continuous-on");
+    let wrap = section.querySelector(".yz-todo-continuous");
+    if (!wrap) {
+      wrap = document.createElement("div");
+      wrap.className = "yz-todo-continuous";
+      body.parentNode.insertBefore(wrap, body.nextSibling);
+    }
+    wrap.textContent = "";
+    yzTodoCountdowns.clear();
+
+    const tasks = list
+      .map((t) => ({ t: t, ms: (parseDeadline(t.endTime) || { getTime: () => Infinity }).getTime() }))
+      .sort((a, b) => a.ms - b.ms)
+      .map((x) => x.t);
+
+    const cards = new Map();
+    tasks.forEach((task) => {
+      const card = buildTodoCard(task);
+      wrap.appendChild(card);
+      cards.set(task.activityId || task.id, card);
+    });
+
+    const ids = tasks.map((t) => t.activityId || t.id).filter(Boolean);
+    searchCourses(ids)
+      .then((infos) => {
+        tasks.forEach((task) => {
+          const id = task.activityId || task.id;
+          const card = cards.get(id);
+          if (!card || !card.isConnected) return;
+          const info = infos[id];
+          const el = card.querySelector(".yz-todo-course");
+          if (el) el.textContent = info ? info.name + "(" + info.teachers + ")" : "未知课程";
+        });
+      })
+      .catch(() => {});
+
+    tasks.forEach((task) => {
+      const id = task.activityId || task.id;
+      fetchAssignmentInfo(task).then((info) => {
+        const card = cards.get(id);
+        if (!card || !card.isConnected || !info) return;
+        renderTodoChips(card, task, info);
+      });
+    });
+  }
+
   // 更新作业显示
   async function updateAssignmentDisplay(list, page) {
+    if (!list || list.length === 0) return;
+    if (settings.home.todoContinuous) {
+      renderTodoContinuous(list);
+      return;
+    }
+    removeTodoContinuous();
+
     if (!list || list.length === 0) return;
 
     // 获取当前页的作业
@@ -3598,6 +3813,72 @@
         border-color: rgba(148, 163, 184, 0.35);
         color: #64748b;
         background: rgba(148, 163, 184, 0.1);
+      }
+      `);
+    }
+    if (settings.home.todoContinuous) {
+      GM_addStyle(`
+      .in-progress-section.yz-todo-continuous-on .in-progress-body {
+        display: none !important;
+      }
+      .in-progress-section.yz-todo-continuous-on .in-progress-header .header-control {
+        display: none !important;
+      }
+      .yz-todo-continuous {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        padding: 0 0 24px;
+      }
+      .yz-todo-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 14px;
+        padding: 14px 16px;
+        border-radius: 14px;
+        background-color: #fff;
+        box-shadow: inset 0 0 0 1px #eceff4;
+        cursor: pointer;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+      .yz-todo-item:hover {
+        box-shadow: inset 0 0 0 1px #d7e0ec, 0 8px 20px rgba(15, 23, 42, 0.08);
+        transform: translateY(-1px);
+      }
+      .yz-todo-icon {
+        flex: none;
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #eff6ff;
+        font-size: 20px;
+      }
+      .yz-todo-box {
+        flex: 1;
+        min-width: 0;
+      }
+      .yz-todo-title {
+        font-size: 14px;
+        font-weight: 600;
+        line-height: 20px;
+        color: #171725;
+      }
+      .yz-todo-course {
+        margin-top: 2px;
+        font-size: 12px;
+        line-height: 16px;
+        font-weight: 600;
+        color: #2563eb;
+      }
+      .yz-todo-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 6px;
       }
       `);
     }
