@@ -3112,6 +3112,44 @@
     }
   }
 
+  // 直接按平台路由规则打开待办详情（不依赖被隐藏的原卡片）
+  function openTodoTask(task) {
+    const id = task && (task.activityId || task.id);
+    if (!id) return;
+    const q = (obj) =>
+      Object.keys(obj)
+        .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
+        .map((k) => k + "=" + encodeURIComponent(obj[k]))
+        .join("&");
+    const type = Number(task.type);
+    if (type === 3 || type === 5) {
+      const tab = type === 3 ? "first" : "fourth";
+      location.href =
+        "course.html#/student/assignmentDetails_fullpage?" +
+        q({
+          activeTabName: tab,
+          assignmentId: id,
+          assignmentType: task.assignmentType === undefined ? 0 : task.assignmentType,
+          assignmentTitle: task.activityName || task.assignmentTitle || "",
+          evaluationStatus: task.evaluationStatus,
+          studentGroupId: task.studentGroupId,
+          isOpenEvaluation: task.isOpenEvaluation,
+        });
+      return;
+    }
+    if (type === 1) {
+      location.href = "course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id);
+      return;
+    }
+    if (type === 2) {
+      location.href = "course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id);
+      return;
+    }
+    if (type === 4) {
+      location.href = "course.html#/answer?id=" + encodeURIComponent(id);
+    }
+  }
+
   function buildTodoCard(task) {
     const card = document.createElement("div");
     card.className = "yz-todo-item yz-task-card";
@@ -3146,16 +3184,7 @@
     meta.className = "yz-todo-meta";
     box.appendChild(meta);
 
-    card.addEventListener("click", () => {
-      const name = (task.activityName || task.assignmentTitle || "").trim();
-      const origin = Array.from(
-        document.querySelectorAll(".in-progress-body .in-progress-item")
-      ).find((n) => {
-        const el = n.querySelector(".activity-title");
-        return el && (el.textContent || "").trim() === name;
-      });
-      if (origin) origin.click();
-    });
+    card.addEventListener("click", () => openTodoTask(task));
 
     renderTodoChips(card, task, null);
     return card;
