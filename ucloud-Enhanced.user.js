@@ -3070,14 +3070,17 @@
       chip.textContent = "截止 " + fmtDeadline(d);
       meta.appendChild(chip);
 
-      const badge = document.createElement("span");
-      const rem = formatRemain(d - Date.now());
-      badge.className = "yz-overdue-badge " + rem.cls;
-      badge.textContent = rem.text;
-      meta.appendChild(badge);
-      yzTodoCountdowns.set(card, { badge: badge, endTime: task.endTime });
-      startTodoTicker();
+      if (settings.home.showOverdueBadge) {
+        const badge = document.createElement("span");
+        const rem = formatRemain(d - Date.now());
+        badge.className = "yz-overdue-badge " + rem.cls;
+        badge.textContent = rem.text;
+        meta.appendChild(badge);
+        yzTodoCountdowns.set(card, { badge: badge, endTime: task.endTime });
+        startTodoTicker();
+      }
     }
+    if (!settings.home.showTaskMeta) return;
     const mode = (info && info.mode) || pickModeName(task.assignmentType);
     if (mode) {
       const chip = document.createElement("span");
@@ -3719,6 +3722,49 @@
 
   // 启用文本选择 修改按钮尺寸
   function addFunctionalCSS() {
+    // 待办胶囊基础样式：常驻，不随设置开关消失
+    GM_addStyle(`
+    .yz-deadline-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(148, 163, 184, 0.45);
+      background: rgba(148, 163, 184, 0.18);
+      color: #94a3b8;
+      font-size: 12px;
+      line-height: 1.4;
+      white-space: nowrap;
+    }
+    .yz-task-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+    }
+    .yz-task-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      border-radius: 999px;
+      border: 1px solid rgba(59, 130, 246, 0.35);
+      color: #2563eb;
+      background: rgba(59, 130, 246, 0.08);
+      white-space: nowrap;
+    }
+    .yz-task-chip.mode {
+      border-color: rgba(139, 92, 246, 0.35);
+      color: #7c3aed;
+      background: rgba(139, 92, 246, 0.1);
+    }
+    .yz-task-chip.info {
+      border-color: rgba(148, 163, 184, 0.35);
+      color: #64748b;
+      background: rgba(148, 163, 184, 0.1);
+    }
+    `);
     GM_addStyle(`
     .teacher-home-page .home-left-container .in-progress-section .in-progress-body .in-progress-item .activity-box .activity-title {
       height: auto !important;
