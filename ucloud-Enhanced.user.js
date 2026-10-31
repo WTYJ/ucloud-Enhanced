@@ -3798,6 +3798,8 @@
         display: inline-flex;
         align-items: center;
         padding: 1px 8px;
+        font-size: 12px;
+        line-height: 1.4;
         border-radius: 999px;
         border: 1px solid rgba(59, 130, 246, 0.35);
         color: #2563eb;
@@ -3879,6 +3881,8 @@
         align-items: center;
         gap: 6px;
         margin-top: 6px;
+        font-size: 12px;
+        line-height: 1.4;
       }
       `);
     }
