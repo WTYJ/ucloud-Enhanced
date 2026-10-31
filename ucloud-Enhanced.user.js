@@ -917,8 +917,8 @@
         showOverdueBadge: {
           type: 'checkbox',
           quick: true,
-          label: '待办逾期提示',
-          description: '在已逾期的待办旁显示红色"已逾期"标签，3天内到期的显示橙色"XXh截止"标签。',
+          label: '待办截止倒计时',
+          description: '在待办旁显示截止倒计时：3天内到期显示橙色剩余时间（精确到天/时/分，每分钟自动更新），已逾期显示红色逾期时长。',
           defaultValue: false
         },
         courseSearchBox: {
@@ -2752,6 +2752,87 @@
     return result;
   }
 
+  // 待办截止倒计时：把剩余毫秒差换算成分档文案与配色
+  // 只保留 3 天内的提醒（3 天以上返回 null，不显示），避免卡片被长期待办淹没
+  function formatRemain(diffMs) {
+    const MIN = 60 * 1000;
+    const HOUR = 60 * MIN;
+    const DAY = 24 * HOUR;
+    if (diffMs < 0) {
+      const past = -diffMs;
+      if (past < HOUR) return { cls: "overdue", text: "已逾期不足 1 时" };
+      if (past < DAY) return { cls: "overdue", text: "已逾期 " + Math.floor(past / HOUR) + " 时" };
+      return { cls: "overdue", text: "已逾期 " + Math.floor(past / DAY) + " 天" };
+    }
+    if (diffMs < HOUR) {
+      const m = Math.ceil(diffMs / MIN);
+      if (m >= 60) return { cls: "soon", text: "剩 1 时" };
+      return { cls: "soon", text: "剩 " + Math.max(1, m) + " 分" };
+    }
+    if (diffMs < DAY) {
+      const h = Math.floor(diffMs / HOUR);
+      const m = Math.floor((diffMs % HOUR) / MIN);
+      return { cls: "soon", text: "剩 " + h + " 时" + (m ? " " + m + " 分" : "") };
+    }
+    if (diffMs < 3 * DAY) {
+      const d = Math.floor(diffMs / DAY);
+      const h = Math.floor((diffMs % DAY) / HOUR);
+      return { cls: "soon", text: "剩 " + d + " 天" + (h ? " " + h + " 时" : "") };
+    }
+    return null;
+  }
+
+  // 已渲染倒计时徽标的节点 → 截止时间，供每分钟刷新；节点失效后自动剔除
+  const countdownBadges = new Map();
+  let countdownTimer = null;
+
+  function parseDeadline(endTime) {
+    if (!endTime) return null;
+    const d = new Date(String(endTime).replace(" ", "T"));
+    return isNaN(d.getTime()) ? null : d;
+  }
+
+  function renderCountdownBadge(node, endTime) {
+    if (!node || !node.isConnected) return;
+    const titleEl = node.querySelector(".activity-title");
+    if (!titleEl) return;
+    const end = parseDeadline(endTime);
+    if (!end) return;
+    const info = formatRemain(end - Date.now());
+    let badge = node.querySelector(".yz-overdue-badge");
+    if (!info) {
+      if (badge) badge.remove();
+      countdownBadges.delete(node);
+      return;
+    }
+    if (!badge) {
+      badge = document.createElement("span");
+      titleEl.appendChild(badge);
+    }
+    badge.className = "yz-overdue-badge " + info.cls;
+    badge.textContent = info.text;
+    countdownBadges.set(node, endTime);
+    ensureCountdownTicker();
+  }
+
+  // 每 60 秒重算一次，让倒计时在页面停留时自然走动；全部节点消失后自动停表
+  function ensureCountdownTicker() {
+    if (countdownTimer) return;
+    countdownTimer = setInterval(() => {
+      for (const [node, endTime] of countdownBadges) {
+        if (!node.isConnected) {
+          countdownBadges.delete(node);
+          continue;
+        }
+        renderCountdownBadge(node, endTime);
+      }
+      if (countdownBadges.size === 0) {
+        clearInterval(countdownTimer);
+        countdownTimer = null;
+      }
+    }, 60 * 1000);
+  }
+
   // 更新作业显示
   async function updateAssignmentDisplay(list, page) {
     if (!list || list.length === 0) return;
@@ -2843,23 +2924,7 @@
         }
       }
       if (settings.home.showOverdueBadge && tlist[idx] && tlist[idx].endTime) {
-        const existing = nodes[i].querySelector(".yz-overdue-badge");
-        if (existing) existing.remove();
-        const end = new Date(tlist[idx].endTime.replace(" ", "T"));
-        const now = new Date();
-        const diffMs = end - now;
-        if (diffMs < 0) {
-          const badge = document.createElement("span");
-          badge.className = "yz-overdue-badge overdue";
-          badge.textContent = "已逾期";
-          nodes[i].querySelector(".activity-title").appendChild(badge);
-        } else if (diffMs < 3 * 24 * 60 * 60 * 1000) {
-          const hours = Math.ceil(diffMs / (60 * 60 * 1000));
-          const badge = document.createElement("span");
-          badge.className = "yz-overdue-badge soon";
-          badge.textContent = hours + "h截止";
-          nodes[i].querySelector(".activity-title").appendChild(badge);
-        }
+        renderCountdownBadge(nodes[i], tlist[idx].endTime);
       }
     }
   }
@@ -3297,6 +3362,8 @@
         margin-left: 8px;
         vertical-align: middle;
         line-height: 1.4;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
       }
       .yz-overdue-badge.overdue {
         background: #f56c6c;
