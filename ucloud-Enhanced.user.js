@@ -2860,10 +2860,9 @@
     }, 60 * 1000);
   }
 
-  // 待办卡片补充信息：班级已交人数
-  // 优先用待办接口自带字段；缺失时按 activityId 拉一次作业详情并缓存
-  // （学生端作业详情接口含 totalNum / noSubmitNum，页面本身不展示而已）
-  const assignmentStatCache = new Map();
+  // 待办卡片补充信息：满分、作业模式、附件数、互评、班级已交人数
+  // 待办接口字段优先；缺失时按 activityId 拉一次作业详情并缓存
+  const assignmentInfoCache = new Map();
 
   function normalizeStat(total, noSubmit) {
     const t = Number(total);
@@ -2873,51 +2872,83 @@
     return { total: t, submitted: t - n };
   }
 
-  function fetchAssignmentStat(task) {
+  function pickModeName(type) {
+    const t = Number(type);
+    if (t === 0) return "个人作业";
+    if (t === 1) return "小组作业";
+    return "";
+  }
+
+  function collectDirectInfo(task) {
+    const info = {};
+    const stat = normalizeStat(task.totalNum, task.noSubmitNum);
+    if (stat) info.stat = stat;
+    const mode = pickModeName(task.assignmentType);
+    if (mode) info.mode = mode;
+    if (Number(task.isOpenEvaluation) === 1) info.evaluation = true;
+    return info;
+  }
+
+  function fetchAssignmentInfo(task) {
     const id = task && (task.activityId || task.id);
     if (!id) return Promise.resolve(null);
-    if (assignmentStatCache.has(id)) return assignmentStatCache.get(id);
+    if (assignmentInfoCache.has(id)) return assignmentInfoCache.get(id);
     const p = Promise.resolve()
       .then(() => getDetail(id))
       .then((json) => {
         const d = (json && json.data) || {};
-        return normalizeStat(d.totalNum, d.noSubmitNum);
+        const info = {};
+        const stat = normalizeStat(d.totalNum, d.noSubmitNum);
+        if (stat) info.stat = stat;
+        const mode = pickModeName(d.assignmentType);
+        if (mode) info.mode = mode;
+        const fullMark = Number(d.fullMark);
+        if (Number.isFinite(fullMark) && fullMark > 0) info.fullMark = fullMark;
+        if (Array.isArray(d.assignmentResource) && d.assignmentResource.length) {
+          info.attachments = d.assignmentResource.length;
+        }
+        if (Number(d.isOpenEvaluation) === 1) info.evaluation = true;
+        return Object.keys(info).length ? info : null;
       })
       .catch(() => null);
-    assignmentStatCache.set(id, p);
+    assignmentInfoCache.set(id, p);
     return p;
   }
 
-  function paintClassChip(host, stat) {
+  function paintTaskChips(host, info) {
     if (!host || !host.isConnected) return;
     const meta = ensureTaskMeta(host);
     if (!meta) return;
-    let chip = meta.querySelector(".yz-task-chip");
-    if (!stat) {
-      if (chip) chip.remove();
-      return;
+    meta.querySelectorAll(".yz-task-chip").forEach((c) => c.remove());
+    if (!info) return;
+    const chips = [];
+    if (info.fullMark) chips.push({ text: "满分 " + info.fullMark + " 分", cls: "info" });
+    if (info.mode) chips.push({ text: info.mode, cls: "info" });
+    if (info.attachments) chips.push({ text: "附件 " + info.attachments, cls: "info" });
+    if (info.evaluation) chips.push({ text: "互评", cls: "info" });
+    if (info.stat) {
+      chips.push({
+        text: "班级已交 " + info.stat.submitted + " / " + info.stat.total + " 人",
+        cls: "",
+      });
     }
-    if (!chip) {
-      chip = document.createElement("span");
-      chip.className = "yz-task-chip";
+    chips.forEach((c) => {
+      const chip = document.createElement("span");
+      chip.className = "yz-task-chip" + (c.cls ? " " + c.cls : "");
+      chip.textContent = c.text;
       meta.appendChild(chip);
-    }
-    chip.textContent =
-      "班级已交 " + stat.submitted + " / " + stat.total + " 人";
+    });
   }
 
   function renderTaskMeta(node, task) {
     if (!node || !node.isConnected || !task) return;
     const host = node.children && node.children[1];
     if (!host) return;
-    const direct = normalizeStat(task.totalNum, task.noSubmitNum);
-    if (direct) {
-      paintClassChip(host, direct);
-      return;
-    }
-    fetchAssignmentStat(task).then((stat) => {
+    const direct = collectDirectInfo(task);
+    if (Object.keys(direct).length) paintTaskChips(host, direct);
+    fetchAssignmentInfo(task).then((info) => {
       if (!node.isConnected) return;
-      paintClassChip(host, stat);
+      paintTaskChips(host, info || direct);
     });
   }
 
@@ -3496,6 +3527,11 @@
         color: #2563eb;
         background: rgba(59, 130, 246, 0.08);
         white-space: nowrap;
+      }
+      .yz-task-chip.info {
+        border-color: rgba(148, 163, 184, 0.35);
+        color: #64748b;
+        background: rgba(148, 163, 184, 0.1);
       }
       `);
     }
