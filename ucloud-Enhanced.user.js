@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      1.3.10
+// @version      1.3.11
 // @description  主页作业显示所属课程（含测试类待办），自动深色模式，主页课程搜索，使用Office 365预览课件，通知按时间排序，去除悬浮窗，解除复制限制，课件自动下载，批量下载，资源页展示全部下载按钮，更好的页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*

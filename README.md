@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-1.3.10-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-1.3.11-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -37,6 +37,13 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 1.3.11
+
+- 新增：待办截止倒计时精细化——按剩余时间显示「剩 X 天 X 时 / X 时 X 分 / X 分」，已逾期显示逾期时长，每分钟自动更新；3 天以上不显示，避免长期待办干扰
+- 新增：待办显示班级已交人数（`班级已交 x / y 人`）——优先用待办接口字段，缺失时自动读取一次作业详情并缓存；接口无数据时静默不显示
+- 改进：倒计时按紧迫度分级配色——24 小时内红色、1–3 天橙色、已逾期深红
+- 设置：「待办逾期提示」更名为「待办截止倒计时」；新增「待办显示班级进度」（默认开启）
 
 ### 1.3.10
 
