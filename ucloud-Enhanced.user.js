@@ -1174,7 +1174,7 @@
     if (
       el.closest &&
       el.closest(
-        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar"
+        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-meta,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge"
       )
     )
       return;
@@ -3539,8 +3539,9 @@
         color: #fff;
       }
       .yz-overdue-badge.later {
-        background: rgba(148, 163, 184, 0.18);
-        color: #64748b;
+        background: rgba(148, 163, 184, 0.22);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        color: #94a3b8;
       }
       .yz-overdue-badge.soon {
         background: #e6a23c;
@@ -3564,9 +3565,9 @@
         align-items: center;
         padding: 1px 8px;
         border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.3);
-        background: rgba(148, 163, 184, 0.08);
-        color: #64748b;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(148, 163, 184, 0.18);
+        color: #94a3b8;
         font-size: 12px;
         line-height: 1.4;
         white-space: nowrap;
