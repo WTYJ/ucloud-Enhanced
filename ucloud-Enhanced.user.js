@@ -3515,22 +3515,14 @@
       .yz-task-card .activity-post {
         border-radius: 12px;
       }
-      .yz-task-card .activity-box {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        column-gap: 10px;
-        row-gap: 3px;
-      }
       .yz-task-course {
-        flex: 1 0 100%;
+        display: block;
         font-size: 12px;
         line-height: 16px;
         font-weight: 600;
         color: #2563eb !important;
       }
       .yz-task-card .activity-title {
-        flex: 1 0 100%;
         height: auto !important;
         font-size: 14px;
         line-height: 20px;
@@ -3538,16 +3530,13 @@
         color: #171725;
       }
       .yz-task-card .yz-task-meta {
-        order: 1;
         display: flex;
         flex-wrap: wrap;
         align-items: center;
         gap: 6px;
-        margin-top: 0;
+        margin-top: 3px;
       }
       .yz-task-card .acitivity-dateline {
-        order: 2;
-        margin-left: auto;
         font-size: 12px;
         line-height: 16px;
         color: #94a3b8;
