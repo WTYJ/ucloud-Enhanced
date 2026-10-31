@@ -913,6 +913,12 @@
           description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
+        todoCardSkin: {
+          type: 'checkbox',
+          label: '待办卡片新样式（试验）',
+          description: '为待办卡片加上卡片化外观：圆角描边、课程名标签、截止时间右对齐、状态胶囊；关闭后恢复平台原样。',
+          defaultValue: true
+        },
         useWheelPageTurner: {
           type: 'checkbox',
           quick: true,
@@ -2798,6 +2804,18 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
+  // 待办卡片统一的信息行（倒计时 + 班级进度共用），不存在时创建
+  function ensureTaskMeta(host) {
+    if (!host) return null;
+    let meta = host.querySelector(".yz-task-meta");
+    if (!meta) {
+      meta = document.createElement("div");
+      meta.className = "yz-task-meta";
+      host.appendChild(meta);
+    }
+    return meta;
+  }
+
   function renderCountdownBadge(node, endTime) {
     if (!node || !node.isConnected) return;
     const titleEl = node.querySelector(".activity-title");
@@ -2805,7 +2823,9 @@
     const end = parseDeadline(endTime);
     if (!end) return;
     const info = formatRemain(end - Date.now());
-    let badge = node.querySelector(".yz-overdue-badge");
+    const meta = ensureTaskMeta(node.children && node.children[1]);
+    const scope = meta || titleEl;
+    let badge = scope.querySelector(".yz-overdue-badge");
     if (!info) {
       if (badge) badge.remove();
       countdownBadges.delete(node);
@@ -2813,7 +2833,8 @@
     }
     if (!badge) {
       badge = document.createElement("span");
-      titleEl.appendChild(badge);
+      if (meta) meta.insertBefore(badge, meta.firstChild);
+      else titleEl.appendChild(badge);
     }
     badge.className = "yz-overdue-badge " + info.cls;
     badge.textContent = info.text;
@@ -2869,17 +2890,13 @@
 
   function paintClassChip(host, stat) {
     if (!host || !host.isConnected) return;
-    let meta = host.querySelector(".yz-task-meta");
+    const meta = ensureTaskMeta(host);
+    if (!meta) return;
+    let chip = meta.querySelector(".yz-task-chip");
     if (!stat) {
-      if (meta) meta.remove();
+      if (chip) chip.remove();
       return;
     }
-    if (!meta) {
-      meta = document.createElement("div");
-      meta.className = "yz-task-meta";
-      host.appendChild(meta);
-    }
-    let chip = meta.querySelector(".yz-task-chip");
     if (!chip) {
       chip = document.createElement("span");
       chip.className = "yz-task-chip";
@@ -2980,18 +2997,24 @@
     }
 
     // 更新课程信息显示
+    const skin = !!settings.home.todoCardSkin;
     for (let i = 0; i < Math.min(nodes.length, texts.length); i++) {
       const idx = pickTextIndex(nodes[i], i);
-      if (nodes[i] && nodes[i].children[1]) {
-        if (nodes[i].children[1].children.length === 0) {
+      const card = nodes[i];
+      if (card && card.classList) card.classList.toggle("yz-task-card", skin);
+      if (card && card.children[1]) {
+        const host = card.children[1];
+        if (host.children.length === 0) {
           const p = document.createElement("div");
+          p.className = "yz-task-course";
           const t = document.createTextNode(texts[idx]);
           p.appendChild(t);
           p.style.color = "#0066cc";
-          nodes[i].children[1].insertAdjacentElement("afterbegin", p);
+          host.insertAdjacentElement("afterbegin", p);
         } else {
-          nodes[i].children[1].children[0].innerHTML = texts[idx];
-          nodes[i].children[1].children[0].style.color = "#0066cc";
+          host.children[0].innerHTML = texts[idx];
+          host.children[0].style.color = "#0066cc";
+          if (host.children[0].classList) host.children[0].classList.add("yz-task-course");
         }
       }
       if (settings.home.showTaskMeta && tlist[idx]) {
@@ -3473,6 +3496,65 @@
         color: #2563eb;
         background: rgba(59, 130, 246, 0.08);
         white-space: nowrap;
+      }
+      `);
+    }
+    if (settings.home.todoCardSkin) {
+      GM_addStyle(`
+      .in-progress-section .in-progress-item.yz-task-card {
+        box-sizing: border-box;
+        border-radius: 14px;
+        background-color: #fff;
+        box-shadow: inset 0 0 0 1px #eceff4;
+        transition: box-shadow 0.2s ease, transform 0.2s ease;
+      }
+      .in-progress-section .in-progress-item.yz-task-card:hover {
+        box-shadow: inset 0 0 0 1px #d7e0ec, 0 8px 20px rgba(15, 23, 42, 0.08);
+        transform: translateY(-1px);
+      }
+      .yz-task-card .activity-post {
+        border-radius: 12px;
+      }
+      .yz-task-card .activity-box {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        column-gap: 10px;
+        row-gap: 3px;
+      }
+      .yz-task-course {
+        flex: 1 0 100%;
+        font-size: 12px;
+        line-height: 16px;
+        font-weight: 600;
+        color: #2563eb !important;
+      }
+      .yz-task-card .activity-title {
+        flex: 1 0 100%;
+        height: auto !important;
+        font-size: 14px;
+        line-height: 20px;
+        font-weight: 600;
+        color: #171725;
+      }
+      .yz-task-card .yz-task-meta {
+        order: 1;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 0;
+      }
+      .yz-task-card .acitivity-dateline {
+        order: 2;
+        margin-left: auto;
+        font-size: 12px;
+        line-height: 16px;
+        color: #94a3b8;
+        text-align: right;
+      }
+      .yz-task-card .yz-overdue-badge {
+        margin-left: 0;
       }
       `);
     }
