@@ -3060,15 +3060,18 @@
   function renderTodoChips(card, task, info) {
     const meta = card.querySelector(".yz-todo-meta");
     if (!meta) return;
+    const headMeta = card.querySelector(".yz-todo-headmeta");
     meta.textContent = "";
+    if (headMeta) headMeta.textContent = "";
     yzTodoCountdowns.delete(card);
+    const attrHost = headMeta || meta;
 
     const d = parseDeadline(task.endTime);
     if (d) {
       const chip = document.createElement("span");
       chip.className = "yz-deadline-chip";
       chip.textContent = "截止 " + fmtDeadline(d);
-      meta.appendChild(chip);
+      attrHost.appendChild(chip);
 
       if (settings.home.showOverdueBadge) {
         const badge = document.createElement("span");
@@ -3086,7 +3089,7 @@
       const chip = document.createElement("span");
       chip.className = "yz-task-chip mode";
       chip.textContent = (mode === "小组作业" ? "👥 " : "👤 ") + mode;
-      meta.appendChild(chip);
+      attrHost.appendChild(chip);
     }
     if (info && info.attachments) {
       const chip = document.createElement("span");
@@ -3123,10 +3126,16 @@
     box.className = "yz-todo-box";
     card.appendChild(box);
 
+    const head = document.createElement("div");
+    head.className = "yz-todo-head";
+    box.appendChild(head);
     const title = document.createElement("div");
     title.className = "yz-todo-title";
     title.textContent = task.activityName || task.assignmentTitle || "未命名作业";
-    box.appendChild(title);
+    head.appendChild(title);
+    const headMeta = document.createElement("div");
+    headMeta.className = "yz-todo-headmeta";
+    head.appendChild(headMeta);
 
     const course = document.createElement("div");
     course.className = "yz-todo-course";
@@ -3908,11 +3917,27 @@
         flex: 1;
         min-width: 0;
       }
+      .yz-todo-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
       .yz-todo-title {
+        flex: 1;
+        min-width: 0;
         font-size: 14px;
         font-weight: 600;
         line-height: 20px;
         color: #171725;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .yz-todo-headmeta {
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
       .yz-todo-course {
         margin-top: 2px;
