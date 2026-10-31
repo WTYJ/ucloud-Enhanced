@@ -907,6 +907,12 @@
           description: '在主页待办列表的条目上显示其所属课程。',
           defaultValue: true
         },
+        showTaskMeta: {
+          type: 'checkbox',
+          label: '待办显示班级进度',
+          description: '在待办条目上显示班级已交人数与是否允许补交；接口未返回对应数据时不显示。',
+          defaultValue: true
+        },
         useWheelPageTurner: {
           type: 'checkbox',
           quick: true,
@@ -2766,13 +2772,13 @@
     }
     if (diffMs < HOUR) {
       const m = Math.ceil(diffMs / MIN);
-      if (m >= 60) return { cls: "soon", text: "剩 1 时" };
-      return { cls: "soon", text: "剩 " + Math.max(1, m) + " 分" };
+      if (m >= 60) return { cls: "urgent", text: "剩 1 时" };
+      return { cls: "urgent", text: "剩 " + Math.max(1, m) + " 分" };
     }
     if (diffMs < DAY) {
       const h = Math.floor(diffMs / HOUR);
       const m = Math.floor((diffMs % HOUR) / MIN);
-      return { cls: "soon", text: "剩 " + h + " 时" + (m ? " " + m + " 分" : "") };
+      return { cls: "urgent", text: "剩 " + h + " 时" + (m ? " " + m + " 分" : "") };
     }
     if (diffMs < 3 * DAY) {
       const d = Math.floor(diffMs / DAY);
@@ -2831,6 +2837,50 @@
         countdownTimer = null;
       }
     }, 60 * 1000);
+  }
+
+  // 待办卡片补充信息：班级已交人数、是否可补交
+  // 平台接口未返回对应字段时静默跳过，不显示占位文案
+  function renderTaskMeta(node, task) {
+    if (!node || !node.isConnected || !task) return;
+    const host = node.children && node.children[1];
+    if (!host) return;
+    const chips = [];
+    const total = Number(task.totalNum);
+    const noSubmit = Number(task.noSubmitNum);
+    if (
+      Number.isFinite(total) &&
+      Number.isFinite(noSubmit) &&
+      total > 0 &&
+      noSubmit >= 0 &&
+      noSubmit <= total
+    ) {
+      chips.push("班级已交 " + (total - noSubmit) + " / " + total + " 人");
+    }
+    const allowLate = task.allowLate === true || task.allowLate === 1;
+    let meta = host.querySelector(".yz-task-meta");
+    if (!chips.length && !allowLate) {
+      if (meta) meta.remove();
+      return;
+    }
+    if (!meta) {
+      meta = document.createElement("div");
+      meta.className = "yz-task-meta";
+      host.appendChild(meta);
+    }
+    meta.textContent = "";
+    if (chips.length) {
+      const chip = document.createElement("span");
+      chip.className = "yz-task-chip";
+      chip.textContent = chips[0];
+      meta.appendChild(chip);
+    }
+    if (allowLate) {
+      const chip = document.createElement("span");
+      chip.className = "yz-task-chip late";
+      chip.textContent = "可补交";
+      meta.appendChild(chip);
+    }
   }
 
   // 更新作业显示
@@ -2922,6 +2972,9 @@
           nodes[i].children[1].children[0].innerHTML = texts[idx];
           nodes[i].children[1].children[0].style.color = "#0066cc";
         }
+      }
+      if (settings.home.showTaskMeta && tlist[idx]) {
+        renderTaskMeta(nodes[i], tlist[idx]);
       }
       if (settings.home.showOverdueBadge && tlist[idx] && tlist[idx].endTime) {
         renderCountdownBadge(nodes[i], tlist[idx].endTime);
@@ -3366,12 +3419,44 @@
         font-variant-numeric: tabular-nums;
       }
       .yz-overdue-badge.overdue {
-        background: #f56c6c;
+        background: #b91c1c;
+        color: #fff;
+      }
+      .yz-overdue-badge.urgent {
+        background: #ef4444;
         color: #fff;
       }
       .yz-overdue-badge.soon {
         background: #e6a23c;
         color: #fff;
+      }
+      `);
+    }
+    if (settings.home.showTaskMeta) {
+      GM_addStyle(`
+      .yz-task-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 4px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+      .yz-task-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        color: #2563eb;
+        background: rgba(59, 130, 246, 0.08);
+        white-space: nowrap;
+      }
+      .yz-task-chip.late {
+        border-color: rgba(34, 197, 94, 0.4);
+        color: #16a34a;
+        background: rgba(34, 197, 94, 0.08);
       }
       `);
     }
