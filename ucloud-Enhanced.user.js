@@ -2806,33 +2806,40 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // 把平台自带的「截止时间」文本包成胶囊
+  // 把平台自带的「截止时间」文本改造成胶囊，并入统一信息行
   function renderDeadlineChip(host, endTime) {
     if (!host || !host.isConnected) return;
-    const dateRe = /(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/;
-    let chip = host.querySelector(".yz-deadline-chip");
+    const meta = ensureTaskMeta(host);
+    if (!meta) return;
+    let chip = meta.querySelector(".yz-deadline-chip");
     if (!chip) {
+      const dateRe = /(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/;
+      let dateText = "";
       for (const node of Array.from(host.childNodes)) {
         if (node.nodeType === 3 && dateRe.test(node.nodeValue || "")) {
-          const m = dateRe.exec(node.nodeValue);
-          chip = document.createElement("span");
-          chip.className = "yz-deadline-chip";
-          chip.textContent = "截止 " + m[1] + "-" + m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
-          host.replaceChild(chip, node);
+          dateText = node.nodeValue;
+          if (node.parentNode) node.parentNode.removeChild(node);
           break;
         }
       }
-    }
-    if (!chip && endTime) {
-      const d = parseDeadline(endTime);
-      if (!d) return;
-      const pad = (n) => String(n).padStart(2, "0");
+      let label = "";
+      const m = dateRe.exec(dateText);
+      if (m) {
+        label = "截止 " + m[1] + "-" + m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
+      } else if (endTime) {
+        const d = parseDeadline(endTime);
+        if (!d) return;
+        const pad = (n) => String(n).padStart(2, "0");
+        label =
+          "截止 " + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+          " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+      } else {
+        return;
+      }
       chip = document.createElement("span");
       chip.className = "yz-deadline-chip";
-      chip.textContent =
-        "截止 " + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-        " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
-      host.appendChild(chip);
+      chip.textContent = label;
+      meta.insertBefore(chip, meta.firstChild);
     }
   }
 
@@ -3629,9 +3636,14 @@
         flex-wrap: wrap;
         align-items: center;
         gap: 6px;
-        margin-top: 3px;
+        margin-top: 0;
       }
       .yz-task-card .acitivity-dateline {
+        display: flex;
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 5px;
+        margin-top: 6px;
         font-size: 12px;
         line-height: 16px;
         color: #94a3b8;
