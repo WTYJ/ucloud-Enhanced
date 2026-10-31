@@ -2856,9 +2856,8 @@
     const id = task && (task.activityId || task.id);
     if (!id) return Promise.resolve(null);
     if (assignmentStatCache.has(id)) return assignmentStatCache.get(id);
-    const p = apiFetch(
-      "ykt-site/assignment/check-assignment-detail?assignmentId=" + id
-    )
+    const p = Promise.resolve()
+      .then(() => getDetail(id))
       .then((json) => {
         const d = (json && json.data) || {};
         return normalizeStat(d.totalNum, d.noSubmitNum);
