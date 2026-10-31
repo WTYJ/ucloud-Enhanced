@@ -913,12 +913,6 @@
           description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
-        sortByDeadline: {
-          type: 'checkbox',
-          label: '待办按截止时间排序',
-          description: '每页待办按截止时间升序排列，最先截止的排在最前；关闭后保持平台原顺序。',
-          defaultValue: true
-        },
         todoCardSkin: {
           type: 'checkbox',
           label: '待办卡片新样式（试验）',
@@ -3063,38 +3057,6 @@
       }
     }
 
-    if (settings.home.sortByDeadline) sortCardsByDeadline(nodes, tlist);
-  }
-
-  // 按截止时间升序重排本页卡片；顺序已正确时不触碰 DOM，避免观察器自激
-  function sortCardsByDeadline(nodes, tlist) {
-    if (!nodes || nodes.length < 2) return;
-    const parent = nodes[0].parentNode;
-    if (!parent) return;
-    const entries = nodes.map((node, i) => {
-      let ms = Infinity;
-      const line = node.querySelector(".acitivity-dateline");
-      const m =
-        line &&
-        /(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/.exec(line.textContent || "");
-      if (m) {
-        const t = new Date(m[1] + "T" + m[2]).getTime();
-        if (!isNaN(t)) ms = t;
-      }
-      if (ms === Infinity && tlist && tlist[i] && tlist[i].endTime) {
-        const d = parseDeadline(tlist[i].endTime);
-        if (d) ms = d.getTime();
-      }
-      return { node: node, ms: ms };
-    });
-    entries.sort((a, b) => a.ms - b.ms);
-    const desired = entries.map((e) => e.node);
-    const current = Array.prototype.filter.call(
-      parent.children,
-      (n) => nodes.indexOf(n) >= 0
-    );
-    const changed = desired.some((n, i) => n !== current[i]);
-    if (changed) desired.forEach((n) => parent.appendChild(n));
   }
 
   // XPath选择器
