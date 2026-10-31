@@ -3540,7 +3540,6 @@
         font-size: 12px;
         line-height: 16px;
         color: #94a3b8;
-        text-align: right;
       }
       .yz-task-card .yz-overdue-badge {
         margin-left: 0;
