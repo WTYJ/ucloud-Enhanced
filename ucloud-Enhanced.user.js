@@ -913,6 +913,12 @@
           description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
+        sortByDeadline: {
+          type: 'checkbox',
+          label: '待办按截止时间排序',
+          description: '每页待办按截止时间升序排列，最先截止的排在最前；关闭后保持平台原顺序。',
+          defaultValue: true
+        },
         todoCardSkin: {
           type: 'checkbox',
           label: '待办卡片新样式（试验）',
@@ -2873,9 +2879,8 @@
   }
 
   function pickModeName(type) {
-    const t = Number(type);
-    if (t === 0) return "个人作业";
-    if (t === 1) return "小组作业";
+    if (type === 0 || type === "0") return "个人作业";
+    if (type === 1 || type === "1") return "小组作业";
     return "";
   }
 
@@ -2902,8 +2907,6 @@
         if (stat) info.stat = stat;
         const mode = pickModeName(d.assignmentType);
         if (mode) info.mode = mode;
-        const fullMark = Number(d.fullMark);
-        if (Number.isFinite(fullMark) && fullMark > 0) info.fullMark = fullMark;
         if (Array.isArray(d.assignmentResource) && d.assignmentResource.length) {
           info.attachments = d.assignmentResource.length;
         }
@@ -2922,8 +2925,12 @@
     meta.querySelectorAll(".yz-task-chip").forEach((c) => c.remove());
     if (!info) return;
     const chips = [];
-    if (info.fullMark) chips.push({ text: "满分 " + info.fullMark + " 分", cls: "info" });
-    if (info.mode) chips.push({ text: info.mode, cls: "info" });
+    if (info.mode) {
+      chips.push({
+        text: (info.mode === "小组作业" ? "👥 " : "👤 ") + info.mode,
+        cls: "mode",
+      });
+    }
     if (info.attachments) chips.push({ text: "附件 " + info.attachments, cls: "info" });
     if (info.evaluation) chips.push({ text: "互评", cls: "info" });
     if (info.stat) {
@@ -3055,6 +3062,39 @@
         renderCountdownBadge(nodes[i], tlist[idx].endTime);
       }
     }
+
+    if (settings.home.sortByDeadline) sortCardsByDeadline(nodes, tlist);
+  }
+
+  // 按截止时间升序重排本页卡片；顺序已正确时不触碰 DOM，避免观察器自激
+  function sortCardsByDeadline(nodes, tlist) {
+    if (!nodes || nodes.length < 2) return;
+    const parent = nodes[0].parentNode;
+    if (!parent) return;
+    const entries = nodes.map((node, i) => {
+      let ms = Infinity;
+      const line = node.querySelector(".acitivity-dateline");
+      const m =
+        line &&
+        /(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})/.exec(line.textContent || "");
+      if (m) {
+        const t = new Date(m[1] + "T" + m[2]).getTime();
+        if (!isNaN(t)) ms = t;
+      }
+      if (ms === Infinity && tlist && tlist[i] && tlist[i].endTime) {
+        const d = parseDeadline(tlist[i].endTime);
+        if (d) ms = d.getTime();
+      }
+      return { node: node, ms: ms };
+    });
+    entries.sort((a, b) => a.ms - b.ms);
+    const desired = entries.map((e) => e.node);
+    const current = Array.prototype.filter.call(
+      parent.children,
+      (n) => nodes.indexOf(n) >= 0
+    );
+    const changed = desired.some((n, i) => n !== current[i]);
+    if (changed) desired.forEach((n) => parent.appendChild(n));
   }
 
   // XPath选择器
@@ -3527,6 +3567,11 @@
         color: #2563eb;
         background: rgba(59, 130, 246, 0.08);
         white-space: nowrap;
+      }
+      .yz-task-chip.mode {
+        border-color: rgba(139, 92, 246, 0.35);
+        color: #7c3aed;
+        background: rgba(139, 92, 246, 0.1);
       }
       .yz-task-chip.info {
         border-color: rgba(148, 163, 184, 0.35);
