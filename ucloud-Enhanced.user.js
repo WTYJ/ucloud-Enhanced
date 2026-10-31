@@ -930,7 +930,7 @@
           type: 'checkbox',
           quick: true,
           label: '待办截止倒计时',
-          description: '在待办旁显示截止倒计时：3天内到期显示橙色剩余时间（精确到天/时/分，每分钟自动更新），已逾期显示红色逾期时长。',
+          description: '在待办旁显示截止倒计时：未到期显示剩余时间（精确到天/时/分，每分钟自动更新），已逾期显示红色逾期时长；全部待办均显示。',
           defaultValue: false
         },
         courseSearchBox: {
@@ -2791,7 +2791,9 @@
       const h = Math.floor((diffMs % DAY) / HOUR);
       return { cls: "soon", text: "剩 " + d + " 天" + (h ? " " + h + " 时" : "") };
     }
-    return null;
+    const days = Math.floor(diffMs / DAY);
+    const hours = Math.floor((diffMs % DAY) / HOUR);
+    return { cls: "later", text: "剩 " + days + " 天" + (hours ? " " + hours + " 时" : "") };
   }
 
   // 已渲染倒计时徽标的节点 → 截止时间，供每分钟刷新；节点失效后自动剔除
@@ -2802,6 +2804,36 @@
     if (!endTime) return null;
     const d = new Date(String(endTime).replace(" ", "T"));
     return isNaN(d.getTime()) ? null : d;
+  }
+
+  // 把平台自带的「截止时间」文本包成胶囊
+  function renderDeadlineChip(host, endTime) {
+    if (!host || !host.isConnected) return;
+    const dateRe = /(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/;
+    let chip = host.querySelector(".yz-deadline-chip");
+    if (!chip) {
+      for (const node of Array.from(host.childNodes)) {
+        if (node.nodeType === 3 && dateRe.test(node.nodeValue || "")) {
+          const m = dateRe.exec(node.nodeValue);
+          chip = document.createElement("span");
+          chip.className = "yz-deadline-chip";
+          chip.textContent = "截止 " + m[1] + "-" + m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
+          host.replaceChild(chip, node);
+          break;
+        }
+      }
+    }
+    if (!chip && endTime) {
+      const d = parseDeadline(endTime);
+      if (!d) return;
+      const pad = (n) => String(n).padStart(2, "0");
+      chip = document.createElement("span");
+      chip.className = "yz-deadline-chip";
+      chip.textContent =
+        "截止 " + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+        " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+      host.appendChild(chip);
+    }
   }
 
   // 待办卡片统一的信息行（倒计时 + 班级进度共用），不存在时创建
@@ -3048,6 +3080,9 @@
           host.children[0].style.color = "#0066cc";
           if (host.children[0].classList) host.children[0].classList.add("yz-task-course");
         }
+      }
+      if (skin && tlist[idx] && tlist[idx].endTime) {
+        renderDeadlineChip(nodes[i].children[1], tlist[idx].endTime);
       }
       if (settings.home.showTaskMeta && tlist[idx]) {
         renderTaskMeta(nodes[i], tlist[idx]);
@@ -3503,6 +3538,10 @@
         background: #ef4444;
         color: #fff;
       }
+      .yz-overdue-badge.later {
+        background: rgba(148, 163, 184, 0.18);
+        color: #64748b;
+      }
       .yz-overdue-badge.soon {
         background: #e6a23c;
         color: #fff;
@@ -3519,6 +3558,18 @@
         margin-top: 4px;
         font-size: 12px;
         line-height: 1.4;
+      }
+      .yz-deadline-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.3);
+        background: rgba(148, 163, 184, 0.08);
+        color: #64748b;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: nowrap;
       }
       .yz-task-chip {
         display: inline-flex;
