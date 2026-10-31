@@ -910,7 +910,7 @@
         showTaskMeta: {
           type: 'checkbox',
           label: '待办显示班级进度',
-          description: '在待办条目上显示班级已交人数与是否允许补交；接口未返回对应数据时不显示。',
+          description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
         useWheelPageTurner: {
@@ -2839,27 +2839,39 @@
     }, 60 * 1000);
   }
 
-  // 待办卡片补充信息：班级已交人数、是否可补交
-  // 平台接口未返回对应字段时静默跳过，不显示占位文案
-  function renderTaskMeta(node, task) {
-    if (!node || !node.isConnected || !task) return;
-    const host = node.children && node.children[1];
-    if (!host) return;
-    const chips = [];
-    const total = Number(task.totalNum);
-    const noSubmit = Number(task.noSubmitNum);
-    if (
-      Number.isFinite(total) &&
-      Number.isFinite(noSubmit) &&
-      total > 0 &&
-      noSubmit >= 0 &&
-      noSubmit <= total
-    ) {
-      chips.push("班级已交 " + (total - noSubmit) + " / " + total + " 人");
-    }
-    const allowLate = task.allowLate === true || task.allowLate === 1;
+  // 待办卡片补充信息：班级已交人数
+  // 优先用待办接口自带字段；缺失时按 activityId 拉一次作业详情并缓存
+  // （学生端作业详情接口含 totalNum / noSubmitNum，页面本身不展示而已）
+  const assignmentStatCache = new Map();
+
+  function normalizeStat(total, noSubmit) {
+    const t = Number(total);
+    const n = Number(noSubmit);
+    if (!Number.isFinite(t) || !Number.isFinite(n)) return null;
+    if (t <= 0 || n < 0 || n > t) return null;
+    return { total: t, submitted: t - n };
+  }
+
+  function fetchAssignmentStat(task) {
+    const id = task && (task.activityId || task.id);
+    if (!id) return Promise.resolve(null);
+    if (assignmentStatCache.has(id)) return assignmentStatCache.get(id);
+    const p = apiFetch(
+      "ykt-site/assignment/check-assignment-detail?assignmentId=" + id
+    )
+      .then((json) => {
+        const d = (json && json.data) || {};
+        return normalizeStat(d.totalNum, d.noSubmitNum);
+      })
+      .catch(() => null);
+    assignmentStatCache.set(id, p);
+    return p;
+  }
+
+  function paintClassChip(host, stat) {
+    if (!host || !host.isConnected) return;
     let meta = host.querySelector(".yz-task-meta");
-    if (!chips.length && !allowLate) {
+    if (!stat) {
       if (meta) meta.remove();
       return;
     }
@@ -2868,19 +2880,29 @@
       meta.className = "yz-task-meta";
       host.appendChild(meta);
     }
-    meta.textContent = "";
-    if (chips.length) {
-      const chip = document.createElement("span");
+    let chip = meta.querySelector(".yz-task-chip");
+    if (!chip) {
+      chip = document.createElement("span");
       chip.className = "yz-task-chip";
-      chip.textContent = chips[0];
       meta.appendChild(chip);
     }
-    if (allowLate) {
-      const chip = document.createElement("span");
-      chip.className = "yz-task-chip late";
-      chip.textContent = "可补交";
-      meta.appendChild(chip);
+    chip.textContent =
+      "班级已交 " + stat.submitted + " / " + stat.total + " 人";
+  }
+
+  function renderTaskMeta(node, task) {
+    if (!node || !node.isConnected || !task) return;
+    const host = node.children && node.children[1];
+    if (!host) return;
+    const direct = normalizeStat(task.totalNum, task.noSubmitNum);
+    if (direct) {
+      paintClassChip(host, direct);
+      return;
     }
+    fetchAssignmentStat(task).then((stat) => {
+      if (!node.isConnected) return;
+      paintClassChip(host, stat);
+    });
   }
 
   // 更新作业显示
@@ -3452,11 +3474,6 @@
         color: #2563eb;
         background: rgba(59, 130, 246, 0.08);
         white-space: nowrap;
-      }
-      .yz-task-chip.late {
-        border-color: rgba(34, 197, 94, 0.4);
-        color: #16a34a;
-        background: rgba(34, 197, 94, 0.08);
       }
       `);
     }
