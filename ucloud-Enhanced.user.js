@@ -3932,9 +3932,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(59, 130, 246, 0.16);
-        border: 1px solid rgba(59, 130, 246, 0.3);
-        color: #60a5fa;
+        background: rgba(59, 130, 246, 0.28);
+        border: 1px solid rgba(59, 130, 246, 0.55);
+        color: #93c5fd;
         font-size: 20px;
       }
       .yz-todo-box {
