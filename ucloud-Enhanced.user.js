@@ -1180,7 +1180,7 @@
     if (
       el.closest &&
       el.closest(
-        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-meta,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge"
+        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-meta,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon"
       )
     )
       return;
@@ -3002,14 +3002,6 @@
   const yzTodoCountdowns = new Map();
   let yzTodoTimer = null;
 
-  function todoIcon(type) {
-    const t = Number(type);
-    if (t === 1) return "💬";
-    if (t === 2) return "📝";
-    if (t === 4) return "❓";
-    return "📋";
-  }
-
   function fmtDeadline(d) {
     const pad = (n) => String(n).padStart(2, "0");
     return (
@@ -3157,7 +3149,8 @@
 
     const icon = document.createElement("div");
     icon.className = "yz-todo-icon";
-    icon.textContent = todoIcon(task.type);
+    icon.innerHTML =
+      '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9.5 13h6"/><path d="M9.5 16.5h4"/></svg>';
     card.appendChild(icon);
 
     const box = document.createElement("div");
@@ -3939,7 +3932,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: #eff6ff;
+        background: rgba(59, 130, 246, 0.16);
+        border: 1px solid rgba(59, 130, 246, 0.3);
+        color: #60a5fa;
         font-size: 20px;
       }
       .yz-todo-box {
