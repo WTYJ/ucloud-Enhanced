@@ -3644,6 +3644,12 @@
       }
       `);
     }
+    // 板块级容器圆角统一（最底层卡片）
+    GM_addStyle(`
+    .teacher-home-page .home-card {
+      border-radius: 20px !important;
+    }
+    `);
     // 卡片圆角统一：课程卡 / 待办卡 / 右侧待办
     GM_addStyle(`
     .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item,
@@ -3661,20 +3667,30 @@
       .main-content .router-container .menu-nav {
         display: none !important;
       }
-      .main-content .router-container .box {
+      .main-content:has(.teacher-home-page),
+      .main-content:has(.teacher-home-page) .router-container {
         width: 100% !important;
-        max-width: none;
-        display: block;
       }
-      .teacher-home-page {
-        max-width: 1680px !important;
+      .main-content:has(.teacher-home-page) .router-container .box {
+        width: 100% !important;
+        max-width: none !important;
+        display: block !important;
         margin: 0 auto !important;
       }
+      .teacher-home-page {
+        box-sizing: border-box !important;
+        width: 100% !important;
+        max-width: 1680px !important;
+        margin-left: auto !important;
+        margin-right: auto !important;
+        padding: 0 16px !important;
+      }
       .teacher-home-page .home-left-container {
-        width: calc(100% - 572px) !important;
+        width: calc(100% - 588px) !important;
       }
       .teacher-home-page .home-right-container {
         width: 540px !important;
+        margin-right: 16px !important;
       }
       `);
     }
