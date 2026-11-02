@@ -3026,7 +3026,7 @@
     const icon = document.createElement("div");
     icon.className = "yz-todo-icon";
     icon.innerHTML =
-      '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9.5 13h6"/><path d="M9.5 16.5h4"/></svg>';
+      '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9.5 13h6"/><path d="M9.5 16.5h4"/></svg>';
     card.appendChild(icon);
 
     const box = document.createElement("div");
@@ -3779,10 +3779,17 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(59, 130, 246, 0.28);
-        border: 1px solid rgba(59, 130, 246, 0.55);
-        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.18);
+        border: 1px solid rgba(59, 130, 246, 0.45);
+        color: #1d4ed8;
         font-size: 20px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .yz-todo-icon {
+          background: rgba(59, 130, 246, 0.28);
+          border-color: rgba(59, 130, 246, 0.55);
+          color: #93c5fd;
+        }
       }
       .yz-todo-box {
         flex: 1;
