@@ -2853,6 +2853,21 @@
     return p;
   }
 
+  // 右侧栏为空时收起，让左栏（课程/待办）填满并保持居中
+  function syncHomeLayout() {
+    const page = document.querySelector(".teacher-home-page");
+    if (!page) return;
+    const right = page.querySelector(".home-right-container");
+    let hasVisible = false;
+    if (right) {
+      hasVisible = Array.from(right.children).some((c) => {
+        const cs = getComputedStyle(c);
+        return cs.display !== "none" && cs.visibility !== "hidden" && c.offsetHeight > 8;
+      });
+    }
+    page.classList.toggle("yz-no-right", !hasVisible);
+  }
+
   // ===== 连续待办列表（不分页）=====
   const yzTodoCountdowns = new Map();
   let yzTodoTimer = null;
@@ -3692,6 +3707,12 @@
         width: 540px !important;
         margin-right: 16px !important;
       }
+      .teacher-home-page.yz-no-right .home-left-container {
+        width: calc(100% - 32px) !important;
+      }
+      .teacher-home-page.yz-no-right .home-right-container {
+        display: none !important;
+      }
       `);
     }
     if (settings.home.hideVisitHistory) {
@@ -4248,6 +4269,9 @@
         // 更新作业显示
         await updateAssignmentDisplay(list, page);
       }
+      syncHomeLayout();
+      setTimeout(syncHomeLayout, 600);
+      setTimeout(syncHomeLayout, 1800);
 
       function wheelPageTurner() {
         const pageConfigs = [
