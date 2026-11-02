@@ -1428,12 +1428,11 @@
     .wb-course-meta { margin-top: 6px; font-size: 12px; color: #64748b; }
 
     :host(.wb-full) .wb-panel {
-      left: 0;
+      left: 50%;
       top: 0;
-      transform: none;
-      width: 100vw;
+      transform: translateX(-50%);
+      width: min(1080px, calc(100vw - 48px));
       height: 100vh;
-      max-width: none;
       max-height: none;
       border-radius: 0;
     }
@@ -1758,17 +1757,37 @@
     }
   }
 
+  function isHomePage() {
+    const href = location.href;
+    return (
+      href.indexOf("/uclass/#/student/homePage") >= 0 ||
+      href.indexOf("/uclass/index.html#/student/homePage") >= 0 ||
+      href.indexOf("/uclass/#/teacher/homePage") >= 0 ||
+      href.indexOf("/uclass/index.html#/teacher/homePage") >= 0
+    );
+  }
+
   function setupWorkbench() {
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && wbHost && wbHost.style.display === "block") wbClose();
     });
     const autoOpen = () => {
-      if (settings.workbench.entry && settings.workbench.autoOpen) {
-        setTimeout(() => wbOpen("todo"), 800);
+      if (
+        settings.workbench.entry &&
+        settings.workbench.autoOpen &&
+        isHomePage()
+      ) {
+        setTimeout(() => {
+          if (isHomePage()) wbOpen("todo");
+        }, 800);
       }
     };
     if (document.readyState === "complete") autoOpen();
     else window.addEventListener("load", autoOpen, { once: true });
+    // 从主页跳转到其它页面时关闭工作台，避免遮挡内容
+    window.addEventListener("hashchange", () => {
+      if (wbHost && wbHost.style.display === "block" && !isHomePage()) wbClose();
+    });
   }
 
   // 初始化扩展功能
