@@ -1342,9 +1342,6 @@
 
   // 初始化扩展功能
   function initializeExtension() {
-    window.addEventListener("resize", () => {
-      if (settings.home.hideSideNav) centerHomePage();
-    });
     // 注册菜单命令
     registerMenuCommands();
 
@@ -2862,27 +2859,6 @@
     return p;
   }
 
-  // 强制主页在视口内居中：撑满父级链 + 固定宽度 + margin auto
-  function centerHomePage() {
-    const page = document.querySelector(".teacher-home-page");
-    if (!page) return;
-    const vw = document.documentElement.clientWidth || window.innerWidth || 0;
-    if (!vw) return;
-    const noRight = page.classList.contains("yz-no-right");
-    const target = Math.min(noRight ? 1212 : 1680, Math.max(320, vw - 40));
-    let el = page.parentElement;
-    let guard = 0;
-    while (el && el !== document.body && guard++ < 4) {
-      el.style.setProperty("width", "100%", "important");
-      el.style.setProperty("max-width", "none", "important");
-      el = el.parentElement;
-    }
-    page.style.setProperty("width", target + "px", "important");
-    page.style.setProperty("max-width", "none", "important");
-    page.style.setProperty("margin-left", "auto", "important");
-    page.style.setProperty("margin-right", "auto", "important");
-  }
-
   // 右侧栏为空时收起，让左栏（课程/待办）填满并保持居中
   function syncHomeLayout() {
     const page = document.querySelector(".teacher-home-page");
@@ -2896,7 +2872,6 @@
       });
     }
     page.classList.toggle("yz-no-right", !hasVisible);
-    centerHomePage();
   }
 
   // ===== 连续待办列表（不分页）=====
@@ -3745,11 +3720,15 @@
         width: 540px !important;
         margin-right: 16px !important;
       }
+      .teacher-home-page.yz-no-right {
+        max-width: 1180px !important;
+      }
       .teacher-home-page.yz-no-right .home-left-container {
+        display: block !important;
         width: 100% !important;
-        max-width: 1180px;
-        margin-left: auto !important;
-        margin-right: auto !important;
+        max-width: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
       }
       .teacher-home-page.yz-no-right .home-right-container {
         display: none !important;
