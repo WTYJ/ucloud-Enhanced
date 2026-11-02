@@ -1389,7 +1389,8 @@
     .wb-refresh:hover { background: #e2e8f0; }
     .wb-close { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 18px; line-height: 1; cursor: pointer; color: #475569; }
     .wb-close:hover { background: #e2e8f0; }
-    .wb-body { flex: 1; overflow: auto; padding: 18px 20px 24px; }
+    .wb-body { flex: 1; overflow: auto; padding: 18px 20px 24px; box-sizing: border-box; }
+    .wb-inner { width: 100%; max-width: 880px; margin: 0 auto; }
     .wb-pane[hidden] { display: none; }
     .wb-loading, .wb-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 48px 0; }
     .wb-card { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: box-shadow .2s ease, transform .2s ease; }
@@ -1412,6 +1413,10 @@
     .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #fff; }
     :host(.wb-dark) .wb-search { background: #1b2130; border-color: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
     :host(.wb-dark) .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #1b2130; }
+    .wb-notice-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .wb-notice-count { font-size: 12.5px; color: #94a3b8; }
+    .wb-readall { border: 1px solid rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.08); color: #2563eb; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; cursor: pointer; }
+    .wb-readall:disabled { opacity: 0.5; cursor: default; }
     .wb-notice { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; background: #fff; cursor: pointer; }
     .wb-notice:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
     .wb-notice-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #171725; }
@@ -1428,11 +1433,12 @@
     .wb-course-meta { margin-top: 6px; font-size: 12px; color: #64748b; }
 
     :host(.wb-full) .wb-panel {
-      left: 50%;
+      left: 0;
       top: 0;
-      transform: translateX(-50%);
-      width: min(1080px, calc(100vw - 48px));
+      transform: none;
+      width: 100vw;
       height: 100vh;
+      max-width: none;
       max-height: none;
       border-radius: 0;
     }
@@ -1606,6 +1612,9 @@
         pane.innerHTML = '<div class="wb-empty">暂无待办</div>';
         return;
       }
+      const inner = document.createElement("div");
+      inner.className = "wb-inner";
+      pane.appendChild(inner);
       const cards = {};
       wbTodoCards = [];
       tasks.forEach((task) => {
@@ -1617,7 +1626,7 @@
         card.querySelector(".wb-card-title").textContent = task.activityName || task.assignmentTitle || "未命名作业";
         wbRenderTodoMeta(card, task, null);
         card.addEventListener("click", () => openTaskUrl(buildTaskUrl(task)));
-        pane.appendChild(card);
+        inner.appendChild(card);
         cards[task.activityId || task.id] = card;
         wbTodoCards.push({ card: card, task: task });
       });
@@ -1667,36 +1676,60 @@
         pane.innerHTML = '<div class="wb-empty">暂无通知</div>';
         return;
       }
+      const inner = document.createElement("div");
+      inner.className = "wb-inner";
+      const unreadIds = list
+        .filter((item) => Number(item.isRead) === 0)
+        .map((item) => item.id);
+      const toolbar = document.createElement("div");
+      toolbar.className = "wb-notice-toolbar";
+      toolbar.innerHTML =
+        '<span class="wb-notice-count"></span>' +
+        '<button class="wb-readall"' + (unreadIds.length ? "" : " disabled") + ">全部已读</button>";
+      toolbar.querySelector(".wb-notice-count").textContent =
+        unreadIds.length ? "未读 " + unreadIds.length + " 条" : "全部已读";
+      inner.appendChild(toolbar);
+      const cards = [];
       list.forEach((item) => {
         const card = document.createElement("div");
         card.className = "wb-notice";
         let unread = Number(item.isRead) === 0;
+        card.dataset.unread = unread ? "1" : "0";
         card.innerHTML =
           '<div class="wb-notice-title">' +
           (unread ? '<span class="wb-dot"></span>' : "") +
           '<span class="wb-notice-text"></span></div>' +
           '<div class="wb-notice-time"></div>' +
-          '<div class="wb-notice-body" hidden></div>';
+          '<div class="wb-notice-body"></div>';
         card.querySelector(".wb-notice-text").textContent = item.newsTitle || "无标题通知";
         card.querySelector(".wb-notice-time").textContent = item.newsCopyTime || "";
         const tmp = document.createElement("div");
         tmp.innerHTML = item.newsInfo || "";
         card.querySelector(".wb-notice-body").textContent = (tmp.textContent || "").trim();
-        card.addEventListener("click", () => {
-          const body = card.querySelector(".wb-notice-body");
-          body.hidden = !body.hidden;
-          if (unread) {
-            unread = false;
-            const dot = card.querySelector(".wb-dot");
-            if (dot) dot.remove();
-            apiFetch(
-              "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(item.id),
-              { method: "POST" }
-            ).catch(() => {});
-          }
-        });
-        pane.appendChild(card);
+        cards.push(card);
+        inner.appendChild(card);
       });
+      toolbar.querySelector(".wb-readall").addEventListener("click", (e) => {
+        e.stopPropagation();
+        const ids = cards
+          .filter((c) => c.dataset.unread === "1")
+          .map((c) => c.querySelector(".wb-notice-text").textContent && c.dataset.id)
+          .filter(Boolean);
+        cards.forEach((c) => {
+          c.dataset.unread = "0";
+          const dot = c.querySelector(".wb-dot");
+          if (dot) dot.remove();
+        });
+        toolbar.querySelector(".wb-notice-count").textContent = "全部已读";
+        const btn = toolbar.querySelector(".wb-readall");
+        btn.disabled = true;
+        const allIds = list.map((n) => n.id).join(",");
+        apiFetch(
+          "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(allIds),
+          { method: "POST" }
+        ).catch(() => {});
+      });
+      pane.appendChild(inner);
     } catch (e) {
       pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
       wbState.noticeLoaded = false;
@@ -1715,13 +1748,16 @@
         pane.innerHTML = '<div class="wb-empty">暂无课程</div>';
         return;
       }
+      const inner = document.createElement("div");
+      inner.className = "wb-inner";
+      pane.appendChild(inner);
       const search = document.createElement("input");
       search.className = "wb-search";
       search.placeholder = "搜索课程 / 教师 / 院系";
-      pane.appendChild(search);
+      inner.appendChild(search);
       const grid = document.createElement("div");
       grid.className = "wb-course-grid";
-      pane.appendChild(grid);
+      inner.appendChild(grid);
       const renderGrid = (keyword) => {
         grid.innerHTML = "";
         const kw = (keyword || "").toLowerCase();
