@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-2.0.0-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-2.0.1-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -38,6 +38,11 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 2.0.1
+
+- 调整：「在新标签中打开详情页」默认关闭
+- 修复：深色模式下工作台遮罩泛蓝——遮罩色由深蓝改为中性黑
 
 ### 2.0.0
 
