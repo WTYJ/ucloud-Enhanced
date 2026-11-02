@@ -1221,7 +1221,7 @@
     if (
       el.closest &&
       el.closest(
-        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-meta,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon"
+        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon"
       )
     )
       return;
@@ -3563,7 +3563,7 @@
 
   function buildTodoCard(task) {
     const card = document.createElement("div");
-    card.className = "yz-todo-item yz-task-card";
+    card.className = "yz-todo-item";
     card.dataset.activityId = task.activityId || task.id || "";
 
     const icon = document.createElement("div");
@@ -4117,17 +4117,7 @@
       font-size: 12px;
       line-height: 1.4;
       white-space: nowrap;
-    }
-    .yz-task-meta {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: 6px;
-      margin-top: 4px;
-      font-size: 12px;
-      line-height: 1.4;
-    }
-    .yz-task-chip {
+    }    .yz-task-chip {
       display: inline-flex;
       align-items: center;
       padding: 1px 8px;
