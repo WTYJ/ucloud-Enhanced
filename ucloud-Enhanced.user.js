@@ -894,12 +894,14 @@
         },
         autoOpen: {
           type: 'checkbox',
+          quick: true,
           label: '进入页面自动打开工作台',
           description: '每次打开或刷新页面后自动弹出工作台。',
           defaultValue: false
         },
         fullscreen: {
           type: 'checkbox',
+          quick: true,
           label: '工作台全屏',
           description: '工作台以全屏铺满窗口的方式打开（关闭时为居中浮窗）。',
           defaultValue: false
@@ -912,7 +914,6 @@
       items: {
         useBiggerButton: {
           type: 'checkbox',
-          quick: true,
           label: '加大翻页按钮尺寸',
           description: '增大个人主页翻页按钮的尺寸和点击区域，提升操作便捷性。',
           defaultValue: true
@@ -924,17 +925,18 @@
           description: '个人主页中的课程和作业详情链接将在新标签页中打开，方便多任务处理。',
           defaultValue: true
         },
-        showTodoCourseName: {
-          type: 'checkbox',
-          label: '待办显示所属课程',
-          description: '在个人主页的待办条目上显示所属课程与教师，方便区分不同课程的作业。',
-          defaultValue: true
-        },
         useWheelPageTurner: {
           type: 'checkbox',
           quick: true,
           label: '使用鼠标滚轮翻页',
           description: '可以使用鼠标滚轮来翻动个人主页的"本学期课程"和"待办"。',
+          defaultValue: true
+        },
+        showTodoCourseName: {
+          type: 'checkbox',
+          quick: true,
+          label: '待办显示所属课程',
+          description: '在个人主页的待办条目上显示所属课程与教师，方便区分不同课程的作业。',
           defaultValue: true
         },
       }
@@ -4938,6 +4940,7 @@
         const pageConfigs = [
           {
             // 待办
+            skip: () => !!settings.experimental.todoRedesign,
             targetSelector:
               "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-body",
             prevPageSelector:
@@ -4981,31 +4984,28 @@
             }
           };
         }
-        pageConfigs.forEach((config) => {
+        const bindConfig = (config, attempt) => {
+          if (config.skip && config.skip()) return;
           const targetDiv = document.querySelector(config.targetSelector);
-          const prevPageElement = document.querySelector(
-            config.prevPageSelector
-          );
-          const nextPageElement = document.querySelector(
-            config.nextPageSelector
-          );
-          const pageIndicator = document.querySelector(
-            config.pageIndicatorSelector
-          );
-
-          if (
-            !targetDiv ||
-            !prevPageElement ||
-            !nextPageElement ||
-            !pageIndicator
-          )
+          const prevPageElement = document.querySelector(config.prevPageSelector);
+          const nextPageElement = document.querySelector(config.nextPageSelector);
+          const pageIndicator = document.querySelector(config.pageIndicatorSelector);
+          if (!targetDiv || !prevPageElement || !nextPageElement || !pageIndicator) {
+            if (attempt < 40) setTimeout(() => bindConfig(config, attempt + 1), 150);
             return;
+          }
+          if (targetDiv.dataset.yzWheelBound === "1") return;
+          targetDiv.dataset.yzWheelBound = "1";
           targetDiv.addEventListener(
             "wheel",
             createWheelHandler(prevPageElement, nextPageElement, pageIndicator),
             { passive: false }
           );
-        });
+        };
+        pageConfigs.forEach((config) => bindConfig(config, 0));
+        // 平台可能晚于脚本渲染或在切换后重建列表，延迟补绑
+        setTimeout(() => pageConfigs.forEach((config) => bindConfig(config, 0)), 1500);
+        setTimeout(() => pageConfigs.forEach((config) => bindConfig(config, 0)), 4000);
       }
       if (settings.home.useWheelPageTurner) wheelPageTurner();
     }
