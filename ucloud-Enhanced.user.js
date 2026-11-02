@@ -937,12 +937,6 @@
           description: '可以使用鼠标滚轮来翻动个人主页的"本学期课程"和"待办"。',
           defaultValue: true
         },
-        courseSearchBox: {
-          type: 'checkbox',
-          label: '本学期课程搜索框',
-          description: '在个人主页的"本学期课程"区域增加搜索框，可按课程名、教师或院系快速搜索并打开课程。',
-          defaultValue: true
-        }
       }
     },
     preview: {
@@ -1082,9 +1076,15 @@
       emoji: '🧪',
       title: '实验功能',
       items: {
+        courseSearchBox: {
+          type: 'checkbox',
+          label: '主页课程搜索框',
+          description: '在个人主页「本学期课程」区域增加搜索框，按课程名/教师/院系搜索并打开课程。实验性功能。',
+          defaultValue: false
+        },
         todoRedesign: {
           type: 'checkbox',
-          label: '待办改版（原地）',
+          label: '待办改版（连续列表 + 卡片样式）',
           description: '把平台待办改为连续列表并套用新卡片样式。实验性功能，平台改版后可能失效；推荐使用「工作台」查看待办。',
           defaultValue: false
         },
@@ -3906,7 +3906,7 @@
   }
 
   async function setupLessonSearch() {
-    if (!settings.home.courseSearchBox) return;
+    if (!settings.experimental.courseSearchBox) return;
     const section = await waitForLessonSection();
     if (!section || section.querySelector(".yz-lesson-toolbar")) return;
     const header = section.querySelector(".my-lesson-header");
@@ -3989,7 +3989,7 @@
       results.hidden = false;
     };
 
-    if (settings.home.courseSearchBox) {
+    if (settings.experimental.courseSearchBox) {
       const searchWrap = document.createElement("div");
       searchWrap.className = "yz-lesson-search";
 
@@ -4486,7 +4486,7 @@
       }
     `);
     }
-    if (settings.home.courseSearchBox) {
+    if (settings.experimental.courseSearchBox) {
       GM_addStyle(`
       .yz-lesson-toolbar {
         display: flex;
@@ -4832,7 +4832,7 @@
         const pageTitle = "个人主页 - 教学云空间";
         document.title = pageTitle;
       }
-      if (settings.home.courseSearchBox) {
+      if (settings.experimental.courseSearchBox) {
         setupLessonSearch().catch((e) =>
           console.error("[ucloud-Enhanced] 初始化课程搜索失败", e)
         );
