@@ -266,6 +266,17 @@
           return;
         }
         if (window.stop) window.stop();
+        function escapeViewerText(text) {
+          return String(text == null ? "" : text).replace(/[&<>"']/g, (ch) => {
+            return {
+              "&": "&amp;",
+              "<": "&lt;",
+              ">": "&gt;",
+              '"': "&quot;",
+              "'": "&#39;",
+            }[ch];
+          });
+        }
         function createModernImageViewer(imageUrl) {
           const style = document.createElement("style");
           style.textContent = `
@@ -420,7 +431,7 @@
           document.body.innerHTML = `
           <div class="modern-image-viewer">
             <div class="viewer-header">
-              <div class="viewer-title">${getImageFileName(imageUrl)}</div>
+              <div class="viewer-title">${escapeViewerText(getImageFileName(imageUrl))}</div>
               <div class="viewer-controls">
                 <button class="viewer-button" id="help-btn" title="帮助">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -436,7 +447,7 @@
             </div>
 
             <div class="viewer-content">
-              <img id="viewer-img" class="viewer-image" src="${imageUrl}" alt="预览图片" draggable="false">
+              <img id="viewer-img" class="viewer-image" src="${escapeViewerText(imageUrl)}" alt="预览图片" draggable="false">
             </div>
 
             <div class="viewer-toolbar">
@@ -1367,7 +1378,7 @@
   // ===== 工作台：Shadow DOM 独立界面（待办 / 课程）=====
   let wbHost = null;
   let wbRoot = null;
-  const wbState = { tab: "todo", todoLoaded: false, courseLoaded: false, noticeLoaded: false, themeObserver: null };
+  const wbState = { tab: "todo", todoLoaded: false, courseLoaded: false, noticeLoaded: false, themeObserver: null, prevOverflow: "" };
   let wbTodoCards = [];
   let wbTicker = null;
 
@@ -1532,6 +1543,7 @@
       document.body.style.overflow = "hidden";
     }
     wbHost.style.display = "block";
+    if (wbState.todoLoaded) wbStartTicker();
     if (tab) wbState.tab = tab;
     wbUpdateTabs();
     if (wbState.tab === "course") {
@@ -1547,6 +1559,10 @@
     if (!wbHost) return;
     wbHost.style.display = "none";
     document.body.style.overflow = wbState.prevOverflow || "";
+    if (wbTicker) {
+      clearInterval(wbTicker);
+      wbTicker = null;
+    }
   }
 
   function wbRenderTodoMeta(card, task, info) {
@@ -1705,18 +1721,20 @@
           '<div class="wb-notice-body"></div>';
         card.querySelector(".wb-notice-text").textContent = item.newsTitle || "无标题通知";
         card.querySelector(".wb-notice-time").textContent = item.newsCopyTime || "";
-        const tmp = document.createElement("div");
-        tmp.innerHTML = item.newsInfo || "";
-        card.querySelector(".wb-notice-body").textContent = (tmp.textContent || "").trim();
+        let noticeText = "";
+        try {
+          const doc = new DOMParser().parseFromString(item.newsInfo || "", "text/html");
+          doc.querySelectorAll("script,style,iframe,object,embed,link,meta").forEach((n) => n.remove());
+          noticeText = (doc.body && doc.body.textContent) || "";
+        } catch (e) {
+          noticeText = "";
+        }
+        card.querySelector(".wb-notice-body").textContent = noticeText.trim();
         cards.push(card);
         inner.appendChild(card);
       });
       toolbar.querySelector(".wb-readall").addEventListener("click", (e) => {
         e.stopPropagation();
-        const ids = cards
-          .filter((c) => c.dataset.unread === "1")
-          .map((c) => c.querySelector(".wb-notice-text").textContent && c.dataset.id)
-          .filter(Boolean);
         cards.forEach((c) => {
           c.dataset.unread = "0";
           const dot = c.querySelector(".wb-dot");
@@ -1810,11 +1828,7 @@
       if (e.key === "Escape" && wbHost && wbHost.style.display === "block") wbClose();
     });
     const autoOpen = () => {
-      if (
-        settings.workbench.entry &&
-        settings.workbench.autoOpen &&
-        isHomePage()
-      ) {
+      if (settings.workbench.autoOpen && isHomePage()) {
         setTimeout(() => {
           if (isHomePage()) wbOpen("todo");
         }, 800);
@@ -1997,7 +2011,7 @@
     const notification = document.createElement("div");
     notification.className = "yz-notify";
     notification.innerHTML = `
-      <div class="notify-title"><span class="notify-dot"></span>发现新版本 v${newVersion}</div>
+      <div class="notify-title"><span class="notify-dot"></span>发现新版本 v${escapeHtml(newVersion)}</div>
       <div class="notify-msg">当前版本 v${GM_info.script.version}，更新后可在 README 查看变更内容。</div>
       <div class="notify-actions">
         <button class="notify-btn primary" data-act="update">立即更新</button>
@@ -3063,13 +3077,25 @@
     });
   }
 
+  function escapeHtml(text) {
+    return String(text == null ? "" : text).replace(/[&<>"']/g, (ch) => {
+      return {
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;",
+      }[ch];
+    });
+  }
+
   // 通知函数
   function showNotification(title, message) {
     const notification = document.createElement("div");
     notification.className = "yz-notify";
     notification.innerHTML = `
-      <div class="notify-title"><span class="notify-dot"></span>${title}</div>
-      <div class="notify-msg">${message}</div>
+      <div class="notify-title"><span class="notify-dot"></span>${escapeHtml(title)}</div>
+      <div class="notify-msg">${escapeHtml(message)}</div>
     `;
     document.body.appendChild(notification);
     requestAnimationFrame(() => notification.classList.add("visible"));
@@ -4097,6 +4123,9 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 6px;
+      margin-top: 4px;
+      font-size: 12px;
+      line-height: 1.4;
     }
     .yz-task-chip {
       display: inline-flex;
@@ -4170,53 +4199,6 @@
       .yz-overdue-badge.soon {
         background: #e6a23c;
         color: #fff;
-      }
-      `);
-    }
-    if (settings.experimental.todoRedesign) {
-      GM_addStyle(`
-      .yz-task-meta {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        margin-top: 4px;
-        font-size: 12px;
-        line-height: 1.4;
-      }
-      .yz-deadline-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 8px;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        background: rgba(148, 163, 184, 0.18);
-        color: #94a3b8;
-        font-size: 12px;
-        line-height: 1.4;
-        white-space: nowrap;
-      }
-      .yz-task-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 8px;
-        font-size: 12px;
-        line-height: 1.4;
-        border-radius: 999px;
-        border: 1px solid rgba(59, 130, 246, 0.35);
-        color: #2563eb;
-        background: rgba(59, 130, 246, 0.08);
-        white-space: nowrap;
-      }
-      .yz-task-chip.mode {
-        border-color: rgba(139, 92, 246, 0.35);
-        color: #7c3aed;
-        background: rgba(139, 92, 246, 0.1);
-      }
-      .yz-task-chip.info {
-        border-color: rgba(148, 163, 184, 0.35);
-        color: #64748b;
-        background: rgba(148, 163, 184, 0.1);
       }
       `);
     }
@@ -4703,7 +4685,6 @@
       const q = new URLSearchParams(location.href);
       const id = q.get("assignmentId");
       const r = get(id);
-      const [userid, token] = getToken();
       const title = q.get("assignmentTitle");
       if (settings.system.betterTitle) {
         const pageTitle = "[作业] " + title + " - 教学云空间";
@@ -4889,48 +4870,59 @@
         }
 
         // 作业详情页切换 Tab 后 DOM 会重绘，需要重新注入课程名
+  let yzAssignmentCourse = null;
+  let yzAssignmentObserver = null;
+  let yzAssignmentTimer = null;
+  let yzAssignmentClickBound = false;
+
   function watchAssignmentCourse(course) {
     if (!course) return;
-    let timer = null;
-    let observer = null;
-    const stillOnPage = () =>
-      location.href.startsWith(
-        "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
-      );
+    yzAssignmentCourse = course;
     const tryInsert = () => {
-      if (!stillOnPage()) {
-        if (observer) observer.disconnect();
+      if (!yzAssignmentCourse) return;
+      if (
+        !location.href.startsWith(
+          "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
+        )
+      )
         return;
-      }
-      insert(course);
+      insert(yzAssignmentCourse);
     };
-    observer = new MutationObserver(() => {
-      clearTimeout(timer);
-      timer = setTimeout(tryInsert, 150);
-    });
-    const start = () => {
+    if (!yzAssignmentObserver) {
+      yzAssignmentObserver = new MutationObserver(() => {
+        clearTimeout(yzAssignmentTimer);
+        yzAssignmentTimer = setTimeout(tryInsert, 150);
+      });
+    }
+    const startObserve = () => {
       const root = document.getElementById("assignment-details");
       if (!root) {
-        setTimeout(start, 200);
+        setTimeout(startObserve, 300);
         return;
       }
-      observer.observe(root, { childList: true, subtree: true });
+      try {
+        yzAssignmentObserver.disconnect();
+      } catch (e) {}
+      yzAssignmentObserver.observe(root, { childList: true, subtree: true });
     };
-    start();
-    document.addEventListener(
-      "click",
-      (e) => {
-        if (e.target && e.target.closest && e.target.closest(".details-tabs")) {
-          setTimeout(tryInsert, 250);
-          setTimeout(tryInsert, 700);
-        }
-      },
-      true
-    );
+    startObserve();
+    if (!yzAssignmentClickBound) {
+      yzAssignmentClickBound = true;
+      document.addEventListener(
+        "click",
+        (e) => {
+          if (e.target && e.target.closest && e.target.closest(".details-tabs")) {
+            setTimeout(tryInsert, 250);
+            setTimeout(tryInsert, 700);
+          }
+        },
+        true
+      );
+    }
   }
 
   // 更新作业显示
-        await updateAssignmentDisplay(list, page);
+        await updateAssignmentDisplay(list);
       }
       syncHomeLayout();
       setTimeout(syncHomeLayout, 600);
