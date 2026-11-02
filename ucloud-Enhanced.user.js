@@ -900,6 +900,12 @@
           description: '个人主页中的课程和作业详情链接将在新标签页中打开，方便多任务处理。',
           defaultValue: true
         },
+        showTodoCourseName: {
+          type: 'checkbox',
+          label: '待办显示所属课程',
+          description: '在个人主页的待办条目上显示所属课程与教师，方便区分不同课程的作业。',
+          defaultValue: true
+        },
         useWheelPageTurner: {
           type: 'checkbox',
           quick: true,
@@ -1068,18 +1074,6 @@
           type: 'checkbox',
           label: '待办改版（原地）',
           description: '把平台待办改为连续列表并套用新卡片样式。实验性功能，平台改版后可能失效；推荐使用「工作台」查看待办。',
-          defaultValue: false
-        },
-        showTaskMeta: {
-          type: 'checkbox',
-          label: '待办显示班级进度（原地）',
-          description: '仅对原地待办改版生效：显示班级已交人数，缺失时读取作业详情兜底。',
-          defaultValue: false
-        },
-        showOverdueBadge: {
-          type: 'checkbox',
-          label: '待办截止倒计时（原地）',
-          description: '仅对原地待办改版生效：显示剩余时间与逾期时长。',
           defaultValue: false
         },
         hideUserPanel: {
@@ -3373,17 +3367,14 @@
       chip.textContent = "截止 " + fmtDeadline(d);
       attrHost.appendChild(chip);
 
-      if (settings.experimental.showOverdueBadge) {
-        const badge = document.createElement("span");
-        const rem = formatRemain(d - Date.now());
-        badge.className = "yz-overdue-badge " + rem.cls;
-        badge.textContent = rem.text;
-        meta.appendChild(badge);
-        yzTodoCountdowns.set(card, { badge: badge, endTime: task.endTime });
-        startTodoTicker();
-      }
+      const badge = document.createElement("span");
+      const rem = formatRemain(d - Date.now());
+      badge.className = "yz-overdue-badge " + rem.cls;
+      badge.textContent = rem.text;
+      meta.appendChild(badge);
+      yzTodoCountdowns.set(card, { badge: badge, endTime: task.endTime });
+      startTodoTicker();
     }
-    if (!settings.experimental.showTaskMeta) return;
     const mode = (info && info.mode) || pickModeName(task.assignmentType);
     if (mode) {
       const chip = document.createElement("span");
@@ -3550,11 +3541,49 @@
     });
   }
 
-  // 更新待办显示：改版开启时用连续列表；关闭时完全保持平台原样
+  // 仅注入课程名（不改版待办，供“待办显示所属课程”开关使用）
+  async function injectTodoCourseNames(list) {
+    if (!list || !list.length) return;
+    const ids = list.map((x) => x.activityId).filter(Boolean);
+    if (!ids.length) return;
+    let infos = {};
+    try {
+      infos = await searchCourses(ids);
+    } catch (e) {
+      return;
+    }
+    const nodes = $x(
+      '//*[@id="layout-container"]/div[2]/div[2]/div/div[2]/div[1]/div[3]/div[2]/div/div'
+    );
+    if (!nodes.length) return;
+    const byTitle = new Map();
+    list.forEach((task) => {
+      const title = (task.activityName || "").trim();
+      if (title && !byTitle.has(title)) byTitle.set(title, task);
+    });
+    nodes.forEach((node) => {
+      const titleEl = node.querySelector(".activity-title");
+      const title = titleEl ? (titleEl.textContent || "").trim() : "";
+      const task = byTitle.get(title);
+      const info = task && infos[task.activityId];
+      const host = node.children && node.children[1];
+      if (!host || !info) return;
+      let el = host.querySelector(".yz-course-line");
+      if (!el) {
+        el = document.createElement("div");
+        el.className = "yz-course-line";
+        host.insertAdjacentElement("afterbegin", el);
+      }
+      el.textContent = info.name + "(" + info.teachers + ")";
+    });
+  }
+
+  // 更新待办显示：改版开启时用连续列表；关闭时保持平台结构，仅按需注入课程名
   async function updateAssignmentDisplay(list) {
     if (!list || list.length === 0) return;
     if (!settings.experimental.todoRedesign) {
       removeTodoContinuous();
+      if (settings.home.showTodoCourseName) injectTodoCourseNames(list);
       return;
     }
     renderTodoContinuous(list);
@@ -4025,7 +4054,7 @@
       }
       `);
     }
-    if (settings.experimental.showOverdueBadge) {
+    if (settings.experimental.todoRedesign) {
       GM_addStyle(`
       .yz-overdue-badge {
         display: inline-block;
@@ -4058,7 +4087,7 @@
       }
       `);
     }
-    if (settings.experimental.showTaskMeta) {
+    if (settings.experimental.todoRedesign) {
       GM_addStyle(`
       .yz-task-meta {
         display: flex;
@@ -4105,6 +4134,19 @@
       }
       `);
     }
+    GM_addStyle(`
+    .yz-course-line {
+      font-size: 12px;
+      line-height: 16px;
+      font-weight: 600;
+      color: #0066cc;
+    }
+    .main-content .router-container .menu-nav,
+    .main-content .router-container .menu-nav .el-menu {
+      border-radius: 20px !important;
+      overflow: hidden;
+    }
+    `);
     // 作业详情页容器圆角
     GM_addStyle(`
     #assignment-details {
@@ -4711,7 +4753,7 @@
           console.error("[ucloud-Enhanced] 初始化课程搜索失败", e)
         );
       }
-      if (settings.experimental.todoRedesign) {
+      if (settings.experimental.todoRedesign || settings.home.showTodoCourseName) {
         // 未完成任务列表
         const list = glist || (await getUndoneList()).data.undoneList;
         if (!list || !Array.isArray(list)) return;
