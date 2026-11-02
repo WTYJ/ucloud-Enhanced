@@ -913,6 +913,12 @@
           description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
+        hideSideNav: {
+          type: 'checkbox',
+          label: '隐藏左侧导航',
+          description: '隐藏个人主页左侧的导航栏（主页/我的课堂/我的问卷等），并把主页内容区加宽。',
+          defaultValue: true
+        },
         hideVisitHistory: {
           type: 'checkbox',
           label: '隐藏访问历史',
@@ -3243,6 +3249,26 @@
   // 更新作业显示
   async function updateAssignmentDisplay(list, page) {
     if (!list || list.length === 0) return;
+    if (settings.home.hideSideNav) {
+      GM_addStyle(`
+      .main-content .router-container .menu-nav {
+        display: none !important;
+      }
+      .main-content .router-container .box {
+        width: calc(100% - 48px) !important;
+        max-width: 1680px;
+      }
+      .teacher-home-page {
+        max-width: 1680px !important;
+      }
+      .teacher-home-page .home-left-container {
+        width: calc(100% - 556px) !important;
+      }
+      .teacher-home-page .home-right-container {
+        width: 540px !important;
+      }
+      `);
+    }
     if (settings.home.hideVisitHistory) {
       GM_addStyle(`
       .visit-history-section {
