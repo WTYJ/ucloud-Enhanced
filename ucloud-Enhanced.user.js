@@ -934,7 +934,7 @@
           quick: true,
           label: '在新标签中打开详情页',
           description: '个人主页中的课程和作业详情链接将在新标签页中打开，方便多任务处理。',
-          defaultValue: true
+          defaultValue: false
         },
         useWheelPageTurner: {
           type: 'checkbox',
