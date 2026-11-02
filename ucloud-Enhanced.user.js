@@ -4895,6 +4895,12 @@
       });
     }
     const startObserve = () => {
+      if (
+        !location.href.startsWith(
+          "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
+        )
+      )
+        return;
       const root = document.getElementById("assignment-details");
       if (!root) {
         setTimeout(startObserve, 300);
