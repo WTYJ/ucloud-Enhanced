@@ -1350,6 +1350,8 @@
   let wbHost = null;
   let wbRoot = null;
   const wbState = { tab: "todo", todoLoaded: false, courseLoaded: false, themeObserver: null };
+  let wbTodoCards = [];
+  let wbTicker = null;
 
   const WB_CSS = `
     :host { all: initial; }
@@ -1367,7 +1369,9 @@
     .wb-tabs { display: flex; gap: 6px; }
     .wb-tab { border: none; background: transparent; padding: 6px 16px; border-radius: 999px; font-size: 13px; color: #64748b; cursor: pointer; }
     .wb-tab.active { background: rgba(59, 130, 246, 0.12); color: #2563eb; font-weight: 600; }
-    .wb-close { margin-left: auto; width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 18px; line-height: 1; cursor: pointer; color: #475569; }
+    .wb-refresh { margin-left: auto; width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 16px; cursor: pointer; color: #475569; }
+    .wb-refresh:hover { background: #e2e8f0; }
+    .wb-close { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 18px; line-height: 1; cursor: pointer; color: #475569; }
     .wb-close:hover { background: #e2e8f0; }
     .wb-body { flex: 1; overflow: auto; padding: 18px 20px 24px; }
     .wb-pane[hidden] { display: none; }
@@ -1388,25 +1392,29 @@
     .wb-badge.overdue { background: #b91c1c; }
     .wb-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(148, 163, 184, 0.1); color: #64748b; font-size: 12px; white-space: nowrap; }
     .wb-chip.blue { border-color: rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.08); color: #2563eb; }
+    .wb-search { width: 100%; box-sizing: border-box; margin-bottom: 14px; padding: 9px 12px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 13px; outline: none; }
+    .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #fff; }
+    :host(.wb-dark) .wb-search { background: #1b2130; border-color: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
+    :host(.wb-dark) .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #1b2130; }
     .wb-course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     .wb-course-item { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; cursor: pointer; background: #fff; }
     .wb-course-item:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
     .wb-course-title { font-size: 14px; font-weight: 600; color: #171725; }
     .wb-course-meta { margin-top: 6px; font-size: 12px; color: #64748b; }
 
-    .wb-dark .wb-panel { background: #151a24; color: #e5e7eb; border: 1px solid rgba(255, 255, 255, 0.08); }
-    .wb-dark .wb-head { border-bottom-color: rgba(255, 255, 255, 0.08); }
-    .wb-dark .wb-brand { color: #f3f4f6; }
-    .wb-dark .wb-tab { color: #94a3b8; }
-    .wb-dark .wb-tab.active { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-    .wb-dark .wb-close { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
-    .wb-dark .wb-card, .wb-dark .wb-course-item { background: #1b2130; border-color: rgba(59, 130, 246, 0.45); }
-    .wb-dark .wb-card-title, .wb-dark .wb-course-title { color: #f3f4f6; }
-    .wb-dark .wb-course { color: #93c5fd; }
-    .wb-dark .wb-deadline { color: #94a3b8; }
-    .wb-dark .wb-chip { color: #94a3b8; }
-    .wb-dark .wb-chip.blue { color: #93c5fd; }
-    .wb-dark .wb-course-meta { color: #94a3b8; }
+    :host(.wb-dark) .wb-panel { background: #151a24; color: #e5e7eb; border: 1px solid rgba(255, 255, 255, 0.08); }
+    :host(.wb-dark) .wb-head { border-bottom-color: rgba(255, 255, 255, 0.08); }
+    :host(.wb-dark) .wb-brand { color: #f3f4f6; }
+    :host(.wb-dark) .wb-tab { color: #94a3b8; }
+    :host(.wb-dark) .wb-tab.active { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    :host(.wb-dark) .wb-close, :host(.wb-dark) .wb-refresh { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
+    :host(.wb-dark) .wb-card, :host(.wb-dark) .wb-course-item { background: #1b2130; border-color: rgba(59, 130, 246, 0.45); }
+    :host(.wb-dark) .wb-card-title, :host(.wb-dark) .wb-course-title { color: #f3f4f6; }
+    :host(.wb-dark) .wb-course { color: #93c5fd; }
+    :host(.wb-dark) .wb-deadline { color: #94a3b8; }
+    :host(.wb-dark) .wb-chip { color: #94a3b8; }
+    :host(.wb-dark) .wb-chip.blue { color: #93c5fd; }
+    :host(.wb-dark) .wb-course-meta { color: #94a3b8; }
   `;
 
   function wbApplyTheme() {
@@ -1429,6 +1437,7 @@
             <button class="wb-tab active" data-tab="todo">待办</button>
             <button class="wb-tab" data-tab="course">课程</button>
           </div>
+          <button class="wb-refresh" title="刷新">↻</button>
           <button class="wb-close" title="关闭">×</button>
         </div>
         <div class="wb-body">
@@ -1439,6 +1448,11 @@
     document.body.appendChild(wbHost);
     wbRoot.querySelector(".wb-mask").addEventListener("click", wbClose);
     wbRoot.querySelector(".wb-close").addEventListener("click", wbClose);
+    wbRoot.querySelector(".wb-refresh").addEventListener("click", () => {
+      if (wbState.tab === "course") wbState.courseLoaded = false;
+      else wbState.todoLoaded = false;
+      wbSwitchTab(wbState.tab);
+    });
     wbRoot.querySelectorAll(".wb-tab").forEach((btn) => {
       btn.addEventListener("click", () => wbSwitchTab(btn.dataset.tab));
     });
@@ -1510,6 +1524,25 @@
     }
   }
 
+  function wbUpdateTodoBadges() {
+    wbTodoCards.forEach(({ card, task }) => {
+      const badge = card.querySelector(".wb-badge");
+      const d = parseDeadline(task.endTime);
+      if (!badge || !d) return;
+      const rem = formatRemain(d - Date.now());
+      badge.className = "wb-badge " + rem.cls;
+      badge.textContent = rem.text;
+    });
+  }
+
+  function wbStartTicker() {
+    if (wbTicker) return;
+    wbTicker = setInterval(() => {
+      if (!wbHost || wbHost.style.display !== "block") return;
+      wbUpdateTodoBadges();
+    }, 60 * 1000);
+  }
+
   async function wbLoadTodo() {
     wbState.todoLoaded = true;
     if (!wbRoot) return;
@@ -1528,6 +1561,7 @@
         return;
       }
       const cards = {};
+      wbTodoCards = [];
       tasks.forEach((task) => {
         const card = document.createElement("div");
         card.className = "wb-card";
@@ -1539,7 +1573,9 @@
         card.addEventListener("click", () => openTaskUrl(buildTaskUrl(task)));
         pane.appendChild(card);
         cards[task.activityId || task.id] = card;
+        wbTodoCards.push({ card: card, task: task });
       });
+      wbStartTicker();
       const ids = tasks.map((t) => t.activityId || t.id).filter(Boolean);
       searchCourses(ids)
         .then((infos) => {
@@ -1578,23 +1614,42 @@
         pane.innerHTML = '<div class="wb-empty">暂无课程</div>';
         return;
       }
+      const search = document.createElement("input");
+      search.className = "wb-search";
+      search.placeholder = "搜索课程 / 教师 / 院系";
+      pane.appendChild(search);
       const grid = document.createElement("div");
       grid.className = "wb-course-grid";
-      list.forEach((course) => {
-        const item = document.createElement("div");
-        item.className = "wb-course-item";
-        item.innerHTML = '<div class="wb-course-title"></div><div class="wb-course-meta"></div>';
-        item.querySelector(".wb-course-title").textContent = course.name || "未命名课程";
-        item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
-          .filter(Boolean)
-          .join(" · ");
-        item.addEventListener("click", () => {
-          wbClose();
-          openCoursePage(course);
-        });
-        grid.appendChild(item);
-      });
       pane.appendChild(grid);
+      const renderGrid = (keyword) => {
+        grid.innerHTML = "";
+        const kw = (keyword || "").toLowerCase();
+        list
+          .filter((c) => {
+            if (!kw) return true;
+            return [c.name, c.teachers, c.department]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase()
+              .includes(kw);
+          })
+          .forEach((course) => {
+            const item = document.createElement("div");
+            item.className = "wb-course-item";
+            item.innerHTML = '<div class="wb-course-title"></div><div class="wb-course-meta"></div>';
+            item.querySelector(".wb-course-title").textContent = course.name || "未命名课程";
+            item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
+              .filter(Boolean)
+              .join(" · ");
+            item.addEventListener("click", () => {
+              wbClose();
+              openCoursePage(course);
+            });
+            grid.appendChild(item);
+          });
+      };
+      search.addEventListener("input", () => renderGrid(search.value.trim()));
+      renderGrid("");
     } catch (e) {
       pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
       wbState.courseLoaded = false;
