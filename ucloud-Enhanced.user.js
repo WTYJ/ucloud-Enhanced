@@ -913,6 +913,12 @@
           description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
+        hideVisitHistory: {
+          type: 'checkbox',
+          label: '隐藏访问历史',
+          description: '隐藏个人主页右侧的「访问历史」板块，为主内容让出空间。',
+          defaultValue: true
+        },
         todoContinuous: {
           type: 'checkbox',
           label: '待办不分页（连续列表）',
@@ -3237,6 +3243,13 @@
   // 更新作业显示
   async function updateAssignmentDisplay(list, page) {
     if (!list || list.length === 0) return;
+    if (settings.home.hideVisitHistory) {
+      GM_addStyle(`
+      .visit-history-section {
+        display: none !important;
+      }
+      `);
+    }
     if (settings.home.todoContinuous) {
       renderTodoContinuous(list);
       return;
@@ -3916,12 +3929,12 @@
         padding: 14px 16px;
         border-radius: 14px;
         background-color: #fff;
-        box-shadow: inset 0 0 0 1px #eceff4;
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3);
         cursor: pointer;
         transition: box-shadow 0.2s ease, transform 0.2s ease;
       }
       .yz-todo-item:hover {
-        box-shadow: inset 0 0 0 1px #d7e0ec, 0 8px 20px rgba(15, 23, 42, 0.08);
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.55), 0 8px 20px rgba(15, 23, 42, 0.08);
         transform: translateY(-1px);
       }
       .yz-todo-icon {
@@ -3987,11 +4000,11 @@
         box-sizing: border-box;
         border-radius: 14px;
         background-color: #fff;
-        box-shadow: inset 0 0 0 1px #eceff4;
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3);
         transition: box-shadow 0.2s ease, transform 0.2s ease;
       }
       .in-progress-section .in-progress-item.yz-task-card:hover {
-        box-shadow: inset 0 0 0 1px #d7e0ec, 0 8px 20px rgba(15, 23, 42, 0.08);
+        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.55), 0 8px 20px rgba(15, 23, 42, 0.08);
         transform: translateY(-1px);
       }
       .yz-task-card .activity-post {
