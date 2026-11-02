@@ -897,7 +897,7 @@
           quick: true,
           label: '进入页面自动打开工作台',
           description: '每次打开或刷新页面后自动弹出工作台。',
-          defaultValue: false
+          defaultValue: true
         },
         fullscreen: {
           type: 'checkbox',
