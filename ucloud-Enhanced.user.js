@@ -1078,6 +1078,12 @@
           description: '每天检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
           defaultValue: true
         },
+        workbenchAutoOpen: {
+          type: 'checkbox',
+          label: '进入页面自动打开工作台',
+          description: '每次打开或刷新页面后自动弹出工作台。',
+          defaultValue: false
+        },
         workbench: {
           type: 'checkbox',
           label: '工作台入口',
@@ -1349,7 +1355,7 @@
   // ===== 工作台：Shadow DOM 独立界面（待办 / 课程）=====
   let wbHost = null;
   let wbRoot = null;
-  const wbState = { tab: "todo", todoLoaded: false, courseLoaded: false, themeObserver: null };
+  const wbState = { tab: "todo", todoLoaded: false, courseLoaded: false, noticeLoaded: false, themeObserver: null };
   let wbTodoCards = [];
   let wbTicker = null;
 
@@ -1396,6 +1402,15 @@
     .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #fff; }
     :host(.wb-dark) .wb-search { background: #1b2130; border-color: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
     :host(.wb-dark) .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #1b2130; }
+    .wb-notice { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; background: #fff; cursor: pointer; }
+    .wb-notice:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
+    .wb-notice-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #171725; }
+    .wb-dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; flex: none; }
+    .wb-notice-time { margin-top: 4px; font-size: 12px; color: #94a3b8; }
+    .wb-notice-body { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #475569; white-space: pre-wrap; }
+    :host(.wb-dark) .wb-notice { background: #1b2130; border-color: rgba(59, 130, 246, 0.45); }
+    :host(.wb-dark) .wb-notice-title { color: #f3f4f6; }
+    :host(.wb-dark) .wb-notice-body { color: #cbd5e1; }
     .wb-course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     .wb-course-item { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; cursor: pointer; background: #fff; }
     .wb-course-item:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
@@ -1436,6 +1451,7 @@
           <div class="wb-tabs">
             <button class="wb-tab active" data-tab="todo">待办</button>
             <button class="wb-tab" data-tab="course">课程</button>
+            <button class="wb-tab" data-tab="notice">通知</button>
           </div>
           <button class="wb-refresh" title="刷新">↻</button>
           <button class="wb-close" title="关闭">×</button>
@@ -1443,6 +1459,7 @@
         <div class="wb-body">
           <div class="wb-pane" data-pane="todo"><div class="wb-loading">加载中…</div></div>
           <div class="wb-pane" data-pane="course" hidden><div class="wb-loading">加载中…</div></div>
+          <div class="wb-pane" data-pane="notice" hidden><div class="wb-loading">加载中…</div></div>
         </div>
       </div>`;
     document.body.appendChild(wbHost);
@@ -1475,6 +1492,7 @@
     wbState.tab = tab;
     wbUpdateTabs();
     if (tab === "course" && !wbState.courseLoaded) wbLoadCourses();
+    if (tab === "notice" && !wbState.noticeLoaded) wbLoadNotices();
     if (tab === "todo" && !wbState.todoLoaded) wbLoadTodo();
   }
 
@@ -1486,6 +1504,8 @@
     wbUpdateTabs();
     if (wbState.tab === "course") {
       if (!wbState.courseLoaded) wbLoadCourses();
+    } else if (wbState.tab === "notice") {
+      if (!wbState.noticeLoaded) wbLoadNotices();
     } else if (!wbState.todoLoaded) {
       wbLoadTodo();
     }
@@ -1602,6 +1622,61 @@
     }
   }
 
+  async function wbLoadNotices() {
+    wbState.noticeLoaded = true;
+    if (!wbRoot) return;
+    const pane = wbRoot.querySelector('[data-pane="notice"]');
+    pane.innerHTML = '<div class="wb-loading">加载中…</div>';
+    try {
+      const [userId] = getToken();
+      const qs = new URLSearchParams({
+        newsCopyPersonId: userId || "",
+        current: 1,
+        size: 100,
+      }).toString();
+      const res = await apiFetch("ykt-basics/api/inform/news/list?" + qs, { method: "POST" });
+      const list = (res && res.data && res.data.records) || [];
+      pane.innerHTML = "";
+      if (!list.length) {
+        pane.innerHTML = '<div class="wb-empty">暂无通知</div>';
+        return;
+      }
+      list.forEach((item) => {
+        const card = document.createElement("div");
+        card.className = "wb-notice";
+        let unread = Number(item.isRead) === 0;
+        card.innerHTML =
+          '<div class="wb-notice-title">' +
+          (unread ? '<span class="wb-dot"></span>' : "") +
+          '<span class="wb-notice-text"></span></div>' +
+          '<div class="wb-notice-time"></div>' +
+          '<div class="wb-notice-body" hidden></div>';
+        card.querySelector(".wb-notice-text").textContent = item.newsTitle || "无标题通知";
+        card.querySelector(".wb-notice-time").textContent = item.newsCopyTime || "";
+        const tmp = document.createElement("div");
+        tmp.innerHTML = item.newsInfo || "";
+        card.querySelector(".wb-notice-body").textContent = (tmp.textContent || "").trim();
+        card.addEventListener("click", () => {
+          const body = card.querySelector(".wb-notice-body");
+          body.hidden = !body.hidden;
+          if (unread) {
+            unread = false;
+            const dot = card.querySelector(".wb-dot");
+            if (dot) dot.remove();
+            apiFetch(
+              "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(item.id),
+              { method: "POST" }
+            ).catch(() => {});
+          }
+        });
+        pane.appendChild(card);
+      });
+    } catch (e) {
+      pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
+      wbState.noticeLoaded = false;
+    }
+  }
+
   async function wbLoadCourses() {
     wbState.courseLoaded = true;
     if (!wbRoot) return;
@@ -1660,6 +1735,13 @@
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape" && wbHost && wbHost.style.display === "block") wbClose();
     });
+    const autoOpen = () => {
+      if (settings.system.workbench && settings.system.workbenchAutoOpen) {
+        setTimeout(() => wbOpen("todo"), 800);
+      }
+    };
+    if (document.readyState === "complete") autoOpen();
+    else window.addEventListener("load", autoOpen, { once: true });
   }
 
   // 初始化扩展功能
