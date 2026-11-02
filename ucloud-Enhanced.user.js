@@ -882,6 +882,30 @@
 (function () {
   document.addEventListener("DOMContentLoaded", initializeExtension);
   const settingsConfig = {
+    workbench: {
+      emoji: '🧩',
+      title: '工作台',
+      items: {
+        entry: {
+          type: 'checkbox',
+          label: '显示工作台入口',
+          description: '在悬浮球快捷面板显示「打开工作台」。',
+          defaultValue: true
+        },
+        autoOpen: {
+          type: 'checkbox',
+          label: '进入页面自动打开工作台',
+          description: '每次打开或刷新页面后自动弹出工作台。',
+          defaultValue: false
+        },
+        fullscreen: {
+          type: 'checkbox',
+          label: '工作台全屏',
+          description: '工作台以全屏铺满窗口的方式打开（关闭时为居中浮窗）。',
+          defaultValue: false
+        }
+      }
+    },
     home: {
       emoji: '👤',
       title: '个人主页',
@@ -1044,18 +1068,6 @@
           type: 'checkbox',
           label: '自动检查更新',
           description: '每天检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
-          defaultValue: true
-        },
-        workbenchAutoOpen: {
-          type: 'checkbox',
-          label: '进入页面自动打开工作台',
-          description: '每次打开或刷新页面后自动弹出工作台。',
-          defaultValue: false
-        },
-        workbench: {
-          type: 'checkbox',
-          label: '工作台入口',
-          description: '在悬浮球快捷面板显示「打开工作台」，提供独立的待办与课程视图。',
           defaultValue: true
         },
         showConfigButton: {
@@ -1415,6 +1427,16 @@
     .wb-course-title { font-size: 14px; font-weight: 600; color: #171725; }
     .wb-course-meta { margin-top: 6px; font-size: 12px; color: #64748b; }
 
+    :host(.wb-full) .wb-panel {
+      left: 0;
+      top: 0;
+      transform: none;
+      width: 100vw;
+      height: 100vh;
+      max-width: none;
+      max-height: none;
+      border-radius: 0;
+    }
     :host(.wb-dark) .wb-panel { background: #151a24; color: #e5e7eb; border: 1px solid rgba(255, 255, 255, 0.08); }
     :host(.wb-dark) .wb-head { border-bottom-color: rgba(255, 255, 255, 0.08); }
     :host(.wb-dark) .wb-brand { color: #f3f4f6; }
@@ -1433,6 +1455,7 @@
   function wbApplyTheme() {
     if (!wbHost) return;
     wbHost.classList.toggle("wb-dark", document.documentElement.classList.contains("ue-dark-mode"));
+    wbHost.classList.toggle("wb-full", !!settings.workbench.fullscreen);
   }
 
   function wbEnsure() {
@@ -1497,6 +1520,10 @@
   function wbOpen(tab) {
     wbEnsure();
     wbApplyTheme();
+    if (!wbHost.style.display || wbHost.style.display === "none") {
+      wbState.prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = "hidden";
+    }
     wbHost.style.display = "block";
     if (tab) wbState.tab = tab;
     wbUpdateTabs();
@@ -1510,7 +1537,9 @@
   }
 
   function wbClose() {
-    if (wbHost) wbHost.style.display = "none";
+    if (!wbHost) return;
+    wbHost.style.display = "none";
+    document.body.style.overflow = wbState.prevOverflow || "";
   }
 
   function wbRenderTodoMeta(card, task, info) {
@@ -1734,7 +1763,7 @@
       if (e.key === "Escape" && wbHost && wbHost.style.display === "block") wbClose();
     });
     const autoOpen = () => {
-      if (settings.system.workbench && settings.system.workbenchAutoOpen) {
+      if (settings.workbench.entry && settings.workbench.autoOpen) {
         setTimeout(() => wbOpen("todo"), 800);
       }
     };
@@ -2662,7 +2691,7 @@
       quickPanel.innerHTML = `
         <div class="quick-title">快捷开关</div>
         ${rows.join("")}
-        ${settings.system.workbench ? '<button class="quick-workbench" id="yzHelper-quick-workbench">🧩 打开工作台</button>' : ''}
+        ${settings.workbench.entry ? '<button class="quick-workbench" id="yzHelper-quick-workbench">🧩 打开工作台</button>' : ''}
         <div class="quick-footer">
           <button class="quick-all" id="yzHelper-quick-all">⚙ 全部设置</button>
           <span class="quick-ver">v${GM_info.script.version}</span>
