@@ -3784,12 +3784,10 @@
         color: #1d4ed8;
         font-size: 20px;
       }
-      @media (prefers-color-scheme: dark) {
-        .yz-todo-icon {
-          background: rgba(59, 130, 246, 0.28);
-          border-color: rgba(59, 130, 246, 0.55);
-          color: #93c5fd;
-        }
+      html.ue-dark-mode .yz-todo-icon {
+        background: rgba(59, 130, 246, 0.28);
+        border-color: rgba(59, 130, 246, 0.55);
+        color: #93c5fd;
       }
       .yz-todo-box {
         flex: 1;
