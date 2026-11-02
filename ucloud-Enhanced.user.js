@@ -900,13 +900,6 @@
           description: '个人主页中的课程和作业详情链接将在新标签页中打开，方便多任务处理。',
           defaultValue: true
         },
-        addHomeworkSource: {
-          type: 'checkbox',
-          quick: true,
-          label: '待办显示所属课程',
-          description: '在主页待办列表的条目上显示其所属课程。',
-          defaultValue: true
-        },
         showTaskMeta: {
           type: 'checkbox',
           label: '待办显示班级进度',
@@ -915,8 +908,9 @@
         },
         todoRedesign: {
           type: 'checkbox',
-          label: '待办改版（连续列表 + 新卡片样式）',
-          description: '把待办改为按截止时间排序的连续列表，并应用卡片化样式与信息胶囊；关闭后完全恢复平台原始的待办分页样式。',
+          quick: true,
+          label: '待办改版',
+          description: '把待办改为按截止时间排序的连续列表，并应用卡片化样式、课程归属与信息胶囊；关闭后完全恢复平台原始的待办分页样式。',
           defaultValue: true
         },
         hideSideNav: {
@@ -3650,6 +3644,18 @@
       }
       `);
     }
+    // 卡片圆角统一：课程卡 / 待办卡 / 右侧待办
+    GM_addStyle(`
+    .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item,
+    .teacher-home-page .home-left-container .in-progress-section .in-progress-body .in-progress-item,
+    .teacher-home-page .home-right-container .my-need-section .my-need-body .my-need-item,
+    .yz-todo-item {
+      border-radius: 16px !important;
+    }
+    .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item .my-lesson-post {
+      border-radius: 12px !important;
+    }
+    `);
     if (settings.home.hideSideNav) {
       GM_addStyle(`
       .main-content .router-container .menu-nav {
@@ -4174,7 +4180,7 @@
           console.error("[ucloud-Enhanced] 初始化课程搜索失败", e)
         );
       }
-      if (settings.home.addHomeworkSource) {
+      if (settings.home.todoRedesign) {
         // 未完成任务列表
         const list = glist || (await getUndoneList()).data.undoneList;
         if (!list || !Array.isArray(list)) return;
