@@ -913,6 +913,12 @@
           description: '把待办改为按截止时间排序的连续列表，并应用卡片化样式、课程归属与信息胶囊；关闭后完全恢复平台原始的待办分页样式。',
           defaultValue: true
         },
+        hideUserPanel: {
+          type: 'checkbox',
+          label: '隐藏学生信息与统计',
+          description: '隐藏个人主页顶部的学生信息卡（头像/学号）与课程数、待办数统计卡。',
+          defaultValue: true
+        },
         hideSideNav: {
           type: 'checkbox',
           label: '隐藏左侧导航',
@@ -3677,6 +3683,13 @@
       border-radius: 12px !important;
     }
     `);
+    if (settings.home.hideUserPanel) {
+      GM_addStyle(`
+      .teacher-home-page .teacher-driver-section {
+        display: none !important;
+      }
+      `);
+    }
     if (settings.home.hideSideNav) {
       GM_addStyle(`
       .main-content .router-container .menu-nav {
@@ -3708,7 +3721,10 @@
         margin-right: 16px !important;
       }
       .teacher-home-page.yz-no-right .home-left-container {
-        width: calc(100% - 32px) !important;
+        width: 100% !important;
+        max-width: 1180px;
+        margin-left: auto !important;
+        margin-right: auto !important;
       }
       .teacher-home-page.yz-no-right .home-right-container {
         display: none !important;
