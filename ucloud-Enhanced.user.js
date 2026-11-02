@@ -913,6 +913,12 @@
           description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
           defaultValue: true
         },
+        todoRedesign: {
+          type: 'checkbox',
+          label: '待办改版（连续列表 + 新卡片样式）',
+          description: '把待办改为按截止时间排序的连续列表，并应用卡片化样式与信息胶囊；关闭后完全恢复平台原始的待办分页样式。',
+          defaultValue: true
+        },
         hideSideNav: {
           type: 'checkbox',
           label: '隐藏左侧导航',
@@ -923,18 +929,6 @@
           type: 'checkbox',
           label: '隐藏访问历史',
           description: '隐藏个人主页右侧的「访问历史」板块，为主内容让出空间。',
-          defaultValue: true
-        },
-        todoContinuous: {
-          type: 'checkbox',
-          label: '待办不分页（连续列表）',
-          description: '把待办改为一个可连续滚动的完整列表，按截止时间从早到晚排列，不再按键翻页。',
-          defaultValue: true
-        },
-        todoCardSkin: {
-          type: 'checkbox',
-          label: '待办卡片新样式（试验）',
-          description: '为待办卡片加上卡片化外观：圆角描边、课程名标签、截止时间右对齐、状态胶囊；关闭后恢复平台原样。',
           defaultValue: true
         },
         useWheelPageTurner: {
@@ -2814,10 +2808,6 @@
     return { cls: "later", text: "剩 " + days + " 天" + (hours ? " " + hours + " 时" : "") };
   }
 
-  // 已渲染倒计时徽标的节点 → 截止时间，供每分钟刷新；节点失效后自动剔除
-  const countdownBadges = new Map();
-  let countdownTimer = null;
-
   function parseDeadline(endTime) {
     if (!endTime) return null;
     const d = new Date(String(endTime).replace(" ", "T"));
@@ -2825,98 +2815,8 @@
   }
 
   // 把平台自带的「截止时间」文本改造成胶囊，并入统一信息行
-  function renderDeadlineChip(host, endTime) {
-    if (!host || !host.isConnected) return;
-    const meta = ensureTaskMeta(host);
-    if (!meta) return;
-    let chip = meta.querySelector(".yz-deadline-chip");
-    if (!chip) {
-      const dateRe = /(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/;
-      let dateText = "";
-      for (const node of Array.from(host.childNodes)) {
-        if (node.nodeType === 3 && dateRe.test(node.nodeValue || "")) {
-          dateText = node.nodeValue;
-          if (node.parentNode) node.parentNode.removeChild(node);
-          break;
-        }
-      }
-      let label = "";
-      const m = dateRe.exec(dateText);
-      if (m) {
-        label = "截止 " + m[1] + "-" + m[2] + "-" + m[3] + " " + m[4] + ":" + m[5];
-      } else if (endTime) {
-        const d = parseDeadline(endTime);
-        if (!d) return;
-        const pad = (n) => String(n).padStart(2, "0");
-        label =
-          "截止 " + d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-          " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
-      } else {
-        return;
-      }
-      chip = document.createElement("span");
-      chip.className = "yz-deadline-chip";
-      chip.textContent = label;
-      meta.insertBefore(chip, meta.firstChild);
-    }
-  }
-
   // 待办卡片统一的信息行（倒计时 + 班级进度共用），不存在时创建
-  function ensureTaskMeta(host) {
-    if (!host) return null;
-    let meta = host.querySelector(".yz-task-meta");
-    if (!meta) {
-      meta = document.createElement("div");
-      meta.className = "yz-task-meta";
-      host.appendChild(meta);
-    }
-    return meta;
-  }
-
-  function renderCountdownBadge(node, endTime) {
-    if (!node || !node.isConnected) return;
-    const titleEl = node.querySelector(".activity-title");
-    if (!titleEl) return;
-    const end = parseDeadline(endTime);
-    if (!end) return;
-    const info = formatRemain(end - Date.now());
-    const meta = ensureTaskMeta(node.children && node.children[1]);
-    const scope = meta || titleEl;
-    let badge = scope.querySelector(".yz-overdue-badge");
-    if (!info) {
-      if (badge) badge.remove();
-      countdownBadges.delete(node);
-      return;
-    }
-    if (!badge) {
-      badge = document.createElement("span");
-      if (meta) meta.insertBefore(badge, meta.firstChild);
-      else titleEl.appendChild(badge);
-    }
-    badge.className = "yz-overdue-badge " + info.cls;
-    badge.textContent = info.text;
-    countdownBadges.set(node, endTime);
-    ensureCountdownTicker();
-  }
-
   // 每 60 秒重算一次，让倒计时在页面停留时自然走动；全部节点消失后自动停表
-  function ensureCountdownTicker() {
-    if (countdownTimer) return;
-    countdownTimer = setInterval(() => {
-      for (const [node, endTime] of countdownBadges) {
-        if (!node.isConnected) {
-          countdownBadges.delete(node);
-          continue;
-        }
-        renderCountdownBadge(node, endTime);
-      }
-      if (countdownBadges.size === 0) {
-        clearInterval(countdownTimer);
-        countdownTimer = null;
-      }
-    }, 60 * 1000);
-  }
-
   // 待办卡片补充信息：满分、作业模式、附件数、互评、班级已交人数
   // 待办接口字段优先；缺失时按 activityId 拉一次作业详情并缓存
   const assignmentInfoCache = new Map();
@@ -2933,16 +2833,6 @@
     if (type === 0 || type === "0") return "个人作业";
     if (type === 1 || type === "1") return "小组作业";
     return "";
-  }
-
-  function collectDirectInfo(task) {
-    const info = {};
-    const stat = normalizeStat(task.totalNum, task.noSubmitNum);
-    if (stat) info.stat = stat;
-    const mode = pickModeName(task.assignmentType);
-    if (mode) info.mode = mode;
-    if (Number(task.isOpenEvaluation) === 1) info.evaluation = true;
-    return info;
   }
 
   function fetchAssignmentInfo(task) {
@@ -2967,47 +2857,6 @@
       .catch(() => null);
     assignmentInfoCache.set(id, p);
     return p;
-  }
-
-  function paintTaskChips(host, info) {
-    if (!host || !host.isConnected) return;
-    const meta = ensureTaskMeta(host);
-    if (!meta) return;
-    meta.querySelectorAll(".yz-task-chip").forEach((c) => c.remove());
-    if (!info) return;
-    const chips = [];
-    if (info.mode) {
-      chips.push({
-        text: (info.mode === "小组作业" ? "👥 " : "👤 ") + info.mode,
-        cls: "mode",
-      });
-    }
-    if (info.attachments) chips.push({ text: "附件 " + info.attachments, cls: "info" });
-    if (info.evaluation) chips.push({ text: "互评", cls: "info" });
-    if (info.stat) {
-      chips.push({
-        text: "班级已交 " + info.stat.submitted + " / " + info.stat.total + " 人",
-        cls: "",
-      });
-    }
-    chips.forEach((c) => {
-      const chip = document.createElement("span");
-      chip.className = "yz-task-chip" + (c.cls ? " " + c.cls : "");
-      chip.textContent = c.text;
-      meta.appendChild(chip);
-    });
-  }
-
-  function renderTaskMeta(node, task) {
-    if (!node || !node.isConnected || !task) return;
-    const host = node.children && node.children[1];
-    if (!host) return;
-    const direct = collectDirectInfo(task);
-    if (Object.keys(direct).length) paintTaskChips(host, direct);
-    fetchAssignmentInfo(task).then((info) => {
-      if (!node.isConnected) return;
-      paintTaskChips(host, info || direct);
-    });
   }
 
   // ===== 连续待办列表（不分页）=====
@@ -3246,147 +3095,14 @@
     });
   }
 
-  // 更新作业显示
-  async function updateAssignmentDisplay(list, page) {
+  // 更新待办显示：改版开启时用连续列表；关闭时完全保持平台原样
+  async function updateAssignmentDisplay(list) {
     if (!list || list.length === 0) return;
-    if (settings.home.hideSideNav) {
-      GM_addStyle(`
-      .main-content .router-container .menu-nav {
-        display: none !important;
-      }
-      .main-content .router-container .box {
-        width: calc(100% - 48px) !important;
-        max-width: 1680px;
-      }
-      .teacher-home-page {
-        max-width: 1680px !important;
-      }
-      .teacher-home-page .home-left-container {
-        width: calc(100% - 556px) !important;
-      }
-      .teacher-home-page .home-right-container {
-        width: 540px !important;
-      }
-      `);
-    }
-    if (settings.home.hideVisitHistory) {
-      GM_addStyle(`
-      .visit-history-section {
-        display: none !important;
-      }
-      `);
-    }
-    if (settings.home.todoContinuous) {
-      renderTodoContinuous(list);
+    if (!settings.home.todoRedesign) {
+      removeTodoContinuous();
       return;
     }
-    removeTodoContinuous();
-
-    if (!list || list.length === 0) return;
-
-    // 获取当前页的作业
-    const tlist = list.slice((page - 1) * 6, page * 6);
-    if (tlist.length === 0) return;
-
-    // 获取课程信息
-    const ids = tlist.map((x) => x.activityId);
-    const infos = await searchCourses(ids);
-
-    // 确保所有信息都已获取到
-    if (Object.keys(infos).length === 0) return;
-
-    // 准备显示文本
-    // 课程扫描已结束仍无结果的，如实显示"未知课程"，而不是永远停留在"加载中..."
-    const texts = tlist.map((x) => {
-      const info = infos[x.activityId];
-      return info ? `${info.name}(${info.teachers})` : "未知课程";
-    });
-
-    // 按活动标题把待办项与 DOM 节点对齐，避免渲染顺序与列表顺序不一致时课程名贴错
-    const titleIndexes = new Map();
-    tlist.forEach((x, i) => {
-      const title = (x.activityName || "").trim();
-      if (!title) return;
-      if (!titleIndexes.has(title)) titleIndexes.set(title, []);
-      titleIndexes.get(title).push(i);
-    });
-    const usedIndexes = new Set();
-    const pickTextIndex = (node, fallback) => {
-      const titleEl = node.querySelector(".activity-title");
-      if (titleEl) {
-        const clone = titleEl.cloneNode(true);
-        clone.querySelectorAll(".yz-overdue-badge").forEach((b) => b.remove());
-        const queue = titleIndexes.get((clone.textContent || "").trim());
-        while (queue && queue.length) {
-          const idx = queue.shift();
-          if (!usedIndexes.has(idx)) {
-            usedIndexes.add(idx);
-            return idx;
-          }
-        }
-      }
-      if (!usedIndexes.has(fallback)) {
-        usedIndexes.add(fallback);
-        return fallback;
-      }
-      const free = tlist.findIndex((_, k) => !usedIndexes.has(k));
-      if (free >= 0) {
-        usedIndexes.add(free);
-        return free;
-      }
-      return fallback;
-    };
-
-    // 等待作业元素显示
-    const timeout = 5000; // 5秒超时
-    const startTime = Date.now();
-
-    let nodes;
-    while (Date.now() - startTime < timeout) {
-      nodes = $x(
-        '//*[@id="layout-container"]/div[2]/div[2]/div/div[2]/div[1]/div[3]/div[2]/div/div'
-      );
-      if (
-        nodes.length > 0 &&
-        nodes.some((node) => node.children[0] && node.children[0].innerText)
-      ) {
-        break;
-      }
-      await sleep(100);
-    }
-
-    // 更新课程信息显示
-    const skin = !!settings.home.todoCardSkin;
-    for (let i = 0; i < Math.min(nodes.length, texts.length); i++) {
-      const idx = pickTextIndex(nodes[i], i);
-      const card = nodes[i];
-      if (card && card.classList) card.classList.toggle("yz-task-card", skin);
-      if (card && card.children[1]) {
-        const host = card.children[1];
-        if (host.children.length === 0) {
-          const p = document.createElement("div");
-          p.className = "yz-task-course";
-          const t = document.createTextNode(texts[idx]);
-          p.appendChild(t);
-          p.style.color = "#0066cc";
-          host.insertAdjacentElement("afterbegin", p);
-        } else {
-          host.children[0].innerHTML = texts[idx];
-          host.children[0].style.color = "#0066cc";
-          if (host.children[0].classList) host.children[0].classList.add("yz-task-course");
-        }
-      }
-      if (skin && tlist[idx] && tlist[idx].endTime) {
-        renderDeadlineChip(nodes[i].children[1], tlist[idx].endTime);
-      }
-      if (settings.home.showTaskMeta && tlist[idx]) {
-        renderTaskMeta(nodes[i], tlist[idx]);
-      }
-      if (settings.home.showOverdueBadge && tlist[idx] && tlist[idx].endTime) {
-        renderCountdownBadge(nodes[i], tlist[idx].endTime);
-      }
-    }
-
+    renderTodoContinuous(list);
   }
 
   // XPath选择器
@@ -3934,7 +3650,36 @@
       }
       `);
     }
-    if (settings.home.todoContinuous) {
+    if (settings.home.hideSideNav) {
+      GM_addStyle(`
+      .main-content .router-container .menu-nav {
+        display: none !important;
+      }
+      .main-content .router-container .box {
+        width: 100% !important;
+        max-width: none;
+        display: block;
+      }
+      .teacher-home-page {
+        max-width: 1680px !important;
+        margin: 0 auto !important;
+      }
+      .teacher-home-page .home-left-container {
+        width: calc(100% - 572px) !important;
+      }
+      .teacher-home-page .home-right-container {
+        width: 540px !important;
+      }
+      `);
+    }
+    if (settings.home.hideVisitHistory) {
+      GM_addStyle(`
+      .visit-history-section {
+        display: none !important;
+      }
+      `);
+    }
+    if (settings.home.todoRedesign) {
       GM_addStyle(`
       .in-progress-section.yz-todo-continuous-on .in-progress-body {
         display: none !important;
@@ -4019,60 +3764,7 @@
         line-height: 1.4;
       }
       `);
-    }
-    if (settings.home.todoCardSkin) {
-      GM_addStyle(`
-      .in-progress-section .in-progress-item.yz-task-card {
-        box-sizing: border-box;
-        border-radius: 14px;
-        background-color: #fff;
-        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3);
-        transition: box-shadow 0.2s ease, transform 0.2s ease;
-      }
-      .in-progress-section .in-progress-item.yz-task-card:hover {
-        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.55), 0 8px 20px rgba(15, 23, 42, 0.08);
-        transform: translateY(-1px);
-      }
-      .yz-task-card .activity-post {
-        border-radius: 12px;
-      }
-      .yz-task-course {
-        display: block;
-        font-size: 12px;
-        line-height: 16px;
-        font-weight: 600;
-        color: #2563eb !important;
-      }
-      .yz-task-card .activity-title {
-        height: auto !important;
-        font-size: 14px;
-        line-height: 20px;
-        font-weight: 600;
-        color: #171725;
-      }
-      .yz-task-card .yz-task-meta {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        margin-top: 0;
-      }
-      .yz-task-card .acitivity-dateline {
-        display: flex;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 5px;
-        margin-top: 6px;
-        font-size: 12px;
-        line-height: 16px;
-        color: #94a3b8;
-      }
-      .yz-task-card .yz-overdue-badge {
-        margin-left: 0;
-      }
-      `);
-    }
-    if (settings.notification.betterNotificationHighlight) {
+    }    if (settings.notification.betterNotificationHighlight) {
       GM_addStyle(`
       .notification-with-dot {
         background-color: #fff8f8 !important;
