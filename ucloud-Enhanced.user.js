@@ -3161,19 +3161,19 @@
   }
 
   // 插入课程信息
-  function insert(x) {
+  function insert(x, retry) {
     if (!x) return;
-    if (
-      $x(
-        "/html/body/div[1]/div/div[2]/div[2]/div/div/div[2]/div/div[2]/div[1]/div/div/div[1]/div/p"
-      ).length > 2
-    )
+    const attempt = retry || 0;
+    // 仅在「作业信息」Tab 存在时注入，避免切到「我的作业」时插错位置
+    if (!document.getElementById("assignment-info")) {
+      if (attempt < 40) setTimeout(() => insert(x, attempt + 1), 50);
       return;
+    }
     const d = $x(
       "/html/body/div[1]/div/div[2]/div[2]/div/div/div[2]/div/div[2]/div[1]/div/div/div[1]/div/p[1]"
     );
     if (!d.length) {
-      setTimeout(() => insert(x), 50);
+      if (attempt < 40) setTimeout(() => insert(x, attempt + 1), 50);
       return;
     }
     // 检查是否已经插入过
@@ -3678,12 +3678,27 @@
     }
     // 作业详情页容器圆角
     GM_addStyle(`
+    #assignment-details {
+      border-radius: 20px !important;
+      overflow: hidden;
+    }
     #assignment-info,
     .assignment-content,
     .assignment-info,
     .assignment-detail-wrap,
     .details-tabs {
       border-radius: 20px !important;
+    }
+    `);
+    GM_addStyle(`
+    html.ue-dark-mode #assignment-details .info-item,
+    html.ue-dark-mode #assignment-details .filed-wrap,
+    html.ue-dark-mode #assignment-details .header,
+    html.ue-dark-mode #assignment-details .el-tabs__item {
+      border-color: rgba(255, 255, 255, 0.14) !important;
+    }
+    html.ue-dark-mode #assignment-details .el-tabs__nav-wrap::after {
+      background-color: rgba(255, 255, 255, 0.14) !important;
     }
     `);
     // 板块级容器圆角统一（最底层卡片）
@@ -4139,13 +4154,16 @@
       }
       if (settings.homework.showHomeworkSource) {
         // 显示相关课程信息
+        let courseForPage = null;
         if (r) {
+          courseForPage = r;
           insert(r);
         } else {
           if (!id || !title) return;
           try {
             const courseInfo = await searchCourse(id, title);
             if (courseInfo) {
+              courseForPage = courseInfo;
               insert(courseInfo);
               set(id, courseInfo);
             }
@@ -4153,6 +4171,7 @@
             console.error("获取课程信息失败", e);
           }
         }
+        if (courseForPage) watchAssignmentCourse(courseForPage);
       }
 
       // 处理资源预览和下载
@@ -4312,7 +4331,48 @@
           gpage = page;
         }
 
-        // 更新作业显示
+        // 作业详情页切换 Tab 后 DOM 会重绘，需要重新注入课程名
+  function watchAssignmentCourse(course) {
+    if (!course) return;
+    let timer = null;
+    let observer = null;
+    const stillOnPage = () =>
+      location.href.startsWith(
+        "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
+      );
+    const tryInsert = () => {
+      if (!stillOnPage()) {
+        if (observer) observer.disconnect();
+        return;
+      }
+      insert(course);
+    };
+    observer = new MutationObserver(() => {
+      clearTimeout(timer);
+      timer = setTimeout(tryInsert, 150);
+    });
+    const start = () => {
+      const root = document.getElementById("assignment-details");
+      if (!root) {
+        setTimeout(start, 200);
+        return;
+      }
+      observer.observe(root, { childList: true, subtree: true });
+    };
+    start();
+    document.addEventListener(
+      "click",
+      (e) => {
+        if (e.target && e.target.closest && e.target.closest(".details-tabs")) {
+          setTimeout(tryInsert, 250);
+          setTimeout(tryInsert, 700);
+        }
+      },
+      true
+    );
+  }
+
+  // 更新作业显示
         await updateAssignmentDisplay(list, page);
       }
       syncHomeLayout();
