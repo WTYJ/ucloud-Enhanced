@@ -1078,6 +1078,12 @@
           description: '每天检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
           defaultValue: true
         },
+        workbench: {
+          type: 'checkbox',
+          label: '工作台入口',
+          description: '在悬浮球快捷面板显示「打开工作台」，提供独立的待办与课程视图。',
+          defaultValue: true
+        },
         showConfigButton: {
           type: 'checkbox',
           label: '显示悬浮球',
@@ -1340,10 +1346,272 @@
     };
   }
 
+  // ===== 工作台：Shadow DOM 独立界面（待办 / 课程）=====
+  let wbHost = null;
+  let wbRoot = null;
+  const wbState = { tab: "todo", todoLoaded: false, courseLoaded: false, themeObserver: null };
+
+  const WB_CSS = `
+    :host { all: initial; }
+    .wb-mask { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); }
+    .wb-panel {
+      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+      width: min(1080px, calc(100vw - 48px)); height: min(780px, calc(100vh - 64px));
+      display: flex; flex-direction: column; overflow: hidden;
+      background: #ffffff; color: #1e293b;
+      border-radius: 20px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.35);
+      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
+    }
+    .wb-head { display: flex; align-items: center; gap: 18px; padding: 16px 20px; border-bottom: 1px solid #eef2f7; }
+    .wb-brand { font-size: 16px; font-weight: 700; color: #171725; }
+    .wb-tabs { display: flex; gap: 6px; }
+    .wb-tab { border: none; background: transparent; padding: 6px 16px; border-radius: 999px; font-size: 13px; color: #64748b; cursor: pointer; }
+    .wb-tab.active { background: rgba(59, 130, 246, 0.12); color: #2563eb; font-weight: 600; }
+    .wb-close { margin-left: auto; width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 18px; line-height: 1; cursor: pointer; color: #475569; }
+    .wb-close:hover { background: #e2e8f0; }
+    .wb-body { flex: 1; overflow: auto; padding: 18px 20px 24px; }
+    .wb-pane[hidden] { display: none; }
+    .wb-loading, .wb-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 48px 0; }
+    .wb-card { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: box-shadow .2s ease, transform .2s ease; }
+    .wb-card:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); transform: translateY(-1px); }
+    .wb-card-head { display: flex; align-items: center; gap: 10px; }
+    .wb-card-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: #171725; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .wb-card-tags { display: flex; gap: 6px; flex: none; }
+    .wb-deadline { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.45); background: rgba(148, 163, 184, 0.18); color: #64748b; font-size: 12px; white-space: nowrap; }
+    .wb-mode { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(139, 92, 246, 0.35); background: rgba(139, 92, 246, 0.1); color: #7c3aed; font-size: 12px; white-space: nowrap; }
+    .wb-course { margin-top: 2px; font-size: 12px; font-weight: 600; color: #2563eb; }
+    .wb-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
+    .wb-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; }
+    .wb-badge.later { background: rgba(148, 163, 184, 0.22); border: 1px solid rgba(148, 163, 184, 0.45); color: #64748b; }
+    .wb-badge.soon { background: #e6a23c; }
+    .wb-badge.urgent { background: #ef4444; }
+    .wb-badge.overdue { background: #b91c1c; }
+    .wb-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(148, 163, 184, 0.1); color: #64748b; font-size: 12px; white-space: nowrap; }
+    .wb-chip.blue { border-color: rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.08); color: #2563eb; }
+    .wb-course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+    .wb-course-item { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; cursor: pointer; background: #fff; }
+    .wb-course-item:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
+    .wb-course-title { font-size: 14px; font-weight: 600; color: #171725; }
+    .wb-course-meta { margin-top: 6px; font-size: 12px; color: #64748b; }
+
+    .wb-dark .wb-panel { background: #151a24; color: #e5e7eb; border: 1px solid rgba(255, 255, 255, 0.08); }
+    .wb-dark .wb-head { border-bottom-color: rgba(255, 255, 255, 0.08); }
+    .wb-dark .wb-brand { color: #f3f4f6; }
+    .wb-dark .wb-tab { color: #94a3b8; }
+    .wb-dark .wb-tab.active { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
+    .wb-dark .wb-close { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
+    .wb-dark .wb-card, .wb-dark .wb-course-item { background: #1b2130; border-color: rgba(59, 130, 246, 0.45); }
+    .wb-dark .wb-card-title, .wb-dark .wb-course-title { color: #f3f4f6; }
+    .wb-dark .wb-course { color: #93c5fd; }
+    .wb-dark .wb-deadline { color: #94a3b8; }
+    .wb-dark .wb-chip { color: #94a3b8; }
+    .wb-dark .wb-chip.blue { color: #93c5fd; }
+    .wb-dark .wb-course-meta { color: #94a3b8; }
+  `;
+
+  function wbApplyTheme() {
+    if (!wbHost) return;
+    wbHost.classList.toggle("wb-dark", document.documentElement.classList.contains("ue-dark-mode"));
+  }
+
+  function wbEnsure() {
+    if (wbHost) return;
+    wbHost = document.createElement("div");
+    wbHost.id = "yzHelper-workbench";
+    wbHost.style.cssText = "position:fixed;inset:0;z-index:2147483000;display:none;";
+    wbRoot = wbHost.attachShadow({ mode: "open" });
+    wbRoot.innerHTML = `<style>${WB_CSS}</style>
+      <div class="wb-mask"></div>
+      <div class="wb-panel">
+        <div class="wb-head">
+          <div class="wb-brand">🧩 工作台</div>
+          <div class="wb-tabs">
+            <button class="wb-tab active" data-tab="todo">待办</button>
+            <button class="wb-tab" data-tab="course">课程</button>
+          </div>
+          <button class="wb-close" title="关闭">×</button>
+        </div>
+        <div class="wb-body">
+          <div class="wb-pane" data-pane="todo"><div class="wb-loading">加载中…</div></div>
+          <div class="wb-pane" data-pane="course" hidden><div class="wb-loading">加载中…</div></div>
+        </div>
+      </div>`;
+    document.body.appendChild(wbHost);
+    wbRoot.querySelector(".wb-mask").addEventListener("click", wbClose);
+    wbRoot.querySelector(".wb-close").addEventListener("click", wbClose);
+    wbRoot.querySelectorAll(".wb-tab").forEach((btn) => {
+      btn.addEventListener("click", () => wbSwitchTab(btn.dataset.tab));
+    });
+    const obs = new MutationObserver(wbApplyTheme);
+    obs.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    wbState.themeObserver = obs;
+  }
+
+  function wbUpdateTabs() {
+    if (!wbRoot) return;
+    wbRoot.querySelectorAll(".wb-tab").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.tab === wbState.tab);
+    });
+    wbRoot.querySelectorAll(".wb-pane").forEach((pane) => {
+      pane.hidden = pane.dataset.pane !== wbState.tab;
+    });
+  }
+
+  function wbSwitchTab(tab) {
+    wbState.tab = tab;
+    wbUpdateTabs();
+    if (tab === "course" && !wbState.courseLoaded) wbLoadCourses();
+    if (tab === "todo" && !wbState.todoLoaded) wbLoadTodo();
+  }
+
+  function wbOpen(tab) {
+    wbEnsure();
+    wbApplyTheme();
+    wbHost.style.display = "block";
+    if (tab) wbState.tab = tab;
+    wbUpdateTabs();
+    if (wbState.tab === "course") {
+      if (!wbState.courseLoaded) wbLoadCourses();
+    } else if (!wbState.todoLoaded) {
+      wbLoadTodo();
+    }
+  }
+
+  function wbClose() {
+    if (wbHost) wbHost.style.display = "none";
+  }
+
+  function wbRenderTodoMeta(card, task, info) {
+    const meta = card.querySelector(".wb-meta");
+    const tags = card.querySelector(".wb-card-tags");
+    if (!meta || !tags) return;
+    meta.innerHTML = "";
+    tags.innerHTML = "";
+    const d = parseDeadline(task.endTime);
+    if (d) {
+      tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(d)}</span>`);
+      const rem = formatRemain(d - Date.now());
+      meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+    }
+    const mode = (info && info.mode) || pickModeName(task.assignmentType);
+    if (mode) {
+      tags.insertAdjacentHTML(
+        "beforeend",
+        `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
+      );
+    }
+    if (info && info.attachments) meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">附件 ${info.attachments}</span>`);
+    if (info && info.evaluation) meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">互评</span>`);
+    if (info && info.stat) {
+      meta.insertAdjacentHTML(
+        "beforeend",
+        `<span class="wb-chip blue">班级已交 ${info.stat.submitted} / ${info.stat.total} 人</span>`
+      );
+    }
+  }
+
+  async function wbLoadTodo() {
+    wbState.todoLoaded = true;
+    if (!wbRoot) return;
+    const pane = wbRoot.querySelector('[data-pane="todo"]');
+    pane.innerHTML = '<div class="wb-loading">加载中…</div>';
+    try {
+      const res = await getUndoneList();
+      const list = (res && res.data && res.data.undoneList) || [];
+      const tasks = list
+        .map((t) => ({ t, ms: (parseDeadline(t.endTime) || { getTime: () => Infinity }).getTime() }))
+        .sort((a, b) => a.ms - b.ms)
+        .map((x) => x.t);
+      pane.innerHTML = "";
+      if (!tasks.length) {
+        pane.innerHTML = '<div class="wb-empty">暂无待办</div>';
+        return;
+      }
+      const cards = {};
+      tasks.forEach((task) => {
+        const card = document.createElement("div");
+        card.className = "wb-card";
+        card.innerHTML =
+          '<div class="wb-card-head"><div class="wb-card-title"></div><div class="wb-card-tags"></div></div>' +
+          '<div class="wb-course">课程加载中…</div><div class="wb-meta"></div>';
+        card.querySelector(".wb-card-title").textContent = task.activityName || task.assignmentTitle || "未命名作业";
+        wbRenderTodoMeta(card, task, null);
+        card.addEventListener("click", () => openTaskUrl(buildTaskUrl(task)));
+        pane.appendChild(card);
+        cards[task.activityId || task.id] = card;
+      });
+      const ids = tasks.map((t) => t.activityId || t.id).filter(Boolean);
+      searchCourses(ids)
+        .then((infos) => {
+          tasks.forEach((task) => {
+            const card = cards[task.activityId || task.id];
+            const info = infos[task.activityId || task.id];
+            if (card && card.isConnected) {
+              card.querySelector(".wb-course").textContent = info
+                ? info.name + "(" + info.teachers + ")"
+                : "未知课程";
+            }
+          });
+        })
+        .catch(() => {});
+      tasks.forEach((task) => {
+        fetchAssignmentInfo(task).then((info) => {
+          const card = cards[task.activityId || task.id];
+          if (card && card.isConnected && info) wbRenderTodoMeta(card, task, info);
+        });
+      });
+    } catch (e) {
+      pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
+      wbState.todoLoaded = false;
+    }
+  }
+
+  async function wbLoadCourses() {
+    wbState.courseLoaded = true;
+    if (!wbRoot) return;
+    const pane = wbRoot.querySelector('[data-pane="course"]');
+    pane.innerHTML = '<div class="wb-loading">加载中…</div>';
+    try {
+      const list = await getCourseList();
+      pane.innerHTML = "";
+      if (!list || !list.length) {
+        pane.innerHTML = '<div class="wb-empty">暂无课程</div>';
+        return;
+      }
+      const grid = document.createElement("div");
+      grid.className = "wb-course-grid";
+      list.forEach((course) => {
+        const item = document.createElement("div");
+        item.className = "wb-course-item";
+        item.innerHTML = '<div class="wb-course-title"></div><div class="wb-course-meta"></div>';
+        item.querySelector(".wb-course-title").textContent = course.name || "未命名课程";
+        item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
+          .filter(Boolean)
+          .join(" · ");
+        item.addEventListener("click", () => {
+          wbClose();
+          openCoursePage(course);
+        });
+        grid.appendChild(item);
+      });
+      pane.appendChild(grid);
+    } catch (e) {
+      pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
+      wbState.courseLoaded = false;
+    }
+  }
+
+  function setupWorkbench() {
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape" && wbHost && wbHost.style.display === "block") wbClose();
+    });
+  }
+
   // 初始化扩展功能
   function initializeExtension() {
     // 注册菜单命令
     registerMenuCommands();
+    setupWorkbench();
 
     const nprogressCSS = GM_getResourceText("NPROGRESS_CSS");
     GM_addStyle(nprogressCSS);
@@ -1694,6 +1962,23 @@
       #yzHelper-quick .quick-item .setting-label {
           flex: 1;
           cursor: pointer;
+      }
+      #yzHelper-quick .quick-workbench {
+          display: block;
+          width: calc(100% - 16px);
+          margin: 8px 8px 0;
+          padding: 8px 12px;
+          border: 1px solid rgba(59, 130, 246, 0.35);
+          border-radius: 10px;
+          background: rgba(59, 130, 246, 0.1);
+          color: var(--ue-accent);
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+      }
+      #yzHelper-quick .quick-workbench:hover {
+          background: var(--ue-accent);
+          color: #fff;
       }
       #yzHelper-quick .quick-footer {
           display: flex;
@@ -2242,6 +2527,7 @@
       quickPanel.innerHTML = `
         <div class="quick-title">快捷开关</div>
         ${rows.join("")}
+        ${settings.system.workbench ? '<button class="quick-workbench" id="yzHelper-quick-workbench">🧩 打开工作台</button>' : ''}
         <div class="quick-footer">
           <button class="quick-all" id="yzHelper-quick-all">⚙ 全部设置</button>
           <span class="quick-ver">v${GM_info.script.version}</span>
@@ -2282,6 +2568,11 @@
     document.body.appendChild(quickPanel);
     bindAutoSave(quickPanel);
     quickPanel.addEventListener("click", (e) => {
+      if (e.target.closest("#yzHelper-quick-workbench")) {
+        closeQuickPanel();
+        wbOpen("todo");
+        return;
+      }
       if (e.target.closest("#yzHelper-quick-all")) {
         closeQuickPanel();
         settingsTrigger();
@@ -2980,6 +3271,37 @@
     }
   }
 
+  // 生成待办详情地址（供工作台与卡片共用）
+  function buildTaskUrl(task) {
+    const id = task && (task.activityId || task.id);
+    if (!id) return "";
+    const q = (obj) =>
+      Object.keys(obj)
+        .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
+        .map((k) => k + "=" + encodeURIComponent(obj[k]))
+        .join("&");
+    const type = Number(task.type);
+    if (type === 3 || type === 5) {
+      const tab = type === 3 ? "first" : "fourth";
+      return (
+        "course.html#/student/assignmentDetails_fullpage?" +
+        q({
+          activeTabName: tab,
+          assignmentId: id,
+          assignmentType: task.assignmentType === undefined ? 0 : task.assignmentType,
+          assignmentTitle: task.activityName || task.assignmentTitle || "",
+          evaluationStatus: task.evaluationStatus,
+          studentGroupId: task.studentGroupId,
+          isOpenEvaluation: task.isOpenEvaluation,
+        })
+      );
+    }
+    if (type === 1) return "course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id);
+    if (type === 2) return "course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id);
+    if (type === 4) return "course.html#/answer?id=" + encodeURIComponent(id);
+    return "";
+  }
+
   // 按“在新标签页打开”设置跳转
   function openTaskUrl(url) {
     if (!url) return;
@@ -2992,41 +3314,7 @@
 
   // 直接按平台路由规则打开待办详情（不依赖被隐藏的原卡片）
   function openTodoTask(task) {
-    const id = task && (task.activityId || task.id);
-    if (!id) return;
-    const q = (obj) =>
-      Object.keys(obj)
-        .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
-        .map((k) => k + "=" + encodeURIComponent(obj[k]))
-        .join("&");
-    const type = Number(task.type);
-    if (type === 3 || type === 5) {
-      const tab = type === 3 ? "first" : "fourth";
-      openTaskUrl(
-        "course.html#/student/assignmentDetails_fullpage?" +
-        q({
-          activeTabName: tab,
-          assignmentId: id,
-          assignmentType: task.assignmentType === undefined ? 0 : task.assignmentType,
-          assignmentTitle: task.activityName || task.assignmentTitle || "",
-          evaluationStatus: task.evaluationStatus,
-          studentGroupId: task.studentGroupId,
-          isOpenEvaluation: task.isOpenEvaluation,
-        })
-      );
-      return;
-    }
-    if (type === 1) {
-      openTaskUrl("course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id));
-      return;
-    }
-    if (type === 2) {
-      openTaskUrl("course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id));
-      return;
-    }
-    if (type === 4) {
-      openTaskUrl("course.html#/answer?id=" + encodeURIComponent(id));
-    }
+    openTaskUrl(buildTaskUrl(task));
   }
 
   function buildTodoCard(task) {
