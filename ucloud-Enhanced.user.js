@@ -2980,6 +2980,16 @@
     }
   }
 
+  // 按“在新标签页打开”设置跳转
+  function openTaskUrl(url) {
+    if (!url) return;
+    if (settings.home.openInNewTab) {
+      window.open(url, "_blank");
+    } else {
+      location.href = url;
+    }
+  }
+
   // 直接按平台路由规则打开待办详情（不依赖被隐藏的原卡片）
   function openTodoTask(task) {
     const id = task && (task.activityId || task.id);
@@ -2992,7 +3002,7 @@
     const type = Number(task.type);
     if (type === 3 || type === 5) {
       const tab = type === 3 ? "first" : "fourth";
-      location.href =
+      openTaskUrl(
         "course.html#/student/assignmentDetails_fullpage?" +
         q({
           activeTabName: tab,
@@ -3002,19 +3012,20 @@
           evaluationStatus: task.evaluationStatus,
           studentGroupId: task.studentGroupId,
           isOpenEvaluation: task.isOpenEvaluation,
-        });
+        })
+      );
       return;
     }
     if (type === 1) {
-      location.href = "course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id);
+      openTaskUrl("course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id));
       return;
     }
     if (type === 2) {
-      location.href = "course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id);
+      openTaskUrl("course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id));
       return;
     }
     if (type === 4) {
-      location.href = "course.html#/answer?id=" + encodeURIComponent(id);
+      openTaskUrl("course.html#/answer?id=" + encodeURIComponent(id));
     }
   }
 
@@ -3665,6 +3676,16 @@
       }
       `);
     }
+    // 作业详情页容器圆角
+    GM_addStyle(`
+    #assignment-info,
+    .assignment-content,
+    .assignment-info,
+    .assignment-detail-wrap,
+    .details-tabs {
+      border-radius: 20px !important;
+    }
+    `);
     // 板块级容器圆角统一（最底层卡片）
     GM_addStyle(`
     .teacher-home-page .home-card {
