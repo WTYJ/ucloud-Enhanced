@@ -900,50 +900,12 @@
           description: '个人主页中的课程和作业详情链接将在新标签页中打开，方便多任务处理。',
           defaultValue: true
         },
-        showTaskMeta: {
-          type: 'checkbox',
-          label: '待办显示班级进度',
-          description: '在待办条目上显示班级已交人数。待办接口无该字段时，会自动读取一次作业详情；两者都取不到时静默不显示。',
-          defaultValue: true
-        },
-        todoRedesign: {
-          type: 'checkbox',
-          quick: true,
-          label: '待办改版',
-          description: '把待办改为按截止时间排序的连续列表，并应用卡片化样式、课程归属与信息胶囊；关闭后完全恢复平台原始的待办分页样式。',
-          defaultValue: true
-        },
-        hideUserPanel: {
-          type: 'checkbox',
-          label: '隐藏学生信息与统计',
-          description: '隐藏个人主页顶部的学生信息卡（头像/学号）与课程数、待办数统计卡。',
-          defaultValue: true
-        },
-        hideSideNav: {
-          type: 'checkbox',
-          label: '隐藏左侧导航',
-          description: '隐藏个人主页左侧的导航栏（主页/我的课堂/我的问卷等），并把主页内容区加宽。',
-          defaultValue: true
-        },
-        hideVisitHistory: {
-          type: 'checkbox',
-          label: '隐藏访问历史',
-          description: '隐藏个人主页右侧的「访问历史」板块，为主内容让出空间。',
-          defaultValue: true
-        },
         useWheelPageTurner: {
           type: 'checkbox',
           quick: true,
           label: '使用鼠标滚轮翻页',
           description: '可以使用鼠标滚轮来翻动个人主页的"本学期课程"和"待办"。',
           defaultValue: true
-        },
-        showOverdueBadge: {
-          type: 'checkbox',
-          quick: true,
-          label: '待办截止倒计时',
-          description: '在待办旁显示截止倒计时：未到期显示剩余时间（精确到天/时/分，每分钟自动更新），已逾期显示红色逾期时长；全部待办均显示。',
-          defaultValue: false
         },
         courseSearchBox: {
           type: 'checkbox',
@@ -1095,6 +1057,48 @@
           label: '显示悬浮球',
           description: '在页面显示可拖动的助手悬浮球（点击打开快捷面板）；关闭后仍可从油猴菜单打开设置。',
           defaultValue: true
+        }
+      }
+    },
+    experimental: {
+      emoji: '🧪',
+      title: '实验功能',
+      items: {
+        todoRedesign: {
+          type: 'checkbox',
+          label: '待办改版（原地）',
+          description: '把平台待办改为连续列表并套用新卡片样式。实验性功能，平台改版后可能失效；推荐使用「工作台」查看待办。',
+          defaultValue: false
+        },
+        showTaskMeta: {
+          type: 'checkbox',
+          label: '待办显示班级进度（原地）',
+          description: '仅对原地待办改版生效：显示班级已交人数，缺失时读取作业详情兜底。',
+          defaultValue: false
+        },
+        showOverdueBadge: {
+          type: 'checkbox',
+          label: '待办截止倒计时（原地）',
+          description: '仅对原地待办改版生效：显示剩余时间与逾期时长。',
+          defaultValue: false
+        },
+        hideUserPanel: {
+          type: 'checkbox',
+          label: '隐藏学生信息与统计',
+          description: '隐藏个人主页顶部学生信息卡与课程数、待办数统计卡。实验性功能。',
+          defaultValue: false
+        },
+        hideSideNav: {
+          type: 'checkbox',
+          label: '隐藏左侧导航',
+          description: '隐藏个人主页左侧导航并加宽内容区。实验性功能。',
+          defaultValue: false
+        },
+        hideVisitHistory: {
+          type: 'checkbox',
+          label: '隐藏访问历史',
+          description: '隐藏个人主页右侧「访问历史」板块。实验性功能。',
+          defaultValue: false
         }
       }
     }
@@ -3369,7 +3373,7 @@
       chip.textContent = "截止 " + fmtDeadline(d);
       attrHost.appendChild(chip);
 
-      if (settings.home.showOverdueBadge) {
+      if (settings.experimental.showOverdueBadge) {
         const badge = document.createElement("span");
         const rem = formatRemain(d - Date.now());
         badge.className = "yz-overdue-badge " + rem.cls;
@@ -3379,7 +3383,7 @@
         startTodoTicker();
       }
     }
-    if (!settings.home.showTaskMeta) return;
+    if (!settings.experimental.showTaskMeta) return;
     const mode = (info && info.mode) || pickModeName(task.assignmentType);
     if (mode) {
       const chip = document.createElement("span");
@@ -3549,7 +3553,7 @@
   // 更新待办显示：改版开启时用连续列表；关闭时完全保持平台原样
   async function updateAssignmentDisplay(list) {
     if (!list || list.length === 0) return;
-    if (!settings.home.todoRedesign) {
+    if (!settings.experimental.todoRedesign) {
       removeTodoContinuous();
       return;
     }
@@ -4021,7 +4025,7 @@
       }
       `);
     }
-    if (settings.home.showOverdueBadge) {
+    if (settings.experimental.showOverdueBadge) {
       GM_addStyle(`
       .yz-overdue-badge {
         display: inline-block;
@@ -4054,7 +4058,7 @@
       }
       `);
     }
-    if (settings.home.showTaskMeta) {
+    if (settings.experimental.showTaskMeta) {
       GM_addStyle(`
       .yz-task-meta {
         display: flex;
@@ -4144,14 +4148,14 @@
       border-radius: 12px !important;
     }
     `);
-    if (settings.home.hideUserPanel) {
+    if (settings.experimental.hideUserPanel) {
       GM_addStyle(`
       .teacher-home-page .teacher-driver-section {
         display: none !important;
       }
       `);
     }
-    if (settings.home.hideSideNav) {
+    if (settings.experimental.hideSideNav) {
       GM_addStyle(`
       .main-content .router-container .menu-nav {
         display: none !important;
@@ -4196,14 +4200,14 @@
       }
       `);
     }
-    if (settings.home.hideVisitHistory) {
+    if (settings.experimental.hideVisitHistory) {
       GM_addStyle(`
       .visit-history-section {
         display: none !important;
       }
       `);
     }
-    if (settings.home.todoRedesign) {
+    if (settings.experimental.todoRedesign) {
       GM_addStyle(`
       .in-progress-section.yz-todo-continuous-on .in-progress-body {
         display: none !important;
@@ -4707,7 +4711,7 @@
           console.error("[ucloud-Enhanced] 初始化课程搜索失败", e)
         );
       }
-      if (settings.home.todoRedesign) {
+      if (settings.experimental.todoRedesign) {
         // 未完成任务列表
         const list = glist || (await getUndoneList()).data.undoneList;
         if (!list || !Array.isArray(list)) return;
