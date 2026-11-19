@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-2.0.1-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-2.1.0-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -38,6 +38,15 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 2.1.0
+
+- 改进：动态深色引擎改为三阶段批量读写分离，跳过 SVG/媒体及隐藏节点，大幅减少首屏与悬停回流抖动；系统切回浅色或关闭开关时即时清理内联覆盖，无需刷新恢复
+- 改进：`searchCourses` 增加会话级活动缓存以合并工作台与主页的并发重复请求；`localStorage` 课程缓存剔除大体积原始字段并限制 300 条上限与异常容错
+- 改进：`downloadFile` 支持无 `Content-Length` 降级整块下载，并在 `finally` 中安全回收进度计数避免进度条卡死；`wait()` 增加 15 秒超时保护
+- 改进：主页待办与课程资源列表改用原生 CSS 选择器，作业详情与「下载全部」按钮补充兜底锚点
+- 修复：作业详情页 `watchAssignmentCourse` 作用域错位导致的严格模式 `ReferenceError`；Webpack Hook 中 `home_openInNewTab` 默认值未同步为 `false`；工作台刷新按钮在「通知」页签无效；作业详情 Office 文件后缀误判 `url` 且不兼容大小写；图片预览器按 `Esc` 报错与双指缩放首次除零；主页翻页 `MutationObserver` 反复切换累积泄漏
+- 重构：合并 `escapeHtml`、`toggleSettingsPanel`、`createNotify`、`getToken/getCookie`、`sortTasksByDeadline`、`openTaskUrl` 及 15 次 `GM_addStyle` 调用，清理死代码与冗余嵌套
 
 ### 2.0.1
 
