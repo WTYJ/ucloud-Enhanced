@@ -1171,7 +1171,7 @@ function escapeHtml(text) {
   }
 
   const DARK_EXEMPT_SELECTOR =
-    "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon";
+    "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon,.yz-course-link,#downloadAllButton";
   const DARK_SKIP_TAGS = new Set([
     "SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "BR", "HR",
     "IMG", "VIDEO", "AUDIO", "CANVAS", "IFRAME", "SVG",
@@ -4506,23 +4506,28 @@ function escapeHtml(text) {
 
     if (!existingText) {
       const p = document.createElement("p");
-      const label = x.name + "(" + x.teachers + ")";
-      // 有课程 ID 时渲染成可点击链接，复用主页搜索框的跳转逻辑；
-      // 早期版本缓存下来的无 ID 记录仍按纯文本显示，避免点击无响应
+      p.className = "yz-course-wrap";
+      const label = x.name + (x.teachers ? " · " + x.teachers : "");
+      // 有课程 ID 时渲染成现代风可点击胶囊，复用课程主页跳转逻辑；
+      // 早期版本缓存下来的无 ID 记录仍按静态胶囊显示，避免点击无响应
+      const badge = document.createElement("span");
+      badge.className = x.id ? "yz-course-link" : "yz-course-link is-static";
+      badge.innerHTML =
+        '<svg class="yz-course-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>' +
+        '<span class="yz-course-text"></span>' +
+        (x.id
+          ? '<svg class="yz-course-arr" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>'
+          : "");
+      badge.querySelector(".yz-course-text").textContent = label;
       if (x.id) {
-        const link = document.createElement("span");
-        link.className = "yz-course-link";
-        link.textContent = label;
-        link.title = "点击进入课程主页";
-        link.addEventListener("click", (e) => {
+        badge.title = "点击进入课程主页";
+        badge.addEventListener("click", (e) => {
           e.preventDefault();
           e.stopPropagation();
           openCoursePage(x);
         });
-        p.appendChild(link);
-      } else {
-        p.appendChild(document.createTextNode(label));
       }
+      p.appendChild(badge);
       d[0].after(p);
     }
   }
@@ -4923,10 +4928,16 @@ function escapeHtml(text) {
         border-radius: 20px !important;
         overflow: hidden;
       }
-      /* 作业详情页容器圆角与深色分割线 */
+      /* 作业详情页轻量现代风抛光（仅皮肤层，不触碰表单与编辑器结构） */
       #assignment-details {
         border-radius: 20px !important;
         overflow: hidden;
+        box-shadow: 0 8px 28px rgba(15, 23, 42, 0.06) !important;
+        border: 1px solid rgba(15, 23, 42, 0.07) !important;
+      }
+      html.ue-dark-mode #assignment-details {
+        box-shadow: 0 12px 36px rgba(0, 0, 0, 0.35) !important;
+        border-color: rgba(255, 255, 255, 0.08) !important;
       }
       #assignment-info,
       .assignment-content,
@@ -4935,14 +4946,84 @@ function escapeHtml(text) {
       .details-tabs {
         border-radius: 20px !important;
       }
+      #assignment-details .el-tabs__item {
+        font-weight: 500;
+        transition: color 0.16s ease;
+      }
+      #assignment-details .el-tabs__item.is-active {
+        color: #2962ff !important;
+        font-weight: 600;
+      }
+      html.ue-dark-mode #assignment-details .el-tabs__item.is-active {
+        color: #93c5fd !important;
+      }
+      #assignment-details .el-tabs__active-bar {
+        background-color: #2962ff !important;
+        height: 3px !important;
+        border-radius: 3px !important;
+      }
+      html.ue-dark-mode #assignment-details .el-tabs__active-bar {
+        background-color: #60a5fa !important;
+      }
+      #assignment-details .el-button {
+        border-radius: 10px !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+      }
+      #assignment-details .el-button--primary {
+        background-color: #2962ff !important;
+        border-color: #2962ff !important;
+      }
+      #assignment-details .el-button--primary:hover {
+        background-color: #1f4fe0 !important;
+        border-color: #1f4fe0 !important;
+        box-shadow: 0 4px 12px rgba(41, 98, 255, 0.28);
+      }
+      #assignment-info .by-icon-eye-grey,
+      #assignment-info .by-icon-yundown-grey {
+        cursor: pointer;
+        border-radius: 8px;
+        transition: opacity 0.15s ease, transform 0.15s ease;
+      }
+      #assignment-info .by-icon-eye-grey:hover,
+      #assignment-info .by-icon-yundown-grey:hover {
+        opacity: 0.85;
+        transform: scale(1.08);
+      }
       html.ue-dark-mode #assignment-details .info-item,
       html.ue-dark-mode #assignment-details .filed-wrap,
       html.ue-dark-mode #assignment-details .header,
       html.ue-dark-mode #assignment-details .el-tabs__item {
-        border-color: rgba(255, 255, 255, 0.14) !important;
+        border-color: rgba(255, 255, 255, 0.12) !important;
       }
       html.ue-dark-mode #assignment-details .el-tabs__nav-wrap::after {
-        background-color: rgba(255, 255, 255, 0.14) !important;
+        background-color: rgba(255, 255, 255, 0.12) !important;
+      }
+      /* 课程资源页轻量现代风抛光 */
+      .resource-item {
+        border-radius: 12px !important;
+        transition: background-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+      }
+      .resource-item:hover {
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.06);
+      }
+      html.ue-dark-mode .resource-item:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+      }
+      #downloadAllButton {
+        border: none !important;
+        border-radius: 10px !important;
+        padding: 9px 18px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        background: linear-gradient(135deg, #3d7bff, #2962ff) !important;
+        color: #ffffff !important;
+        box-shadow: 0 4px 12px rgba(41, 98, 255, 0.28) !important;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease !important;
+      }
+      #downloadAllButton:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 18px rgba(41, 98, 255, 0.36) !important;
+        filter: brightness(1.04);
       }
       /* 主页板块与卡片圆角统一 */
       .teacher-home-page .home-card {
@@ -4962,12 +5043,48 @@ function escapeHtml(text) {
 
     if (settings.homework.showHomeworkSource) {
       cssParts.push(`
+      .yz-course-wrap {
+        margin: 8px 0 4px !important;
+      }
       .yz-course-link {
-        color: #0066cc;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        font-size: 12.5px;
+        font-weight: 600;
+        line-height: 1.4;
+        color: #2563eb;
+        background: rgba(41, 98, 255, 0.09);
+        border: 1px solid rgba(41, 98, 255, 0.2);
         cursor: pointer;
+        transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
       }
       .yz-course-link:hover {
-        text-decoration: underline;
+        background: rgba(41, 98, 255, 0.15);
+        border-color: rgba(41, 98, 255, 0.38);
+        transform: translateY(-1px);
+      }
+      .yz-course-link.is-static {
+        cursor: default;
+      }
+      .yz-course-link.is-static:hover {
+        transform: none;
+      }
+      .yz-course-link .yz-course-ico,
+      .yz-course-link .yz-course-arr {
+        flex: none;
+        opacity: 0.85;
+      }
+      html.ue-dark-mode .yz-course-link {
+        color: #93c5fd;
+        background: rgba(59, 130, 246, 0.18);
+        border-color: rgba(96, 165, 250, 0.3);
+      }
+      html.ue-dark-mode .yz-course-link:hover {
+        background: rgba(59, 130, 246, 0.26);
+        border-color: rgba(96, 165, 250, 0.48);
       }
       `);
     }
