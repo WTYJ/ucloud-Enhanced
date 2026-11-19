@@ -1378,6 +1378,7 @@ function escapeHtml(text) {
   const wbState = {
     tab: "todo",
     open: false,
+    detail: null,
     todoLoaded: false,
     courseLoaded: false,
     noticeLoaded: false,
@@ -1402,6 +1403,18 @@ function escapeHtml(text) {
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
     arrow:
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>',
+    back:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>',
+    external:
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+    file:
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>',
+    eye:
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
+    download:
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    book:
+      '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
     empty:
       '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
   };
@@ -1989,6 +2002,212 @@ function escapeHtml(text) {
       word-break: break-word;
     }
     .wb-link { color: var(--wb-accent-text); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
+
+    /* 二级视图：作业详情 */
+    .wb-detail-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .wb-back-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      color: var(--wb-text-2);
+      border-radius: 10px;
+      padding: 7px 13px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .wb-back-btn:hover { background: var(--wb-surface-2); color: var(--wb-text); border-color: var(--wb-border-strong); }
+    .wb-primary-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: none;
+      background: linear-gradient(135deg, #3d7bff, #2962ff);
+      color: #fff;
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(41, 98, 255, 0.28);
+      transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    }
+    .wb-primary-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(41, 98, 255, 0.36); filter: brightness(1.04); }
+    .wb-detail-hero, .wb-detail-card {
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 16px;
+      padding: 20px 22px;
+      margin-bottom: 14px;
+      box-shadow: var(--wb-card-shadow);
+    }
+    .wb-detail-title {
+      font-size: 19px;
+      font-weight: 700;
+      line-height: 1.4;
+      color: var(--wb-text);
+      letter-spacing: -0.01em;
+    }
+    .wb-detail-course {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      margin-top: 10px;
+      padding: 4px 11px;
+      border-radius: 999px;
+      background: var(--wb-accent-soft);
+      color: var(--wb-accent-text);
+      font-size: 12.5px;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      transition: filter 0.15s ease;
+    }
+    .wb-detail-course.static { cursor: default; }
+    .wb-detail-course:not(.static):hover { filter: brightness(0.95); }
+    .wb-detail-meta {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .wb-progress-wrap {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid var(--wb-border);
+    }
+    .wb-progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12.5px;
+      color: var(--wb-text-2);
+      margin-bottom: 7px;
+      font-variant-numeric: tabular-nums;
+    }
+    .wb-progress-pct { font-weight: 600; color: var(--wb-accent-text); }
+    .wb-progress-track {
+      height: 6px;
+      border-radius: 999px;
+      background: var(--wb-surface-2);
+      overflow: hidden;
+    }
+    .wb-progress-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #3d7bff, #2962ff);
+      transition: width 0.35s ease;
+    }
+    .wb-section-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--wb-text);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .wb-rich-body {
+      font-size: 13.5px;
+      line-height: 1.78;
+      color: var(--wb-text-2);
+      word-break: break-word;
+    }
+    .wb-rich-body p { margin: 0 0 10px; }
+    .wb-rich-body p:last-child { margin-bottom: 0; }
+    .wb-rich-body ul, .wb-rich-body ol { margin: 6px 0 10px; padding-left: 20px; }
+    .wb-rich-body li { margin-bottom: 4px; }
+    .wb-rich-body blockquote {
+      margin: 10px 0;
+      padding: 8px 14px;
+      border-left: 3px solid var(--wb-accent);
+      background: var(--wb-surface-muted);
+      border-radius: 0 8px 8px 0;
+    }
+    .wb-rich-body pre {
+      background: var(--wb-surface-2);
+      padding: 12px 14px;
+      border-radius: 10px;
+      overflow-x: auto;
+      font-size: 12.5px;
+      line-height: 1.6;
+    }
+    .wb-rich-body code {
+      background: var(--wb-surface-2);
+      padding: 2px 5px;
+      border-radius: 5px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 90%;
+    }
+    .wb-rich-body pre code { background: transparent; padding: 0; }
+    .wb-rich-body img { max-width: 100%; height: auto; border-radius: 10px; margin: 8px 0; display: block; }
+    .wb-rich-body table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 12.5px; }
+    .wb-rich-body th, .wb-rich-body td { border: 1px solid var(--wb-border-strong); padding: 6px 10px; text-align: left; }
+    .wb-rich-empty { color: var(--wb-text-3); font-size: 13px; }
+    .wb-attach-list { display: flex; flex-direction: column; gap: 8px; }
+    .wb-attach-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 11px 14px;
+      border-radius: 12px;
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface-muted);
+      transition: border-color 0.15s ease, background 0.15s ease;
+    }
+    .wb-attach-item:hover { border-color: var(--wb-border-strong); background: var(--wb-surface); }
+    .wb-attach-ico {
+      width: 34px;
+      height: 34px;
+      border-radius: 9px;
+      background: var(--wb-accent-soft);
+      color: var(--wb-accent-text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: none;
+    }
+    .wb-attach-name {
+      flex: 1;
+      min-width: 0;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--wb-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .wb-attach-btns { display: flex; gap: 6px; flex: none; }
+    .wb-ghost-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      color: var(--wb-text-2);
+      border-radius: 8px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .wb-ghost-btn:hover:not(:disabled) {
+      border-color: var(--wb-accent);
+      color: var(--wb-accent-text);
+      background: var(--wb-accent-soft);
+    }
+    .wb-ghost-btn:disabled { opacity: 0.5; cursor: wait; }
   `;
 
   function wbApplyTheme() {
@@ -2041,6 +2260,7 @@ function escapeHtml(text) {
           <div class="wb-pane" data-pane="todo">${wbSkeletonHtml("todo")}</div>
           <div class="wb-pane" data-pane="course" hidden>${wbSkeletonHtml("course")}</div>
           <div class="wb-pane" data-pane="notice" hidden>${wbSkeletonHtml("notice")}</div>
+          <div class="wb-pane" data-pane="detail" hidden></div>
         </div>
       </div>`;
     document.body.appendChild(wbHost);
@@ -2062,6 +2282,14 @@ function escapeHtml(text) {
       refreshBtn.classList.remove("spinning");
       void refreshBtn.offsetWidth;
       refreshBtn.classList.add("spinning");
+      if (wbState.tab === "detail" && wbState.detail) {
+        wbOpenAssignmentDetail(
+          wbState.detail.task,
+          wbState.detail.course,
+          wbState.detail.returnTab
+        );
+        return;
+      }
       if (wbState.tab === "course") wbState.courseLoaded = false;
       else if (wbState.tab === "notice") wbState.noticeLoaded = false;
       else wbState.todoLoaded = false;
@@ -2077,8 +2305,12 @@ function escapeHtml(text) {
 
   function wbUpdateTabs() {
     if (!wbRoot) return;
+    const highlightTab =
+      wbState.tab === "detail" && wbState.detail
+        ? wbState.detail.returnTab || "todo"
+        : wbState.tab;
     wbRoot.querySelectorAll(".wb-tab").forEach((btn) => {
-      btn.classList.toggle("active", btn.dataset.tab === wbState.tab);
+      btn.classList.toggle("active", btn.dataset.tab === highlightTab);
     });
     wbRoot.querySelectorAll(".wb-pane").forEach((pane) => {
       pane.hidden = pane.dataset.pane !== wbState.tab;
@@ -2086,6 +2318,7 @@ function escapeHtml(text) {
   }
 
   function wbSwitchTab(tab) {
+    if (tab !== "detail") wbState.detail = null;
     wbState.tab = tab;
     wbUpdateTabs();
     if (tab === "course" && !wbState.courseLoaded) wbLoadCourses();
@@ -2212,8 +2445,10 @@ function escapeHtml(text) {
       inner.appendChild(filterBar);
 
       const cards = {};
+      const taskCourses = new Map();
       wbTodoCards = [];
       tasks.forEach((task) => {
+        const tid = task.activityId || task.id;
         const card = document.createElement("div");
         card.className = "wb-card";
         card.innerHTML =
@@ -2221,9 +2456,16 @@ function escapeHtml(text) {
           '<div class="wb-course">课程加载中…</div><div class="wb-meta"></div>';
         card.querySelector(".wb-card-title").textContent = task.activityName || task.assignmentTitle || "未命名作业";
         wbRenderTodoMeta(card, task, null);
-        card.addEventListener("click", () => openTaskUrl(buildTaskUrl(task)));
+        card.addEventListener("click", () => {
+          const t = Number(task.type);
+          if (t === 3 || t === 5) {
+            wbOpenAssignmentDetail(task, taskCourses.get(tid) || get(tid) || null, "todo");
+          } else {
+            openTaskUrl(buildTaskUrl(task));
+          }
+        });
         inner.appendChild(card);
-        cards[task.activityId || task.id] = card;
+        cards[tid] = card;
         wbTodoCards.push({ card: card, task: task });
       });
       wbStartTicker();
@@ -2232,8 +2474,10 @@ function escapeHtml(text) {
         .then((infos) => {
           const courseCounts = new Map();
           tasks.forEach((task) => {
-            const card = cards[task.activityId || task.id];
-            const info = infos[task.activityId || task.id];
+            const tid = task.activityId || task.id;
+            const card = cards[tid];
+            const info = infos[tid];
+            if (info) taskCourses.set(tid, info);
             const courseName = info ? info.name : "未知课程";
             if (card && card.isConnected) {
               card.dataset.course = courseName;
@@ -2505,6 +2749,279 @@ function escapeHtml(text) {
     }
   }
 
+  const WB_SAFE_TAGS = new Set([
+    "P", "BR", "DIV", "SPAN", "STRONG", "B", "EM", "I", "U", "S",
+    "UL", "OL", "LI", "BLOCKQUOTE", "PRE", "CODE", "H1", "H2", "H3", "H4",
+    "TABLE", "THEAD", "TBODY", "TR", "TH", "TD", "A", "IMG", "HR",
+  ]);
+
+  function wbRenderSafeHtml(container, htmlStr) {
+    container.textContent = "";
+    if (!htmlStr || !String(htmlStr).trim()) {
+      container.innerHTML = '<div class="wb-rich-empty">该作业未填写文字说明</div>';
+      return;
+    }
+    let doc;
+    try {
+      doc = new DOMParser().parseFromString(String(htmlStr), "text/html");
+    } catch (e) {
+      container.textContent = String(htmlStr);
+      return;
+    }
+    const cleanNode = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return document.createTextNode(node.nodeValue || "");
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return null;
+      const tag = node.tagName.toUpperCase();
+      if (["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "SVG", "LINK", "META"].includes(tag)) {
+        return null;
+      }
+      if (!WB_SAFE_TAGS.has(tag)) {
+        const frag = document.createDocumentFragment();
+        node.childNodes.forEach((child) => {
+          const cleaned = cleanNode(child);
+          if (cleaned) frag.appendChild(cleaned);
+        });
+        return frag;
+      }
+      const el = document.createElement(tag.toLowerCase());
+      if (tag === "A") {
+        const href = (node.getAttribute("href") || "").trim();
+        if (/^(https?:|mailto:)/i.test(href)) {
+          el.setAttribute("href", href);
+          el.setAttribute("target", "_blank");
+          el.setAttribute("rel", "noopener noreferrer");
+          el.className = "wb-link";
+        }
+      } else if (tag === "IMG") {
+        const src = (node.getAttribute("src") || "").trim();
+        if (/^(https?:|data:image\/)/i.test(src)) {
+          el.setAttribute("src", src);
+          el.setAttribute("loading", "lazy");
+          el.setAttribute("alt", node.getAttribute("alt") || "作业图片");
+        } else {
+          return null;
+        }
+      }
+      node.childNodes.forEach((child) => {
+        const cleaned = cleanNode(child);
+        if (cleaned) el.appendChild(cleaned);
+      });
+      return el;
+    };
+    const frag = document.createDocumentFragment();
+    doc.body.childNodes.forEach((child) => {
+      const cleaned = cleanNode(child);
+      if (cleaned) frag.appendChild(cleaned);
+    });
+    container.appendChild(frag);
+    if (!container.textContent.trim() && !container.querySelector("img")) {
+      container.innerHTML = '<div class="wb-rich-empty">该作业未填写文字说明</div>';
+    }
+  }
+
+  async function wbPreviewAttachment(res) {
+    const url = await getPreviewURL(res.resourceId);
+    const filename = res.resourceName || "附件";
+    if (settings.preview.autoDownload) {
+      downloadFile(url, filename);
+    }
+    if (OFFICE_EXT_RE.test(filename) && settings.preview.autoSwitchOffice) {
+      openTab(
+        "https://view.officeapps.live.com/op/view.aspx?src=" + encodeURIComponent(url),
+        { active: true, insert: true }
+      );
+    } else if (onlinePreview !== null) {
+      openTab(onlinePreview + encodeURIComponent(url), {
+        active: true,
+        insert: true,
+      });
+    } else {
+      openTab(url, { active: true, insert: true });
+    }
+  }
+
+  async function wbOpenAssignmentDetail(task, courseInfo, returnTab = "todo") {
+    if (!wbRoot || !task) return;
+    const id = task.activityId || task.id;
+    wbState.detail = { task, course: courseInfo, returnTab };
+    wbState.tab = "detail";
+    wbUpdateTabs();
+    const pane = wbRoot.querySelector('[data-pane="detail"]');
+    const bodyEl = wbRoot.querySelector(".wb-body");
+    if (bodyEl) bodyEl.scrollTop = 0;
+    pane.innerHTML = wbSkeletonHtml("todo");
+
+    const nativeUrl = buildTaskUrl(task);
+    try {
+      const json = await getDetail(id);
+      // 防止异步返回时用户已切走或打开了别的作业
+      if (wbState.tab !== "detail" || !wbState.detail || (wbState.detail.task.activityId || wbState.detail.task.id) !== id) {
+        return;
+      }
+      const d = (json && json.data) || {};
+      pane.innerHTML = "";
+      const inner = document.createElement("div");
+      inner.className = "wb-inner";
+      pane.appendChild(inner);
+
+      // 顶部操作条
+      const bar = document.createElement("div");
+      bar.className = "wb-detail-bar";
+      bar.innerHTML =
+        `<button class="wb-back-btn">${WB_ICONS.back}<span>返回待办</span></button>` +
+        `<button class="wb-primary-btn"><span>去原页提交 / 查看</span>${WB_ICONS.external}</button>`;
+      bar.querySelector(".wb-back-btn").addEventListener("click", () => wbSwitchTab(returnTab));
+      bar.querySelector(".wb-primary-btn").addEventListener("click", () => {
+        if (!settings.home.openInNewTab) wbClose();
+        openTaskUrl(nativeUrl);
+      });
+      inner.appendChild(bar);
+
+      // 头部概览卡片
+      const hero = document.createElement("div");
+      hero.className = "wb-detail-hero";
+      const titleText = d.assignmentTitle || task.activityName || task.assignmentTitle || "未命名作业";
+      const titleEl = document.createElement("div");
+      titleEl.className = "wb-detail-title";
+      titleEl.textContent = titleText;
+      hero.appendChild(titleEl);
+
+      const courseLabel = courseInfo
+        ? courseInfo.name + (courseInfo.teachers ? " · " + courseInfo.teachers : "")
+        : d.siteName || d.courseName || "";
+      if (courseLabel) {
+        const courseBtn = document.createElement("button");
+        courseBtn.className = "wb-detail-course" + (courseInfo && courseInfo.id ? "" : " static");
+        courseBtn.innerHTML = `${WB_ICONS.book}<span></span>`;
+        courseBtn.querySelector("span").textContent = courseLabel;
+        if (courseInfo && courseInfo.id) {
+          courseBtn.title = "点击进入课程主页";
+          courseBtn.addEventListener("click", () => {
+            if (!settings.home.openInNewTab) wbClose();
+            openCoursePage(courseInfo);
+          });
+        }
+        hero.appendChild(courseBtn);
+      }
+
+      const meta = document.createElement("div");
+      meta.className = "wb-detail-meta";
+      const endTimeStr = d.assignmentEndTime || d.endTime || task.endTime;
+      const beginTimeStr = d.assignmentBeginTime || d.beginTime;
+      const endDate = parseDeadline(endTimeStr);
+      if (endDate) {
+        const rem = formatRemain(endDate - Date.now());
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+      }
+      const beginDate = parseDeadline(beginTimeStr);
+      if (beginDate) {
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">开始 ${fmtDeadline(beginDate)}</span>`);
+      }
+      const mode = pickModeName(d.assignmentType !== undefined ? d.assignmentType : task.assignmentType);
+      if (mode) {
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`);
+      }
+      const fullScore = d.assignmentScore ?? d.fullScore ?? d.score;
+      if (fullScore !== undefined && fullScore !== null && fullScore !== "") {
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">满分 ${escapeHtml(fullScore)}</span>`);
+      }
+      if (Number(d.isOpenEvaluation) === 1) {
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">支持互评</span>`);
+      }
+      hero.appendChild(meta);
+
+      const stat = normalizeStat(d.totalNum, d.noSubmitNum);
+      if (stat) {
+        const pct = Math.round((stat.submitted / stat.total) * 100);
+        hero.insertAdjacentHTML(
+          "beforeend",
+          `<div class="wb-progress-wrap">
+            <div class="wb-progress-head">
+              <span>班级提交进度（${stat.submitted} / ${stat.total} 人）</span>
+              <span class="wb-progress-pct">${pct}%</span>
+            </div>
+            <div class="wb-progress-track"><div class="wb-progress-fill" style="width:${pct}%"></div></div>
+          </div>`
+        );
+      }
+      inner.appendChild(hero);
+
+      // 作业要求卡片
+      const reqCard = document.createElement("div");
+      reqCard.className = "wb-detail-card";
+      reqCard.innerHTML = '<div class="wb-section-title">作业要求</div><div class="wb-rich-body"></div>';
+      const rawContent = d.assignmentContent || d.content || d.assignmentRequirement || "";
+      wbRenderSafeHtml(reqCard.querySelector(".wb-rich-body"), rawContent);
+      inner.appendChild(reqCard);
+
+      // 作业附件卡片
+      const resources = Array.isArray(d.assignmentResource) ? d.assignmentResource : [];
+      if (resources.length) {
+        const attachCard = document.createElement("div");
+        attachCard.className = "wb-detail-card";
+        attachCard.innerHTML = `<div class="wb-section-title">作业附件（${resources.length}）</div><div class="wb-attach-list"></div>`;
+        const listEl = attachCard.querySelector(".wb-attach-list");
+        resources.forEach((res) => {
+          const row = document.createElement("div");
+          row.className = "wb-attach-item";
+          row.innerHTML =
+            `<span class="wb-attach-ico">${WB_ICONS.file}</span>` +
+            '<span class="wb-attach-name"></span>' +
+            '<div class="wb-attach-btns">' +
+            `<button class="wb-ghost-btn wb-act-preview">${WB_ICONS.eye}<span>预览</span></button>` +
+            `<button class="wb-ghost-btn wb-act-dl">${WB_ICONS.download}<span>下载</span></button>` +
+            "</div>";
+          const fname = res.resourceName || "未命名附件";
+          const nameEl = row.querySelector(".wb-attach-name");
+          nameEl.textContent = fname;
+          nameEl.title = fname;
+
+          const previewBtn = row.querySelector(".wb-act-preview");
+          previewBtn.addEventListener("click", async () => {
+            previewBtn.disabled = true;
+            try {
+              await wbPreviewAttachment(res);
+            } catch (e) {
+              showNotification("预览失败", "无法获取附件预览链接");
+            } finally {
+              previewBtn.disabled = false;
+            }
+          });
+
+          const dlBtn = row.querySelector(".wb-act-dl");
+          dlBtn.addEventListener("click", async () => {
+            dlBtn.disabled = true;
+            try {
+              const url = await getPreviewURL(res.resourceId);
+              await downloadFile(url, fname);
+            } catch (e) {
+              showNotification("下载失败", "无法获取附件下载链接");
+            } finally {
+              dlBtn.disabled = false;
+            }
+          });
+
+          listEl.appendChild(row);
+        });
+        inner.appendChild(attachCard);
+      }
+    } catch (e) {
+      pane.innerHTML =
+        `<div class="wb-inner"><div class="wb-detail-bar">` +
+        `<button class="wb-back-btn">${WB_ICONS.back}<span>返回待办</span></button>` +
+        `<button class="wb-primary-btn"><span>打开原页面</span>${WB_ICONS.external}</button>` +
+        `</div>${wbEmptyHtml("加载作业详情失败，请重试或直接打开原页面")}</div>`;
+      pane.querySelector(".wb-back-btn")?.addEventListener("click", () => wbSwitchTab(returnTab));
+      pane.querySelector(".wb-primary-btn")?.addEventListener("click", () => {
+        if (!settings.home.openInNewTab) wbClose();
+        openTaskUrl(nativeUrl);
+      });
+    }
+  }
+
   function isHomePage() {
     const href = location.href;
     return (
@@ -2517,7 +3034,13 @@ function escapeHtml(text) {
 
   function setupWorkbench() {
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && wbState.open) wbClose();
+      if (e.key === "Escape" && wbState.open) {
+        if (wbState.tab === "detail" && wbState.detail) {
+          wbSwitchTab(wbState.detail.returnTab || "todo");
+        } else {
+          wbClose();
+        }
+      }
     });
     const autoOpen = () => {
       if (settings.workbench.autoOpen && isHomePage()) {
