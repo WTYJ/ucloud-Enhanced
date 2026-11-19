@@ -1371,120 +1371,624 @@ function escapeHtml(text) {
     };
   }
 
-  // ===== 工作台：Shadow DOM 独立界面（待办 / 课程）=====
+  // ===== 工作台：Shadow DOM 独立界面（待办 / 课程 / 通知）=====
   let wbHost = null;
   let wbRoot = null;
-  const wbState = { tab: "todo", todoLoaded: false, courseLoaded: false, noticeLoaded: false, themeObserver: null, prevOverflow: "" };
+  let wbCloseTimer = null;
+  const wbState = {
+    tab: "todo",
+    open: false,
+    todoLoaded: false,
+    courseLoaded: false,
+    noticeLoaded: false,
+    themeObserver: null,
+    prevOverflow: "",
+  };
   let wbTodoCards = [];
   let wbTicker = null;
 
-  const WB_CSS = `
-    :host { all: initial; }
-    .wb-mask { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); }
-    .wb-panel {
-      position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
-      width: min(1080px, calc(100vw - 48px)); height: min(780px, calc(100vh - 64px));
-      display: flex; flex-direction: column; overflow: hidden;
-      background: #ffffff; color: #1e293b;
-      border-radius: 20px; box-shadow: 0 24px 80px rgba(15, 23, 42, 0.35);
-      font-family: "Microsoft YaHei", "PingFang SC", sans-serif;
-    }
-    .wb-head { display: flex; align-items: center; gap: 18px; padding: 16px 20px; border-bottom: 1px solid #eef2f7; }
-    .wb-brand { font-size: 16px; font-weight: 700; color: #171725; }
-    .wb-tabs { display: flex; gap: 6px; }
-    .wb-tab { display: inline-flex; align-items: center; gap: 5px; border: none; background: transparent; padding: 6px 14px; border-radius: 999px; font-size: 13px; color: #64748b; cursor: pointer; }
-    .wb-tab.active { background: rgba(59, 130, 246, 0.12); color: #2563eb; font-weight: 600; }
-    .wb-tab-count { display: none; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 600; text-align: center; background: rgba(100, 116, 139, 0.16); color: #475569; box-sizing: border-box; }
-    .wb-tab-count.show { display: inline-block; }
-    .wb-tab.active .wb-tab-count { background: rgba(37, 99, 235, 0.16); color: #2563eb; }
-    .wb-tab-count.unread { background: #ef4444 !important; color: #fff !important; }
-    .wb-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-    .wb-icon-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 16px; line-height: 1; cursor: pointer; color: #475569; display: inline-flex; align-items: center; justify-content: center; }
-    .wb-icon-btn:hover { background: #e2e8f0; }
-    .wb-close { font-size: 18px; }
-    .wb-body { flex: 1; overflow: auto; padding: 18px 20px 24px; box-sizing: border-box; }
-    .wb-inner { width: 100%; max-width: 880px; margin: 0 auto; }
-    .wb-pane[hidden] { display: none; }
-    .wb-loading, .wb-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 48px 0; }
-    .wb-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-    .wb-filter-bar[hidden] { display: none; }
-    .wb-filter-chip { border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; transition: all .15s ease; }
-    .wb-filter-chip:hover { border-color: rgba(59, 130, 246, 0.45); color: #2563eb; }
-    .wb-filter-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; }
-    .wb-card { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: box-shadow .2s ease, transform .2s ease; }
-    .wb-card[hidden] { display: none; }
-    .wb-card:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); transform: translateY(-1px); }
-    .wb-card-head { display: flex; align-items: center; gap: 10px; }
-    .wb-card-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: #171725; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .wb-card-tags { display: flex; gap: 6px; flex: none; }
-    .wb-deadline { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.45); background: rgba(148, 163, 184, 0.18); color: #64748b; font-size: 12px; white-space: nowrap; }
-    .wb-mode { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(139, 92, 246, 0.35); background: rgba(139, 92, 246, 0.1); color: #7c3aed; font-size: 12px; white-space: nowrap; }
-    .wb-course { margin-top: 2px; font-size: 12px; font-weight: 600; color: #2563eb; }
-    .wb-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 12px; }
-    .wb-badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; color: #fff; white-space: nowrap; }
-    .wb-badge.later { background: rgba(148, 163, 184, 0.22); border: 1px solid rgba(148, 163, 184, 0.45); color: #64748b; }
-    .wb-badge.soon { background: #e6a23c; }
-    .wb-badge.urgent { background: #ef4444; }
-    .wb-badge.overdue { background: #b91c1c; }
-    .wb-chip { display: inline-flex; align-items: center; padding: 1px 8px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.35); background: rgba(148, 163, 184, 0.1); color: #64748b; font-size: 12px; white-space: nowrap; }
-    .wb-chip.blue { border-color: rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.08); color: #2563eb; }
-    .wb-search { width: 100%; box-sizing: border-box; margin-bottom: 14px; padding: 9px 12px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; color: #1e293b; font-size: 13px; outline: none; }
-    .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #fff; }
-    :host(.wb-dark) .wb-search { background: #1b2130; border-color: rgba(255, 255, 255, 0.12); color: #e5e7eb; }
-    :host(.wb-dark) .wb-search:focus { border-color: rgba(59, 130, 246, 0.55); background: #1b2130; }
-    .wb-notice-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .wb-notice-count { font-size: 12.5px; color: #94a3b8; }
-    .wb-readall { border: 1px solid rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.08); color: #2563eb; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; cursor: pointer; }
-    .wb-readall:disabled { opacity: 0.5; cursor: default; }
-    .wb-notice { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; background: #fff; transition: box-shadow .15s ease, border-color .15s ease; }
-    .wb-notice[data-unread="1"] { border-color: rgba(59, 130, 246, 0.45); border-left: 3px solid #2563eb; cursor: pointer; }
-    .wb-notice:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
-    .wb-notice-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #171725; }
-    .wb-notice-hint { margin-left: auto; font-size: 11px; font-weight: 500; color: #2563eb; opacity: 0.85; flex: none; }
-    .wb-dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; flex: none; }
-    .wb-notice-time { margin-top: 4px; font-size: 12px; color: #94a3b8; }
-    .wb-notice-body { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #475569; white-space: pre-wrap; word-break: break-word; }
-    .wb-link { color: #2563eb; text-decoration: underline; word-break: break-all; }
-    :host(.wb-dark) .wb-notice { background: #1b2130; border-color: rgba(255, 255, 255, 0.1); }
-    :host(.wb-dark) .wb-notice[data-unread="1"] { border-color: rgba(59, 130, 246, 0.45); border-left-color: #60a5fa; }
-    :host(.wb-dark) .wb-notice-title { color: #f3f4f6; }
-    :host(.wb-dark) .wb-notice-hint, :host(.wb-dark) .wb-link { color: #93c5fd; }
-    :host(.wb-dark) .wb-notice-body { color: #cbd5e1; }
-    .wb-course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
-    .wb-course-item { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; cursor: pointer; background: #fff; }
-    .wb-course-item:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
-    .wb-course-title { font-size: 14px; font-weight: 600; color: #171725; }
-    .wb-course-meta { margin-top: 6px; font-size: 12px; color: #64748b; }
+  const WB_ICONS = {
+    brand:
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/></svg>',
+    refresh:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>',
+    expand:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+    compress:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+    close:
+      '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    search:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    arrow:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>',
+    empty:
+      '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
+  };
 
+  const WB_COURSE_PALETTE = [
+    ["rgba(41, 98, 255, 0.12)", "#2563eb", "rgba(96, 165, 250, 0.18)", "#93c5fd"],
+    ["rgba(16, 185, 129, 0.12)", "#059669", "rgba(52, 211, 153, 0.18)", "#6ee7b7"],
+    ["rgba(139, 92, 246, 0.12)", "#7c3aed", "rgba(167, 139, 250, 0.18)", "#c4b5fd"],
+    ["rgba(245, 158, 11, 0.14)", "#d97706", "rgba(251, 191, 36, 0.18)", "#fcd34d"],
+    ["rgba(236, 72, 153, 0.12)", "#db2777", "rgba(244, 114, 182, 0.18)", "#f9a8d4"],
+    ["rgba(14, 165, 233, 0.12)", "#0284c7", "rgba(56, 189, 248, 0.18)", "#7dd3fc"],
+  ];
+
+  function wbPickCourseTone(name) {
+    let hash = 0;
+    const str = String(name || "");
+    for (let i = 0; i < str.length; i++) hash = (hash * 31 + str.charCodeAt(i)) >>> 0;
+    return hash % WB_COURSE_PALETTE.length;
+  }
+
+  function wbSkeletonHtml(kind) {
+    if (kind === "course") {
+      return (
+        '<div class="wb-inner"><div class="wb-skel-bar"></div><div class="wb-course-grid">' +
+        Array.from({ length: 6 }, () => '<div class="wb-skel-card wb-skel-course"></div>').join("") +
+        "</div></div>"
+      );
+    }
+    return (
+      '<div class="wb-inner">' +
+      Array.from(
+        { length: 3 },
+        () =>
+          '<div class="wb-skel-card"><div class="wb-skel-line lg"></div><div class="wb-skel-line md"></div><div class="wb-skel-line sm"></div></div>'
+      ).join("") +
+      "</div>"
+    );
+  }
+
+  function wbEmptyHtml(text) {
+    return `<div class="wb-empty"><div class="wb-empty-icon">${WB_ICONS.empty}</div><div>${escapeHtml(text)}</div></div>`;
+  }
+
+  const WB_CSS = `
+    :host {
+      all: initial;
+      --wb-panel-bg: #ffffff;
+      --wb-canvas: #f5f7fa;
+      --wb-surface: #ffffff;
+      --wb-surface-2: #edf1f6;
+      --wb-surface-muted: #fafbfd;
+      --wb-border: rgba(15, 23, 42, 0.08);
+      --wb-border-strong: rgba(15, 23, 42, 0.14);
+      --wb-text: #111827;
+      --wb-text-2: #4b5563;
+      --wb-text-3: #9ca3af;
+      --wb-accent: #2962ff;
+      --wb-accent-soft: rgba(41, 98, 255, 0.1);
+      --wb-accent-text: #2563eb;
+      --wb-shadow: 0 24px 64px rgba(15, 23, 42, 0.24), 0 0 0 1px rgba(15, 23, 42, 0.06);
+      --wb-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+      --wb-card-hover-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+      --wb-tab-active-bg: #ffffff;
+      --wb-tab-active-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
+      --wb-skel-a: #e8edf3;
+      --wb-skel-b: #f3f6fa;
+      --wb-scroll: rgba(15, 23, 42, 0.16);
+      --wb-scroll-hover: rgba(15, 23, 42, 0.28);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    }
+    :host(.wb-dark) {
+      --wb-panel-bg: #181b20;
+      --wb-canvas: #121519;
+      --wb-surface: #1d2128;
+      --wb-surface-2: rgba(255, 255, 255, 0.07);
+      --wb-surface-muted: #181c22;
+      --wb-border: rgba(255, 255, 255, 0.08);
+      --wb-border-strong: rgba(255, 255, 255, 0.15);
+      --wb-text: #f3f4f6;
+      --wb-text-2: #a1a9b8;
+      --wb-text-3: #6b7280;
+      --wb-accent: #3b82f6;
+      --wb-accent-soft: rgba(59, 130, 246, 0.18);
+      --wb-accent-text: #93c5fd;
+      --wb-shadow: 0 28px 80px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      --wb-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+      --wb-card-hover-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
+      --wb-tab-active-bg: #262c36;
+      --wb-tab-active-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+      --wb-skel-a: #222730;
+      --wb-skel-b: #2b313d;
+      --wb-scroll: rgba(255, 255, 255, 0.16);
+      --wb-scroll-hover: rgba(255, 255, 255, 0.28);
+    }
+
+    .wb-mask {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.46);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      opacity: 0;
+      transition: opacity 0.2s ease;
+    }
+    :host(.wb-open) .wb-mask { opacity: 1; }
+
+    .wb-panel {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      width: min(1040px, calc(100vw - 48px));
+      height: min(760px, calc(100vh - 64px));
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: var(--wb-panel-bg);
+      color: var(--wb-text);
+      border-radius: 20px;
+      box-shadow: var(--wb-shadow);
+      opacity: 0;
+      transform: translate(-50%, calc(-50% + 10px)) scale(0.98);
+      transition: opacity 0.2s ease, transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-radius 0.2s ease;
+    }
+    :host(.wb-open) .wb-panel {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
     :host(.wb-full) .wb-panel {
       left: 0;
       top: 0;
-      transform: none;
       width: 100vw;
       height: 100vh;
       max-width: none;
       max-height: none;
       border-radius: 0;
+      transform: scale(0.99);
     }
-    :host(.wb-dark) .wb-panel { background: #151a24; color: #e5e7eb; border: 1px solid rgba(255, 255, 255, 0.08); }
-    :host(.wb-dark) .wb-head { border-bottom-color: rgba(255, 255, 255, 0.08); }
-    :host(.wb-dark) .wb-brand { color: #f3f4f6; }
-    :host(.wb-dark) .wb-tab { color: #94a3b8; }
-    :host(.wb-dark) .wb-tab.active { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-    :host(.wb-dark) .wb-tab-count { background: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
-    :host(.wb-dark) .wb-tab.active .wb-tab-count { background: rgba(59, 130, 246, 0.28); color: #93c5fd; }
-    :host(.wb-dark) .wb-icon-btn { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
-    :host(.wb-dark) .wb-icon-btn:hover { background: rgba(255, 255, 255, 0.14); }
-    :host(.wb-dark) .wb-filter-chip { background: #1b2130; border-color: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
-    :host(.wb-dark) .wb-filter-chip:hover { border-color: rgba(96, 165, 250, 0.55); color: #93c5fd; }
-    :host(.wb-dark) .wb-filter-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }
-    :host(.wb-dark) .wb-card, :host(.wb-dark) .wb-course-item { background: #1b2130; border-color: rgba(59, 130, 246, 0.45); }
-    :host(.wb-dark) .wb-card-title, :host(.wb-dark) .wb-course-title { color: #f3f4f6; }
-    :host(.wb-dark) .wb-course { color: #93c5fd; }
-    :host(.wb-dark) .wb-deadline { color: #94a3b8; }
-    :host(.wb-dark) .wb-chip { color: #94a3b8; }
-    :host(.wb-dark) .wb-chip.blue { color: #93c5fd; }
-    :host(.wb-dark) .wb-course-meta { color: #94a3b8; }
+    :host(.wb-full.wb-open) .wb-panel { transform: none; }
+
+    /* 顶栏 */
+    .wb-head {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 14px 22px;
+      background: var(--wb-panel-bg);
+      border-bottom: 1px solid var(--wb-border);
+      flex: none;
+    }
+    .wb-brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--wb-text);
+    }
+    .wb-brand-icon {
+      width: 28px;
+      height: 28px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #3d7bff, #2962ff);
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 3px 10px rgba(41, 98, 255, 0.32);
+    }
+
+    /* 分段式页签 */
+    .wb-tabs {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      padding: 4px;
+      border-radius: 12px;
+      background: var(--wb-surface-2);
+    }
+    .wb-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: none;
+      background: transparent;
+      padding: 6px 14px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--wb-text-2);
+      cursor: pointer;
+      transition: background 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+    }
+    .wb-tab:hover { color: var(--wb-text); }
+    .wb-tab.active {
+      background: var(--wb-tab-active-bg);
+      color: var(--wb-accent-text);
+      font-weight: 600;
+      box-shadow: var(--wb-tab-active-shadow);
+    }
+    .wb-tab-count {
+      display: none;
+      min-width: 17px;
+      height: 17px;
+      padding: 0 5px;
+      border-radius: 999px;
+      font-size: 11px;
+      line-height: 17px;
+      font-weight: 600;
+      text-align: center;
+      background: var(--wb-surface-2);
+      color: var(--wb-text-2);
+      box-sizing: border-box;
+      font-variant-numeric: tabular-nums;
+    }
+    .wb-tab-count.show { display: inline-block; }
+    .wb-tab.active .wb-tab-count { background: var(--wb-accent-soft); color: var(--wb-accent-text); }
+    .wb-tab-count.unread { background: #ef4444 !important; color: #fff !important; }
+
+    /* 顶栏右侧操作按钮 */
+    .wb-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+    .wb-icon-btn {
+      width: 34px;
+      height: 34px;
+      border: 1px solid transparent;
+      background: transparent;
+      border-radius: 10px;
+      cursor: pointer;
+      color: var(--wb-text-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+    }
+    .wb-icon-btn:hover {
+      background: var(--wb-surface-2);
+      color: var(--wb-text);
+    }
+    .wb-icon-btn.spinning svg { animation: wb-spin 0.55s ease; }
+    @keyframes wb-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+    /* 内容画布与纤细滚动条 */
+    .wb-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 22px 24px 32px;
+      background: var(--wb-canvas);
+      box-sizing: border-box;
+      scrollbar-width: thin;
+      scrollbar-color: var(--wb-scroll) transparent;
+    }
+    .wb-body::-webkit-scrollbar { width: 6px; height: 6px; }
+    .wb-body::-webkit-scrollbar-track { background: transparent; }
+    .wb-body::-webkit-scrollbar-thumb { background: var(--wb-scroll); border-radius: 999px; }
+    .wb-body::-webkit-scrollbar-thumb:hover { background: var(--wb-scroll-hover); }
+
+    .wb-inner { width: 100%; max-width: 880px; margin: 0 auto; }
+    .wb-pane[hidden] { display: none; }
+
+    /* 空态与骨架屏 */
+    .wb-empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      color: var(--wb-text-3);
+      font-size: 13.5px;
+      padding: 64px 0;
+    }
+    .wb-empty[hidden] { display: none; }
+    .wb-empty-icon { opacity: 0.65; }
+    .wb-skel-bar, .wb-skel-line, .wb-skel-course {
+      background: linear-gradient(90deg, var(--wb-skel-a) 25%, var(--wb-skel-b) 50%, var(--wb-skel-a) 75%);
+      background-size: 200% 100%;
+      animation: wb-shimmer 1.3s ease-in-out infinite;
+    }
+    @keyframes wb-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    .wb-skel-bar { height: 40px; border-radius: 12px; margin-bottom: 16px; }
+    .wb-skel-card {
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+    }
+    .wb-skel-course { height: 82px; margin-bottom: 0; }
+    .wb-skel-line { height: 12px; border-radius: 6px; margin-bottom: 10px; }
+    .wb-skel-line.lg { width: 58%; height: 15px; }
+    .wb-skel-line.md { width: 34%; }
+    .wb-skel-line.sm { width: 44%; margin-bottom: 0; }
+
+    /* 待办筛选条 */
+    .wb-filter-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .wb-filter-bar[hidden] { display: none; }
+    .wb-filter-chip {
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      color: var(--wb-text-2);
+      border-radius: 999px;
+      padding: 5px 13px;
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .wb-filter-chip:hover { border-color: var(--wb-border-strong); color: var(--wb-text); }
+    .wb-filter-chip.active {
+      background: var(--wb-accent);
+      border-color: var(--wb-accent);
+      color: #fff;
+      font-weight: 600;
+      box-shadow: 0 4px 12px rgba(41, 98, 255, 0.28);
+    }
+
+    /* 待办卡片（含左侧紧迫度色条） */
+    .wb-card {
+      position: relative;
+      overflow: hidden;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 14px;
+      padding: 15px 18px 15px 21px;
+      margin-bottom: 12px;
+      cursor: pointer;
+      box-shadow: var(--wb-card-shadow);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+    .wb-card::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 3.5px;
+      border-radius: 0 4px 4px 0;
+      background: rgba(148, 163, 184, 0.45);
+    }
+    .wb-card[data-urgency="overdue"]::before { background: #b91c1c; }
+    .wb-card[data-urgency="urgent"]::before { background: #ef4444; }
+    .wb-card[data-urgency="soon"]::before { background: #f59e0b; }
+    .wb-card[hidden] { display: none; }
+    .wb-card:hover {
+      transform: translateY(-2px);
+      border-color: var(--wb-border-strong);
+      box-shadow: var(--wb-card-hover-shadow);
+    }
+    .wb-card-head { display: flex; align-items: center; gap: 12px; }
+    .wb-card-title {
+      flex: 1;
+      min-width: 0;
+      font-size: 14.5px;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--wb-text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .wb-card-tags { display: flex; gap: 6px; flex: none; }
+    .wb-deadline {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: var(--wb-surface-2);
+      color: var(--wb-text-2);
+      font-size: 11.5px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+    .wb-mode {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 999px;
+      background: rgba(139, 92, 246, 0.12);
+      color: #7c3aed;
+      font-size: 11.5px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+    :host(.wb-dark) .wb-mode { background: rgba(167, 139, 250, 0.16); color: #c4b5fd; }
+    .wb-course {
+      margin-top: 5px;
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--wb-accent-text);
+    }
+    .wb-course-teacher { color: var(--wb-text-3); font-weight: 400; }
+    .wb-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; margin-top: 10px; font-size: 12px; }
+    .wb-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 600;
+      color: #fff;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .wb-badge.later { background: var(--wb-surface-2); color: var(--wb-text-2); }
+    .wb-badge.soon { background: #f59e0b; }
+    .wb-badge.urgent { background: #ef4444; }
+    .wb-badge.overdue { background: #b91c1c; }
+    .wb-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 999px;
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface-muted);
+      color: var(--wb-text-2);
+      font-size: 11.5px;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    .wb-chip.blue {
+      border-color: transparent;
+      background: var(--wb-accent-soft);
+      color: var(--wb-accent-text);
+      font-weight: 500;
+    }
+
+    /* 课程搜索与卡片网格 */
+    .wb-search-wrap { position: relative; margin-bottom: 16px; }
+    .wb-search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--wb-text-3);
+      display: inline-flex;
+      pointer-events: none;
+    }
+    .wb-search {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 11px 14px 11px 40px;
+      border-radius: 12px;
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      color: var(--wb-text);
+      font-size: 13.5px;
+      outline: none;
+      box-shadow: var(--wb-card-shadow);
+      transition: border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+    .wb-search::placeholder { color: var(--wb-text-3); }
+    .wb-search:focus {
+      border-color: var(--wb-accent);
+      box-shadow: 0 0 0 3px var(--wb-accent-soft);
+    }
+    .wb-course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+    .wb-course-item {
+      display: flex;
+      align-items: center;
+      gap: 13px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 14px;
+      padding: 15px 16px;
+      cursor: pointer;
+      box-shadow: var(--wb-card-shadow);
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+    .wb-course-item:hover {
+      transform: translateY(-2px);
+      border-color: var(--wb-border-strong);
+      box-shadow: var(--wb-card-hover-shadow);
+    }
+    .wb-course-avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 11px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 700;
+      background: var(--tone-bg-l);
+      color: var(--tone-fg-l);
+    }
+    :host(.wb-dark) .wb-course-avatar { background: var(--tone-bg-d); color: var(--tone-fg-d); }
+    .wb-course-info { flex: 1; min-width: 0; }
+    .wb-course-title {
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+      color: var(--wb-text);
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .wb-course-meta {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--wb-text-2);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .wb-course-arrow {
+      flex: none;
+      color: var(--wb-text-3);
+      opacity: 0;
+      transform: translateX(-4px);
+      transition: opacity 0.16s ease, transform 0.16s ease, color 0.16s ease;
+      display: inline-flex;
+    }
+    .wb-course-item:hover .wb-course-arrow { opacity: 1; transform: translateX(0); color: var(--wb-accent-text); }
+
+    /* 通知列表 */
+    .wb-notice-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+    .wb-notice-count { font-size: 13px; font-weight: 500; color: var(--wb-text-2); }
+    .wb-readall {
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      color: var(--wb-accent-text);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 12.5px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .wb-readall:hover:not(:disabled) {
+      background: var(--wb-accent);
+      border-color: var(--wb-accent);
+      color: #fff;
+    }
+    .wb-readall:disabled { opacity: 0.45; cursor: default; color: var(--wb-text-3); }
+    .wb-notice {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid var(--wb-border);
+      border-radius: 14px;
+      padding: 15px 18px;
+      margin-bottom: 12px;
+      background: var(--wb-surface-muted);
+      box-shadow: var(--wb-card-shadow);
+      transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+    }
+    .wb-notice[data-unread="0"] .wb-notice-title { color: var(--wb-text-2); font-weight: 500; }
+    .wb-notice[data-unread="0"] .wb-notice-body { opacity: 0.78; }
+    .wb-notice[data-unread="1"] {
+      background: var(--wb-surface);
+      padding-left: 21px;
+      border-color: var(--wb-border-strong);
+      cursor: pointer;
+    }
+    .wb-notice[data-unread="1"]::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      top: 10px;
+      bottom: 10px;
+      width: 3.5px;
+      border-radius: 0 4px 4px 0;
+      background: var(--wb-accent);
+    }
+    .wb-notice[data-unread="1"]:hover { box-shadow: var(--wb-card-hover-shadow); }
+    .wb-notice-title { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; color: var(--wb-text); }
+    .wb-notice-hint {
+      margin-left: auto;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--wb-accent-soft);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--wb-accent-text);
+      flex: none;
+    }
+    .wb-dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; flex: none; }
+    .wb-notice-time { margin-top: 5px; font-size: 12px; color: var(--wb-text-3); font-variant-numeric: tabular-nums; }
+    .wb-notice-body {
+      margin-top: 9px;
+      font-size: 13px;
+      line-height: 1.72;
+      color: var(--wb-text-2);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .wb-link { color: var(--wb-accent-text); text-decoration: underline; text-underline-offset: 2px; word-break: break-all; }
   `;
 
   function wbApplyTheme() {
@@ -1494,7 +1998,7 @@ function escapeHtml(text) {
     const fullBtn = wbRoot && wbRoot.querySelector(".wb-fullscreen");
     if (fullBtn) {
       fullBtn.title = settings.workbench.fullscreen ? "退出全屏" : "全屏显示";
-      fullBtn.textContent = settings.workbench.fullscreen ? "🗗" : "⛶";
+      fullBtn.innerHTML = settings.workbench.fullscreen ? WB_ICONS.compress : WB_ICONS.expand;
     }
   }
 
@@ -1518,22 +2022,25 @@ function escapeHtml(text) {
       <div class="wb-mask"></div>
       <div class="wb-panel">
         <div class="wb-head">
-          <div class="wb-brand">🧩 工作台</div>
+          <div class="wb-brand">
+            <span class="wb-brand-icon">${WB_ICONS.brand}</span>
+            <span>工作台</span>
+          </div>
           <div class="wb-tabs">
             <button class="wb-tab active" data-tab="todo">待办<span class="wb-tab-count"></span></button>
             <button class="wb-tab" data-tab="course">课程<span class="wb-tab-count"></span></button>
             <button class="wb-tab" data-tab="notice">通知<span class="wb-tab-count"></span></button>
           </div>
           <div class="wb-actions">
-            <button class="wb-icon-btn wb-fullscreen" title="全屏显示">⛶</button>
-            <button class="wb-icon-btn wb-refresh" title="刷新">↻</button>
-            <button class="wb-icon-btn wb-close" title="关闭">×</button>
+            <button class="wb-icon-btn wb-fullscreen" title="全屏显示">${WB_ICONS.expand}</button>
+            <button class="wb-icon-btn wb-refresh" title="刷新当前页签">${WB_ICONS.refresh}</button>
+            <button class="wb-icon-btn wb-close" title="关闭 (Esc)">${WB_ICONS.close}</button>
           </div>
         </div>
         <div class="wb-body">
-          <div class="wb-pane" data-pane="todo"><div class="wb-loading">加载中…</div></div>
-          <div class="wb-pane" data-pane="course" hidden><div class="wb-loading">加载中…</div></div>
-          <div class="wb-pane" data-pane="notice" hidden><div class="wb-loading">加载中…</div></div>
+          <div class="wb-pane" data-pane="todo">${wbSkeletonHtml("todo")}</div>
+          <div class="wb-pane" data-pane="course" hidden>${wbSkeletonHtml("course")}</div>
+          <div class="wb-pane" data-pane="notice" hidden>${wbSkeletonHtml("notice")}</div>
         </div>
       </div>`;
     document.body.appendChild(wbHost);
@@ -1550,7 +2057,11 @@ function escapeHtml(text) {
         });
       wbApplyTheme();
     });
-    wbRoot.querySelector(".wb-refresh").addEventListener("click", () => {
+    const refreshBtn = wbRoot.querySelector(".wb-refresh");
+    refreshBtn.addEventListener("click", () => {
+      refreshBtn.classList.remove("spinning");
+      void refreshBtn.offsetWidth;
+      refreshBtn.classList.add("spinning");
       if (wbState.tab === "course") wbState.courseLoaded = false;
       else if (wbState.tab === "notice") wbState.noticeLoaded = false;
       else wbState.todoLoaded = false;
@@ -1585,11 +2096,14 @@ function escapeHtml(text) {
   function wbOpen(tab) {
     wbEnsure();
     wbApplyTheme();
-    if (!wbHost.style.display || wbHost.style.display === "none") {
+    clearTimeout(wbCloseTimer);
+    if (!wbState.open) {
       wbState.prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
     }
+    wbState.open = true;
     wbHost.style.display = "block";
+    requestAnimationFrame(() => wbHost && wbHost.classList.add("wb-open"));
     if (wbState.todoLoaded) wbStartTicker();
     wbSwitchTab(tab || wbState.tab);
     // 后台预拉一次通知以点亮未读红点角标，切入通知页签时也可立即展示
@@ -1597,13 +2111,18 @@ function escapeHtml(text) {
   }
 
   function wbClose() {
-    if (!wbHost) return;
-    wbHost.style.display = "none";
+    if (!wbHost || !wbState.open) return;
+    wbState.open = false;
+    wbHost.classList.remove("wb-open");
     document.body.style.overflow = wbState.prevOverflow || "";
     if (wbTicker) {
       clearInterval(wbTicker);
       wbTicker = null;
     }
+    clearTimeout(wbCloseTimer);
+    wbCloseTimer = setTimeout(() => {
+      if (!wbState.open && wbHost) wbHost.style.display = "none";
+    }, 220);
   }
 
   function pickTaskTypeLabel(type) {
@@ -1624,7 +2143,10 @@ function escapeHtml(text) {
     if (d) {
       tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(d)}</span>`);
       const rem = formatRemain(d - Date.now());
+      card.dataset.urgency = rem.cls;
       meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+    } else {
+      card.dataset.urgency = "later";
     }
     const mode = (info && info.mode) || pickModeName(task.assignmentType);
     const typeLabel = pickTaskTypeLabel(task.type);
@@ -1652,6 +2174,7 @@ function escapeHtml(text) {
       const d = parseDeadline(task.endTime);
       if (!badge || !d) return;
       const rem = formatRemain(d - Date.now());
+      card.dataset.urgency = rem.cls;
       badge.className = "wb-badge " + rem.cls;
       badge.textContent = rem.text;
     });
@@ -1660,7 +2183,7 @@ function escapeHtml(text) {
   function wbStartTicker() {
     if (wbTicker) return;
     wbTicker = setInterval(() => {
-      if (!wbHost || wbHost.style.display !== "block") return;
+      if (!wbState.open) return;
       wbUpdateTodoBadges();
     }, 60 * 1000);
   }
@@ -1669,7 +2192,7 @@ function escapeHtml(text) {
     wbState.todoLoaded = true;
     if (!wbRoot) return;
     const pane = wbRoot.querySelector('[data-pane="todo"]');
-    pane.innerHTML = '<div class="wb-loading">加载中…</div>';
+    pane.innerHTML = wbSkeletonHtml("todo");
     try {
       const res = await getUndoneList();
       const list = (res && res.data && res.data.undoneList) || [];
@@ -1677,7 +2200,7 @@ function escapeHtml(text) {
       wbSetTabCount("todo", tasks.length);
       pane.innerHTML = "";
       if (!tasks.length) {
-        pane.innerHTML = '<div class="wb-empty">暂无待办</div>';
+        pane.innerHTML = wbEmptyHtml("当前没有待办事项");
         return;
       }
       const inner = document.createElement("div");
@@ -1714,9 +2237,15 @@ function escapeHtml(text) {
             const courseName = info ? info.name : "未知课程";
             if (card && card.isConnected) {
               card.dataset.course = courseName;
-              card.querySelector(".wb-course").textContent = info
-                ? info.name + "(" + info.teachers + ")"
-                : "未知课程";
+              const courseEl = card.querySelector(".wb-course");
+              courseEl.textContent = "";
+              courseEl.appendChild(document.createTextNode(courseName));
+              if (info && info.teachers) {
+                const tSpan = document.createElement("span");
+                tSpan.className = "wb-course-teacher";
+                tSpan.textContent = " · " + info.teachers;
+                courseEl.appendChild(tSpan);
+              }
               courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
             }
           });
@@ -1753,7 +2282,7 @@ function escapeHtml(text) {
         });
       });
     } catch (e) {
-      pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
+      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.todoLoaded = false;
     }
   }
@@ -1785,7 +2314,7 @@ function escapeHtml(text) {
     wbState.noticeLoaded = true;
     if (!wbRoot) return;
     const pane = wbRoot.querySelector('[data-pane="notice"]');
-    pane.innerHTML = '<div class="wb-loading">加载中…</div>';
+    pane.innerHTML = wbSkeletonHtml("notice");
     try {
       const [userId] = getToken();
       const qs = new URLSearchParams({
@@ -1803,7 +2332,7 @@ function escapeHtml(text) {
       pane.innerHTML = "";
       if (!list.length) {
         wbSetTabCount("notice", 0, true);
-        pane.innerHTML = '<div class="wb-empty">暂无通知</div>';
+        pane.innerHTML = wbEmptyHtml("暂无通知");
         return;
       }
       const inner = document.createElement("div");
@@ -1890,7 +2419,7 @@ function escapeHtml(text) {
       });
       pane.appendChild(inner);
     } catch (e) {
-      pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
+      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.noticeLoaded = false;
     }
   }
@@ -1899,30 +2428,37 @@ function escapeHtml(text) {
     wbState.courseLoaded = true;
     if (!wbRoot) return;
     const pane = wbRoot.querySelector('[data-pane="course"]');
-    pane.innerHTML = '<div class="wb-loading">加载中…</div>';
+    pane.innerHTML = wbSkeletonHtml("course");
     try {
       const list = await getCourseList();
       wbSetTabCount("course", (list && list.length) || 0);
       pane.innerHTML = "";
       if (!list || !list.length) {
-        pane.innerHTML = '<div class="wb-empty">暂无课程</div>';
+        pane.innerHTML = wbEmptyHtml("暂无课程");
         return;
       }
       const inner = document.createElement("div");
       inner.className = "wb-inner";
       pane.appendChild(inner);
+
+      const searchWrap = document.createElement("div");
+      searchWrap.className = "wb-search-wrap";
+      searchWrap.innerHTML = `<span class="wb-search-icon">${WB_ICONS.search}</span>`;
       const search = document.createElement("input");
       search.className = "wb-search";
       search.placeholder = "搜索课程 / 教师 / 院系";
-      inner.appendChild(search);
+      searchWrap.appendChild(search);
+      inner.appendChild(searchWrap);
+
       const grid = document.createElement("div");
       grid.className = "wb-course-grid";
       inner.appendChild(grid);
       const emptyTip = document.createElement("div");
       emptyTip.className = "wb-empty";
-      emptyTip.textContent = "未找到匹配的课程";
+      emptyTip.innerHTML = `<div class="wb-empty-icon">${WB_ICONS.empty}</div><div>未找到匹配的课程</div>`;
       emptyTip.hidden = true;
       inner.appendChild(emptyTip);
+
       const renderGrid = (keyword) => {
         grid.innerHTML = "";
         const kw = (keyword || "").toLowerCase();
@@ -1938,8 +2474,19 @@ function escapeHtml(text) {
         matched.forEach((course) => {
           const item = document.createElement("div");
           item.className = "wb-course-item";
-          item.innerHTML = '<div class="wb-course-title"></div><div class="wb-course-meta"></div>';
-          item.querySelector(".wb-course-title").textContent = course.name || "未命名课程";
+          const titleText = course.name || "未命名课程";
+          const tone = WB_COURSE_PALETTE[wbPickCourseTone(titleText)];
+          item.innerHTML =
+            '<div class="wb-course-avatar"></div>' +
+            '<div class="wb-course-info"><div class="wb-course-title"></div><div class="wb-course-meta"></div></div>' +
+            `<span class="wb-course-arrow">${WB_ICONS.arrow}</span>`;
+          const avatar = item.querySelector(".wb-course-avatar");
+          avatar.textContent = titleText.trim().charAt(0) || "课";
+          avatar.style.setProperty("--tone-bg-l", tone[0]);
+          avatar.style.setProperty("--tone-fg-l", tone[1]);
+          avatar.style.setProperty("--tone-bg-d", tone[2]);
+          avatar.style.setProperty("--tone-fg-d", tone[3]);
+          item.querySelector(".wb-course-title").textContent = titleText;
           item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
             .filter(Boolean)
             .join(" · ");
@@ -1953,7 +2500,7 @@ function escapeHtml(text) {
       search.addEventListener("input", () => renderGrid(search.value.trim()));
       renderGrid("");
     } catch (e) {
-      pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
+      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.courseLoaded = false;
     }
   }
@@ -1970,7 +2517,7 @@ function escapeHtml(text) {
 
   function setupWorkbench() {
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && wbHost && wbHost.style.display === "block") wbClose();
+      if (e.key === "Escape" && wbState.open) wbClose();
     });
     const autoOpen = () => {
       if (settings.workbench.autoOpen && isHomePage()) {
@@ -1983,7 +2530,7 @@ function escapeHtml(text) {
     else window.addEventListener("load", autoOpen, { once: true });
     // 从主页跳转到其它页面时关闭工作台，避免遮挡内容
     window.addEventListener("hashchange", () => {
-      if (wbHost && wbHost.style.display === "block" && !isHomePage()) wbClose();
+      if (wbState.open && !isHomePage()) wbClose();
     });
   }
 
