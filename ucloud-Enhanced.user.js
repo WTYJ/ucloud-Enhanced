@@ -28,6 +28,19 @@
 // @downloadURL  https://github.com/WTYJ/ucloud-Enhanced/raw/refs/heads/main/ucloud-Enhanced.user.js
 // ==/UserScript==
 
+const OFFICE_EXT_RE = /\.(xlsx?|docx?|pptx?)$/i;
+const IMAGE_EXT_RE = /\.((jpe?|pn)g|gif|webp|bmp|tiff|svg)$/i;
+
+function escapeHtml(text) {
+  return String(text == null ? "" : text).replace(/[&<>"']/g, (ch) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;",
+  })[ch]);
+}
+
 (function () {
   "use strict";
   /**
@@ -39,7 +52,7 @@
       {
         name: "studentHomepage",
         identifiers: ['name:"studentHomepage"', "tapUndone", "tapSiteItem"],
-        patched: !GM_getValue("home_openInNewTab", true),
+        patched: !GM_getValue("home_openInNewTab", false),
         replacements: [
           // 规则来自 'tapUndone'
           [
@@ -210,26 +223,17 @@
       GM_getValue("preview_autoSwitchPdf", true) ||
       GM_getValue("preview_autoSwitchImg", true)
     ) {
-      const url = new URLSearchParams(location.search).get("furl");
-      const filename =
-        new URLSearchParams(location.search).get("fullfilename") || url;
+      const params = new URLSearchParams(location.search);
+      const url = params.get("furl");
+      const filename = params.get("fullfilename") || url;
       const viewURL = new URL(url);
-      if (new URLSearchParams(location.search).get("oauthKey")) {
+      const oauthKey = params.get("oauthKey");
+      if (oauthKey) {
         const viewURLsearch = new URLSearchParams(viewURL.search);
-        viewURLsearch.set(
-          "oauthKey",
-          new URLSearchParams(location.search).get("oauthKey")
-        );
+        viewURLsearch.set("oauthKey", oauthKey);
         viewURL.search = viewURLsearch.toString();
       }
-      if (
-        filename.endsWith(".xls") ||
-        filename.endsWith(".xlsx") ||
-        filename.endsWith(".doc") ||
-        filename.endsWith(".docx") ||
-        filename.endsWith(".ppt") ||
-        filename.endsWith(".pptx")
-      ) {
+      if (OFFICE_EXT_RE.test(filename)) {
         if (!GM_getValue("preview_autoSwitchOffice", false)) {
           return;
         }
@@ -238,7 +242,7 @@
           "https://view.officeapps.live.com/op/view.aspx?src=" +
           encodeURIComponent(viewURL.toString());
         return;
-      } else if (filename.endsWith(".pdf")) {
+      } else if (/\.pdf$/i.test(filename)) {
         if (!GM_getValue("preview_autoSwitchPdf", true)) {
           return;
         }
@@ -252,31 +256,11 @@
           })
           .catch((err) => console.error("PDF加载失败:", err));
         return;
-      } else if (
-        filename.endsWith(".jpg") ||
-        filename.endsWith(".png") ||
-        filename.endsWith(".jpeg") ||
-        filename.endsWith(".gif") ||
-        filename.endsWith(".webp") ||
-        filename.endsWith(".bmp") ||
-        filename.endsWith(".tiff") ||
-        filename.endsWith(".svg")
-      ) {
+      } else if (IMAGE_EXT_RE.test(filename)) {
         if (!GM_getValue("preview_autoSwitchImg", true)) {
           return;
         }
         if (window.stop) window.stop();
-        function escapeViewerText(text) {
-          return String(text == null ? "" : text).replace(/[&<>"']/g, (ch) => {
-            return {
-              "&": "&amp;",
-              "<": "&lt;",
-              ">": "&gt;",
-              '"': "&quot;",
-              "'": "&#39;",
-            }[ch];
-          });
-        }
         function createModernImageViewer(imageUrl) {
           const style = document.createElement("style");
           style.textContent = `
@@ -431,7 +415,7 @@
           document.body.innerHTML = `
           <div class="modern-image-viewer">
             <div class="viewer-header">
-              <div class="viewer-title">${escapeViewerText(getImageFileName(imageUrl))}</div>
+              <div class="viewer-title">${escapeHtml(getImageFileName(imageUrl))}</div>
               <div class="viewer-controls">
                 <button class="viewer-button" id="help-btn" title="帮助">
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -447,7 +431,7 @@
             </div>
 
             <div class="viewer-content">
-              <img id="viewer-img" class="viewer-image" src="${escapeViewerText(imageUrl)}" alt="预览图片" draggable="false">
+              <img id="viewer-img" class="viewer-image" src="${escapeHtml(imageUrl)}" alt="预览图片" draggable="false">
             </div>
 
             <div class="viewer-toolbar">
@@ -544,10 +528,6 @@
             // Only adjust position if we have mouse coordinates
             if (state.lastClientX !== undefined) {
               const imageRect = image.getBoundingClientRect();
-
-              // Get the position relative to the image's natural center
-              const naturalWidth = image.naturalWidth;
-              const naturalHeight = image.naturalHeight;
 
               // Calculate the point on the original image that was under the cursor
               const viewportX = state.lastClientX - imageRect.left;
@@ -654,38 +634,7 @@
               } else if (e.touches.length === 2) {
                 const dx = e.touches[0].clientX - e.touches[1].clientX;
                 const dy = e.touches[0].clientY - e.touches[1].clientY;
-                const touchDistance = Math.sqrt(dx * dx + dy * dy);
-                const scaleFactor = touchDistance / lastTouchDistance;
-
-                if (
-                  !isNaN(scaleFactor) &&
-                  isFinite(scaleFactor) &&
-                  scaleFactor > 0
-                ) {
-                  const oldScale = state.scale;
-                  state.scale = Math.max(
-                    0.1,
-                    Math.min(10, state.scale * scaleFactor)
-                  );
-
-                  const centerX =
-                    (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                  const centerY =
-                    (e.touches[0].clientY + e.touches[1].clientY) / 2;
-
-                  const imageRect = image.getBoundingClientRect();
-
-                  const imageX =
-                    centerX - (imageRect.left + imageRect.width / 2);
-                  const imageY =
-                    centerY - (imageRect.top + imageRect.height / 2);
-
-                  state.translateX += imageX * (1 - scaleFactor);
-                  state.translateY += imageY * (1 - scaleFactor);
-
-                  lastTouchDistance = touchDistance;
-                }
-
+                lastTouchDistance = Math.hypot(dx, dy);
                 touchRotationStart =
                   (Math.atan2(
                     e.touches[1].clientY - e.touches[0].clientY,
@@ -721,7 +670,6 @@
                   isFinite(scaleFactor) &&
                   scaleFactor > 0
                 ) {
-                  const oldScale = state.scale;
                   state.scale = Math.max(
                     0.1,
                     Math.min(10, state.scale * scaleFactor)
@@ -805,7 +753,13 @@
 
             switch (e.key) {
               case "Escape":
-                closeViewer();
+                if (helpPanel.style.display === "block") {
+                  helpPanel.style.display = "none";
+                } else if (window.opener || history.length <= 1) {
+                  window.close();
+                } else {
+                  history.back();
+                }
                 break;
               case "+":
               case "=":
@@ -1506,6 +1460,7 @@
     wbRoot.querySelector(".wb-close").addEventListener("click", wbClose);
     wbRoot.querySelector(".wb-refresh").addEventListener("click", () => {
       if (wbState.tab === "course") wbState.courseLoaded = false;
+      else if (wbState.tab === "notice") wbState.noticeLoaded = false;
       else wbState.todoLoaded = false;
       wbSwitchTab(wbState.tab);
     });
@@ -1544,15 +1499,7 @@
     }
     wbHost.style.display = "block";
     if (wbState.todoLoaded) wbStartTicker();
-    if (tab) wbState.tab = tab;
-    wbUpdateTabs();
-    if (wbState.tab === "course") {
-      if (!wbState.courseLoaded) wbLoadCourses();
-    } else if (wbState.tab === "notice") {
-      if (!wbState.noticeLoaded) wbLoadNotices();
-    } else if (!wbState.todoLoaded) {
-      wbLoadTodo();
-    }
+    wbSwitchTab(tab || wbState.tab);
   }
 
   function wbClose() {
@@ -1621,10 +1568,7 @@
     try {
       const res = await getUndoneList();
       const list = (res && res.data && res.data.undoneList) || [];
-      const tasks = list
-        .map((t) => ({ t, ms: (parseDeadline(t.endTime) || { getTime: () => Infinity }).getTime() }))
-        .sort((a, b) => a.ms - b.ms)
-        .map((x) => x.t);
+      const tasks = sortTasksByDeadline(list);
       pane.innerHTML = "";
       if (!tasks.length) {
         pane.innerHTML = '<div class="wb-empty">暂无待办</div>';
@@ -1868,6 +1812,21 @@
     });
   }
 
+  function toggleSettingsPanel() {
+    const panel = document.getElementById("yzHelper-settings");
+    if (!panel) return;
+    if (panel.classList.contains("visible")) {
+      panel.classList.remove("visible");
+      setTimeout(() => {
+        panel.style.display = "none";
+      }, 300);
+    } else {
+      panel.style.display = "flex";
+      void panel.offsetWidth;
+      panel.classList.add("visible");
+    }
+  }
+
   // 注册菜单命令
   function registerMenuCommands() {
     GM_registerMenuCommand(
@@ -1895,24 +1854,7 @@
       }
     );
 
-    GM_registerMenuCommand("⚙️ 打开插件设置", () => {
-      if (
-        document
-          .getElementById("yzHelper-settings")
-          .classList.contains("visible")
-      ) {
-        document
-          .getElementById("yzHelper-settings")
-          .classList.remove("visible");
-        setTimeout(() => {
-          document.getElementById("yzHelper-settings").style.display = "none";
-        }, 300);
-        return;
-      }
-      document.getElementById("yzHelper-settings").style.display = "flex";
-      void document.getElementById("yzHelper-settings").offsetWidth;
-      document.getElementById("yzHelper-settings").classList.add("visible");
-    });
+    GM_registerMenuCommand("⚙️ 打开插件设置", toggleSettingsPanel);
   }
   /**
    * 通用标签页打开函数
@@ -2007,26 +1949,41 @@
   `;
   GM_addStyle(NOTIFY_CSS);
 
+  function createNotify(html, autoCloseMs = 0) {
+    const el = document.createElement("div");
+    el.className = "yz-notify";
+    el.innerHTML = html;
+    document.body.appendChild(el);
+    requestAnimationFrame(() => el.classList.add("visible"));
+    const close = () => {
+      el.classList.remove("visible");
+      setTimeout(() => el.remove(), 300);
+    };
+    if (autoCloseMs > 0) setTimeout(close, autoCloseMs);
+    return { el, close };
+  }
+
+  function showNotification(title, message) {
+    createNotify(
+      `<div class="notify-title"><span class="notify-dot"></span>${escapeHtml(title)}</div>
+      <div class="notify-msg">${escapeHtml(message)}</div>`,
+      3000
+    );
+  }
+
   function showUpdateNotification(newVersion) {
-    const notification = document.createElement("div");
-    notification.className = "yz-notify";
-    notification.innerHTML = `
+    const { el, close } = createNotify(`
       <div class="notify-title"><span class="notify-dot"></span>发现新版本 v${escapeHtml(newVersion)}</div>
       <div class="notify-msg">当前版本 v${GM_info.script.version}，更新后可在 README 查看变更内容。</div>
       <div class="notify-actions">
         <button class="notify-btn primary" data-act="update">立即更新</button>
         <button class="notify-btn ghost" data-act="later">稍后提醒</button>
       </div>
-    `;
-    document.body.appendChild(notification);
-    requestAnimationFrame(() => notification.classList.add("visible"));
-    notification.addEventListener("click", (e) => {
+    `);
+    el.addEventListener("click", (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (act === "update") openTab(GM_info.script.downloadURL, { active: true });
-      if (act) {
-        notification.classList.remove("visible");
-        setTimeout(() => notification.remove(), 300);
-      }
+      if (act) close();
     });
   }
 
@@ -2256,7 +2213,6 @@
           height: 480px;
           color: var(--ue-text);
           overflow: hidden;
-          display: flex;
           flex-direction: column;
           display: none;
           opacity: 0;
@@ -2810,7 +2766,7 @@
       }
       if (e.target.closest("#yzHelper-quick-all")) {
         closeQuickPanel();
-        settingsTrigger();
+        toggleSettingsPanel();
       }
     });
     // 点击快捷面板与悬浮球以外的区域时关闭快捷面板
@@ -2874,7 +2830,7 @@
         return `
           <div class="menu-item ${activeClass}" data-section="${category}">
             <span class="emoji">${config.emoji}</span>
-            <span>${config.title.replace(/^[^\s]+\s/, '')}</span>
+            <span>${config.title}</span>
           </div>
         `;
       }).join('') + `
@@ -3015,24 +2971,10 @@
       });
     });
 
-    function settingsTrigger() {
-      const isVisible = settingsPanel.classList.contains("visible");
-      if (isVisible) {
-        settingsPanel.classList.remove("visible");
-        setTimeout(() => {
-          settingsPanel.style.display = "none";
-        }, 300);
-      } else {
-        settingsPanel.style.display = "flex";
-        void settingsPanel.offsetWidth;
-        settingsPanel.classList.add("visible");
-      }
-    }
-
-    // 主面板关闭按钮（与 settingsTrigger 等效切换）
+    // 主面板关闭按钮
     document
       .getElementById("yzHelper-close")
-      .addEventListener("click", settingsTrigger);
+      .addEventListener("click", toggleSettingsPanel);
 
     // 主面板设置项即改即存
     bindAutoSave(document.getElementById("yzHelper-settings-content"));
@@ -3064,7 +3006,7 @@
               "plugin-settings-item"
             );
             settingsItem.innerHTML = "<!---->插件设置";
-            settingsItem.addEventListener("click", settingsTrigger);
+            settingsItem.addEventListener("click", toggleSettingsPanel);
             menu.appendChild(settingsItem);
           }
         });
@@ -3077,44 +3019,17 @@
     });
   }
 
-  function escapeHtml(text) {
-    return String(text == null ? "" : text).replace(/[&<>"']/g, (ch) => {
-      return {
-        "&": "&amp;",
-        "<": "&lt;",
-        ">": "&gt;",
-        '"': "&quot;",
-        "'": "&#39;",
-      }[ch];
-    });
-  }
-
-  // 通知函数
-  function showNotification(title, message) {
-    const notification = document.createElement("div");
-    notification.className = "yz-notify";
-    notification.innerHTML = `
-      <div class="notify-title"><span class="notify-dot"></span>${escapeHtml(title)}</div>
-      <div class="notify-msg">${escapeHtml(message)}</div>
-    `;
-    document.body.appendChild(notification);
-    requestAnimationFrame(() => notification.classList.add("visible"));
-    setTimeout(() => {
-      notification.classList.remove("visible");
-      setTimeout(() => notification.remove(), 300);
-    }, 3000);
+  function getCookie(name) {
+    const target = name + "=";
+    for (const part of document.cookie.split("; ")) {
+      if (part.startsWith(target)) return part.slice(target.length);
+    }
+    return null;
   }
 
   // 获取Token
   function getToken() {
-    const cookieMap = new Map();
-    document.cookie.split("; ").forEach((cookie) => {
-      const [key, value] = cookie.split("=");
-      cookieMap.set(key, value);
-    });
-    const token = cookieMap.get("iClass-token");
-    const userid = cookieMap.get("iClass-uuid");
-    return [userid, token];
+    return [getCookie("iClass-uuid"), getCookie("iClass-token")];
   }
 
   // 平台 API 请求统一封装：公共鉴权头 + JSON 解析
@@ -3179,6 +3094,7 @@
       a.download = filename;
       document.body.appendChild(a);
       a.click();
+      a.remove();
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error("Download failed:", error);
@@ -3315,7 +3231,6 @@
   }
 
   // 待办截止倒计时：把剩余毫秒差换算成分档文案与配色
-  // 只保留 3 天内的提醒（3 天以上返回 null，不显示），避免卡片被长期待办淹没
   function formatRemain(diffMs) {
     const MIN = 60 * 1000;
     const HOUR = 60 * MIN;
@@ -3352,11 +3267,14 @@
     return isNaN(d.getTime()) ? null : d;
   }
 
-  // 把平台自带的「截止时间」文本改造成胶囊，并入统一信息行
-  // 待办卡片统一的信息行（倒计时 + 班级进度共用），不存在时创建
-  // 每 60 秒重算一次，让倒计时在页面停留时自然走动；全部节点消失后自动停表
-  // 待办卡片补充信息：满分、作业模式、附件数、互评、班级已交人数
-  // 待办接口字段优先；缺失时按 activityId 拉一次作业详情并缓存
+  function sortTasksByDeadline(list) {
+    return list
+      .map((t) => ({ t, ms: (parseDeadline(t.endTime) || { getTime: () => Infinity }).getTime() }))
+      .sort((a, b) => a.ms - b.ms)
+      .map((x) => x.t);
+  }
+
+  // 作业详情补充信息缓存（作业模式、附件数、互评、班级已交人数）
   const assignmentInfoCache = new Map();
 
   function normalizeStat(total, noSubmit) {
@@ -3556,11 +3474,6 @@
     }
   }
 
-  // 直接按平台路由规则打开待办详情（不依赖被隐藏的原卡片）
-  function openTodoTask(task) {
-    openTaskUrl(buildTaskUrl(task));
-  }
-
   function buildTodoCard(task) {
     const card = document.createElement("div");
     card.className = "yz-todo-item";
@@ -3596,7 +3509,7 @@
     meta.className = "yz-todo-meta";
     box.appendChild(meta);
 
-    card.addEventListener("click", () => openTodoTask(task));
+    card.addEventListener("click", () => openTaskUrl(buildTaskUrl(task)));
 
     renderTodoChips(card, task, null);
     return card;
@@ -3617,10 +3530,7 @@
     wrap.textContent = "";
     yzTodoCountdowns.clear();
 
-    const tasks = list
-      .map((t) => ({ t: t, ms: (parseDeadline(t.endTime) || { getTime: () => Infinity }).getTime() }))
-      .sort((a, b) => a.ms - b.ms)
-      .map((x) => x.t);
+    const tasks = sortTasksByDeadline(list);
 
     const cards = new Map();
     tasks.forEach((task) => {
@@ -3774,6 +3684,64 @@
     }
   }
 
+  // 作业详情页切换 Tab 后 DOM 会重绘，需要重新注入课程名
+  let yzAssignmentCourse = null;
+  let yzAssignmentObserver = null;
+  let yzAssignmentTimer = null;
+  let yzAssignmentClickBound = false;
+
+  function watchAssignmentCourse(course) {
+    if (!course) return;
+    yzAssignmentCourse = course;
+    const tryInsert = () => {
+      if (!yzAssignmentCourse) return;
+      if (
+        !location.href.startsWith(
+          "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
+        )
+      )
+        return;
+      insert(yzAssignmentCourse);
+    };
+    if (!yzAssignmentObserver) {
+      yzAssignmentObserver = new MutationObserver(() => {
+        clearTimeout(yzAssignmentTimer);
+        yzAssignmentTimer = setTimeout(tryInsert, 150);
+      });
+    }
+    const startObserve = () => {
+      if (
+        !location.href.startsWith(
+          "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
+        )
+      )
+        return;
+      const root = document.getElementById("assignment-details");
+      if (!root) {
+        setTimeout(startObserve, 300);
+        return;
+      }
+      try {
+        yzAssignmentObserver.disconnect();
+      } catch (e) {}
+      yzAssignmentObserver.observe(root, { childList: true, subtree: true });
+    };
+    startObserve();
+    if (!yzAssignmentClickBound) {
+      yzAssignmentClickBound = true;
+      document.addEventListener(
+        "click",
+        (e) => {
+          if (e.target && e.target.closest && e.target.closest(".details-tabs")) {
+            setTimeout(tryInsert, 250);
+            setTimeout(tryInsert, 700);
+          }
+        },
+        true
+      );
+    }
+  }
+
   // 辅助函数
   function sleep(n) {
     return new Promise((res) => setTimeout(res, n));
@@ -3791,14 +3759,6 @@
   let courseListCache = null;
   let courseListPromise = null;
   let courseListLoading = false;
-
-  function getCookie(name) {
-    const target = name + "=";
-    for (const part of document.cookie.split("; ")) {
-      if (part.startsWith(target)) return part.slice(target.length);
-    }
-    return null;
-  }
 
   function getRoleAliase() {
     const raw = getCookie("user-role");
@@ -3896,11 +3856,7 @@
       "https://ucloud.bupt.edu.cn/uclass/course.html#/" +
       view +
       "/courseHomePage?ind=1";
-    if (settings.home.openInNewTab) {
-      window.open(url, "_blank");
-    } else {
-      window.location.href = url;
-    }
+    openTaskUrl(url);
   }
 
   function findLessonSection() {
@@ -4017,76 +3973,74 @@
       results.hidden = false;
     };
 
-    if (settings.experimental.courseSearchBox) {
-      const searchWrap = document.createElement("div");
-      searchWrap.className = "yz-lesson-search";
+    const searchWrap = document.createElement("div");
+    searchWrap.className = "yz-lesson-search";
 
-      input = document.createElement("input");
-      input.type = "text";
-      input.className = "yz-lesson-search-input";
-      input.placeholder = "搜索课程 / 教师 / 院系";
-      input.autocomplete = "off";
-      input.spellcheck = false;
+    input = document.createElement("input");
+    input.type = "text";
+    input.className = "yz-lesson-search-input";
+    input.placeholder = "搜索课程 / 教师 / 院系";
+    input.autocomplete = "off";
+    input.spellcheck = false;
 
-      const icon = document.createElement("span");
-      icon.className = "yz-lesson-search-icon";
-      icon.innerHTML =
-        '<svg viewBox="0 0 1024 1024" width="13" height="13" aria-hidden="true"><path d="M448 128a320 320 0 1 1 0 640 320 320 0 0 1 0-640zm0 64a256 256 0 1 0 0 512 256 256 0 0 0 0-512z" fill="#b2b7c2"/><path d="M697.7 651.5l155.4 155.4-45.2 45.2-155.4-155.4z" fill="#b2b7c2"/></svg>';
+    const icon = document.createElement("span");
+    icon.className = "yz-lesson-search-icon";
+    icon.innerHTML =
+      '<svg viewBox="0 0 1024 1024" width="13" height="13" aria-hidden="true"><path d="M448 128a320 320 0 1 1 0 640 320 320 0 0 1 0-640zm0 64a256 256 0 1 0 0 512 256 256 0 0 0 0-512z" fill="#b2b7c2"/><path d="M697.7 651.5l155.4 155.4-45.2 45.2-155.4-155.4z" fill="#b2b7c2"/></svg>';
 
-      results = document.createElement("div");
-      results.className = "yz-lesson-search-results";
-      results.hidden = true;
-      results.addEventListener("mousedown", (e) => e.preventDefault());
+    results = document.createElement("div");
+    results.className = "yz-lesson-search-results";
+    results.hidden = true;
+    results.addEventListener("mousedown", (e) => e.preventDefault());
 
-      input.addEventListener("focus", async () => {
-        renderResults();
-        await getCourseList();
-        if (document.activeElement === input) renderResults();
-      });
-      input.addEventListener("input", async () => {
-        renderResults();
-        await getCourseList();
-        if (document.activeElement === input) renderResults();
-      });
-      input.addEventListener("keydown", (e) => {
-        const items = results
-          ? Array.from(results.querySelectorAll(".yz-lesson-search-item"))
-          : [];
-        if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-          if (!items.length) return;
-          e.preventDefault();
-          if (e.key === "ArrowDown") {
-            activeIndex = (activeIndex + 1) % items.length;
-          } else {
-            activeIndex = (activeIndex - 1 + items.length) % items.length;
-          }
-          items.forEach((item, index) =>
-            item.classList.toggle("active", index === activeIndex)
-          );
-          items[activeIndex].scrollIntoView({ block: "nearest" });
-        } else if (e.key === "Enter") {
-          if (!items.length) return;
-          e.preventDefault();
-          const target = items[activeIndex >= 0 ? activeIndex : 0];
-          const course = (courseListCache || []).find(
-            (c) => c.id === target.dataset.id
-          );
-          if (course) {
-            hideResults();
-            openCoursePage(course);
-          }
-        } else if (e.key === "Escape") {
-          hideResults();
-          input.blur();
+    input.addEventListener("focus", async () => {
+      renderResults();
+      await getCourseList();
+      if (document.activeElement === input) renderResults();
+    });
+    input.addEventListener("input", async () => {
+      renderResults();
+      await getCourseList();
+      if (document.activeElement === input) renderResults();
+    });
+    input.addEventListener("keydown", (e) => {
+      const items = results
+        ? Array.from(results.querySelectorAll(".yz-lesson-search-item"))
+        : [];
+      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+        if (!items.length) return;
+        e.preventDefault();
+        if (e.key === "ArrowDown") {
+          activeIndex = (activeIndex + 1) % items.length;
+        } else {
+          activeIndex = (activeIndex - 1 + items.length) % items.length;
         }
-      });
-      input.addEventListener("blur", () => setTimeout(hideResults, 150));
+        items.forEach((item, index) =>
+          item.classList.toggle("active", index === activeIndex)
+        );
+        items[activeIndex].scrollIntoView({ block: "nearest" });
+      } else if (e.key === "Enter") {
+        if (!items.length) return;
+        e.preventDefault();
+        const target = items[activeIndex >= 0 ? activeIndex : 0];
+        const course = (courseListCache || []).find(
+          (c) => c.id === target.dataset.id
+        );
+        if (course) {
+          hideResults();
+          openCoursePage(course);
+        }
+      } else if (e.key === "Escape") {
+        hideResults();
+        input.blur();
+      }
+    });
+    input.addEventListener("blur", () => setTimeout(hideResults, 150));
 
-      searchWrap.appendChild(input);
-      searchWrap.appendChild(icon);
-      searchWrap.appendChild(results);
-      toolbar.appendChild(searchWrap);
-    }
+    searchWrap.appendChild(input);
+    searchWrap.appendChild(icon);
+    searchWrap.appendChild(results);
+    toolbar.appendChild(searchWrap);
 
     header.appendChild(toolbar);
   }
@@ -4102,54 +4056,66 @@
     return json.data.previewUrl;
   }
 
-  // 启用文本选择 修改按钮尺寸
+  // 启用文本选择、页面美化与按需功能样式（合并为单次 GM_addStyle 注入）
   function addFunctionalCSS() {
-    // 待办胶囊基础样式：常驻，不随设置开关消失
-    GM_addStyle(`
-    .yz-deadline-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 1px 8px;
-      border-radius: 999px;
-      border: 1px solid rgba(148, 163, 184, 0.45);
-      background: rgba(148, 163, 184, 0.18);
-      color: #94a3b8;
-      font-size: 12px;
-      line-height: 1.4;
-      white-space: nowrap;
-    }    .yz-task-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 1px 8px;
-      font-size: 12px;
-      line-height: 1.4;
-      border-radius: 999px;
-      border: 1px solid rgba(59, 130, 246, 0.35);
-      color: #2563eb;
-      background: rgba(59, 130, 246, 0.08);
-      white-space: nowrap;
-    }
-    .yz-task-chip.mode {
-      border-color: rgba(139, 92, 246, 0.35);
-      color: #7c3aed;
-      background: rgba(139, 92, 246, 0.1);
-    }
-    .yz-task-chip.info {
-      border-color: rgba(148, 163, 184, 0.35);
-      color: #64748b;
-      background: rgba(148, 163, 184, 0.1);
-    }
-    `);
-    GM_addStyle(`
-    .teacher-home-page .home-left-container .in-progress-section .in-progress-body .in-progress-item .activity-box .activity-title {
-      height: auto !important;
-    }
-    #layout-container > div.main-content > div.router-container > div > div.my-course-page {
-      max-height: none !important;
-    }
-    `);
+    const cssParts = [
+      `
+      .teacher-home-page .home-left-container .in-progress-section .in-progress-body .in-progress-item .activity-box .activity-title {
+        height: auto !important;
+      }
+      #layout-container > div.main-content > div.router-container > div > div.my-course-page {
+        max-height: none !important;
+      }
+      .yz-course-line {
+        font-size: 12px;
+        line-height: 16px;
+        font-weight: 600;
+        color: #0066cc;
+      }
+      .main-content .router-container .menu-nav,
+      .main-content .router-container .menu-nav .el-menu {
+        border-radius: 20px !important;
+        overflow: hidden;
+      }
+      /* 作业详情页容器圆角与深色分割线 */
+      #assignment-details {
+        border-radius: 20px !important;
+        overflow: hidden;
+      }
+      #assignment-info,
+      .assignment-content,
+      .assignment-info,
+      .assignment-detail-wrap,
+      .details-tabs {
+        border-radius: 20px !important;
+      }
+      html.ue-dark-mode #assignment-details .info-item,
+      html.ue-dark-mode #assignment-details .filed-wrap,
+      html.ue-dark-mode #assignment-details .header,
+      html.ue-dark-mode #assignment-details .el-tabs__item {
+        border-color: rgba(255, 255, 255, 0.14) !important;
+      }
+      html.ue-dark-mode #assignment-details .el-tabs__nav-wrap::after {
+        background-color: rgba(255, 255, 255, 0.14) !important;
+      }
+      /* 主页板块与卡片圆角统一 */
+      .teacher-home-page .home-card {
+        border-radius: 20px !important;
+      }
+      .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item,
+      .teacher-home-page .home-left-container .in-progress-section .in-progress-body .in-progress-item,
+      .teacher-home-page .home-right-container .my-need-section .my-need-body .my-need-item,
+      .yz-todo-item {
+        border-radius: 16px !important;
+      }
+      .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item .my-lesson-post {
+        border-radius: 12px !important;
+      }
+      `,
+    ];
+
     if (settings.homework.showHomeworkSource) {
-      GM_addStyle(`
+      cssParts.push(`
       .yz-course-link {
         color: #0066cc;
         cursor: pointer;
@@ -4159,104 +4125,15 @@
       }
       `);
     }
-    if (settings.experimental.todoRedesign) {
-      GM_addStyle(`
-      .yz-overdue-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 12px;
-        font-weight: 600;
-        margin-left: 8px;
-        vertical-align: middle;
-        line-height: 1.4;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-      }
-      .yz-overdue-badge.overdue {
-        background: #b91c1c;
-        color: #fff;
-      }
-      .yz-overdue-badge.urgent {
-        background: #ef4444;
-        color: #fff;
-      }
-      .yz-overdue-badge.later {
-        background: rgba(148, 163, 184, 0.22);
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        color: #94a3b8;
-      }
-      .yz-overdue-badge.soon {
-        background: #e6a23c;
-        color: #fff;
-      }
-      `);
-    }
-    GM_addStyle(`
-    .yz-course-line {
-      font-size: 12px;
-      line-height: 16px;
-      font-weight: 600;
-      color: #0066cc;
-    }
-    .main-content .router-container .menu-nav,
-    .main-content .router-container .menu-nav .el-menu {
-      border-radius: 20px !important;
-      overflow: hidden;
-    }
-    `);
-    // 作业详情页容器圆角
-    GM_addStyle(`
-    #assignment-details {
-      border-radius: 20px !important;
-      overflow: hidden;
-    }
-    #assignment-info,
-    .assignment-content,
-    .assignment-info,
-    .assignment-detail-wrap,
-    .details-tabs {
-      border-radius: 20px !important;
-    }
-    `);
-    GM_addStyle(`
-    html.ue-dark-mode #assignment-details .info-item,
-    html.ue-dark-mode #assignment-details .filed-wrap,
-    html.ue-dark-mode #assignment-details .header,
-    html.ue-dark-mode #assignment-details .el-tabs__item {
-      border-color: rgba(255, 255, 255, 0.14) !important;
-    }
-    html.ue-dark-mode #assignment-details .el-tabs__nav-wrap::after {
-      background-color: rgba(255, 255, 255, 0.14) !important;
-    }
-    `);
-    // 板块级容器圆角统一（最底层卡片）
-    GM_addStyle(`
-    .teacher-home-page .home-card {
-      border-radius: 20px !important;
-    }
-    `);
-    // 卡片圆角统一：课程卡 / 待办卡 / 右侧待办
-    GM_addStyle(`
-    .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item,
-    .teacher-home-page .home-left-container .in-progress-section .in-progress-body .in-progress-item,
-    .teacher-home-page .home-right-container .my-need-section .my-need-body .my-need-item,
-    .yz-todo-item {
-      border-radius: 16px !important;
-    }
-    .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item .my-lesson-post {
-      border-radius: 12px !important;
-    }
-    `);
     if (settings.experimental.hideUserPanel) {
-      GM_addStyle(`
+      cssParts.push(`
       .teacher-home-page .teacher-driver-section {
         display: none !important;
       }
       `);
     }
     if (settings.experimental.hideSideNav) {
-      GM_addStyle(`
+      cssParts.push(`
       .main-content .router-container .menu-nav {
         display: none !important;
       }
@@ -4301,17 +4178,69 @@
       `);
     }
     if (settings.experimental.hideVisitHistory) {
-      GM_addStyle(`
+      cssParts.push(`
       .visit-history-section {
         display: none !important;
       }
       `);
     }
     if (settings.experimental.todoRedesign) {
-      GM_addStyle(`
-      .in-progress-section.yz-todo-continuous-on .in-progress-body {
-        display: none !important;
+      cssParts.push(`
+      .yz-deadline-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        background: rgba(148, 163, 184, 0.18);
+        color: #94a3b8;
+        font-size: 12px;
+        line-height: 1.4;
+        white-space: nowrap;
       }
+      .yz-task-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 1px 8px;
+        font-size: 12px;
+        line-height: 1.4;
+        border-radius: 999px;
+        border: 1px solid rgba(59, 130, 246, 0.35);
+        color: #2563eb;
+        background: rgba(59, 130, 246, 0.08);
+        white-space: nowrap;
+      }
+      .yz-task-chip.mode {
+        border-color: rgba(139, 92, 246, 0.35);
+        color: #7c3aed;
+        background: rgba(139, 92, 246, 0.1);
+      }
+      .yz-task-chip.info {
+        border-color: rgba(148, 163, 184, 0.35);
+        color: #64748b;
+        background: rgba(148, 163, 184, 0.1);
+      }
+      .yz-overdue-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        font-weight: 600;
+        margin-left: 8px;
+        vertical-align: middle;
+        line-height: 1.4;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .yz-overdue-badge.overdue { background: #b91c1c; color: #fff; }
+      .yz-overdue-badge.urgent { background: #ef4444; color: #fff; }
+      .yz-overdue-badge.soon { background: #e6a23c; color: #fff; }
+      .yz-overdue-badge.later {
+        background: rgba(148, 163, 184, 0.22);
+        border: 1px solid rgba(148, 163, 184, 0.45);
+        color: #94a3b8;
+      }
+      .in-progress-section.yz-todo-continuous-on .in-progress-body,
       .in-progress-section.yz-todo-continuous-on .in-progress-header .header-control {
         display: none !important;
       }
@@ -4397,8 +4326,9 @@
         line-height: 1.4;
       }
       `);
-    }    if (settings.notification.betterNotificationHighlight) {
-      GM_addStyle(`
+    }
+    if (settings.notification.betterNotificationHighlight) {
+      cssParts.push(`
       .notification-with-dot {
         background-color: #fff8f8 !important;
         border-left: 5px solid #f56c6c !important;
@@ -4407,24 +4337,24 @@
         margin-bottom: 8px !important;
         border-radius: 4px !important;
         transition: all 0.3s ease !important;
-    }
-    .notification-with-dot:hover {
+      }
+      .notification-with-dot:hover {
         background-color: #fff0f0 !important;
         box-shadow: 0 4px 12px rgba(245, 108, 108, 0.3) !important;
         transform: translateY(-2px) !important;
-    }
-    `);
+      }
+      `);
     }
     if (settings.system.unlockCopy) {
-      GM_addStyle(`
-        .el-checkbox, .el-checkbox-button__inner, .el-empty__image img, .el-radio,
-        div, span, p, a, h1, h2, h3, h4, h5, h6, li, td, th {
-          -webkit-user-select: auto !important;
-          -moz-user-select: auto !important;
-          -ms-user-select: auto !important;
-          user-select: auto !important;
-        }
-        `);
+      cssParts.push(`
+      .el-checkbox, .el-checkbox-button__inner, .el-empty__image img, .el-radio,
+      div, span, p, a, h1, h2, h3, h4, h5, h6, li, td, th {
+        -webkit-user-select: auto !important;
+        -moz-user-select: auto !important;
+        -ms-user-select: auto !important;
+        user-select: auto !important;
+      }
+      `);
       document.addEventListener(
         "copy",
         function (e) {
@@ -4432,7 +4362,6 @@
         },
         true
       );
-
       document.addEventListener(
         "selectstart",
         function (e) {
@@ -4442,7 +4371,7 @@
       );
     }
     if (settings.home.useBiggerButton) {
-      GM_addStyle(`
+      cssParts.push(`
       .teacher-home-page .home-left-container .my-lesson-section .my-lesson-header .header-control .banner-control-btn, .teacher-home-page .home-left-container .in-progress-section .in-progress-header .header-control .banner-control-btn {
         width: 60px !important;
         height: 30px !important;
@@ -4458,10 +4387,10 @@
         align-items: center;
         justify-content: center;
       }
-    `);
+      `);
     }
     if (settings.experimental.courseSearchBox) {
-      GM_addStyle(`
+      cssParts.push(`
       .yz-lesson-toolbar {
         display: flex;
         align-items: center;
@@ -4557,9 +4486,7 @@
         font-size: 12px;
         color: #92929d;
       }
-
-      /* 深色模式：本工具栏已豁免页面深色引擎，显式指定深色配色，
-         下拉卡片用浅色描边与页面底色明确分层 */
+      /* 深色模式：本工具栏已豁免页面深色引擎，显式指定深色配色 */
       html.ue-dark-mode .yz-lesson-search-input {
         background: #2a2e31;
         border-color: transparent;
@@ -4584,14 +4511,15 @@
       html.ue-dark-mode .yz-lesson-search-empty {
         color: #9aa0a6;
       }
-    `);
+      `);
     }
+    GM_addStyle(cssParts.join("\n"));
   }
+
+  let homePageObserver = null;
 
   // 主函数
   async function main() {
-    "use strict";
-
     // 获取开关的状态（是否开启）
     const fixTicketEnabled = settings.system.fixTicketBug;
 
@@ -4721,13 +4649,8 @@
 
         $x('//*[@id="assignment-info"]/div[2]/div[2]/div[2]/div').forEach(
           (x, index) => {
-            if (
-              x.querySelector(".by-icon-eye-grey") ||
-              x.querySelector(".by-icon-yundown-grey")
-            ) {
-              x.querySelector(".by-icon-eye-grey").remove();
-              x.querySelector(".by-icon-yundown-grey").remove();
-            }
+            x.querySelector(".by-icon-eye-grey")?.remove();
+            x.querySelector(".by-icon-yundown-grey")?.remove();
 
             // 添加预览按钮
             const i = document.createElement("i");
@@ -4740,31 +4663,18 @@
                 downloadFile(url, filename);
                 console.debug("Autodownload");
               }
-              if (
-                filename.endsWith(".xls") ||
-                filename.endsWith(".xlsx") ||
-                url.endsWith(".doc") ||
-                url.endsWith(".docx") ||
-                url.endsWith(".ppt") ||
-                url.endsWith(".pptx")
-              ) {
-                if (settings.preview.autoSwitchOffice) {
-                  openTab(
-                    "https://view.officeapps.live.com/op/view.aspx?src=" +
-                      encodeURIComponent(url),
-                    { active: true, insert: true }
-                  );
-                } else if (onlinePreview !== null) {
-                  openTab(onlinePreview + encodeURIComponent(url), {
-                    active: true,
-                    insert: true,
-                  });
-                }
-              } else if (onlinePreview !== null)
+              if (OFFICE_EXT_RE.test(filename) && settings.preview.autoSwitchOffice) {
+                openTab(
+                  "https://view.officeapps.live.com/op/view.aspx?src=" +
+                    encodeURIComponent(url),
+                  { active: true, insert: true }
+                );
+              } else if (onlinePreview !== null) {
                 openTab(onlinePreview + encodeURIComponent(url), {
                   active: true,
                   insert: true,
                 });
+              }
             });
 
             // 添加下载按钮
@@ -4817,14 +4727,17 @@
         glist = list;
 
         let pageCheckTimer = null;
-        const observer = new MutationObserver(() => {
+        if (homePageObserver) {
+          homePageObserver.disconnect();
+          homePageObserver = null;
+        }
+        const pageIndicatorSelector =
+          "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block";
+        homePageObserver = new MutationObserver(() => {
           // 防抖：任何 DOM 变动都会触发回调，集中处理避免重复解析
           clearTimeout(pageCheckTimer);
           pageCheckTimer = setTimeout(async () => {
-            const pageElement = document.querySelector(
-              "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block"
-            );
-
+            const pageElement = document.querySelector(pageIndicatorSelector);
             if (!pageElement) return;
 
             // 解析页码
@@ -4836,12 +4749,12 @@
             // 页码变化则更新显示
             if (currentPage !== gpage) {
               gpage = currentPage;
-              await updateAssignmentDisplay(list, currentPage);
+              await updateAssignmentDisplay(list);
             }
           }, 120);
         });
 
-        observer.observe(document.body, {
+        homePageObserver.observe(document.body, {
           childList: true,
           subtree: true,
           attributes: false,
@@ -4849,75 +4762,12 @@
         });
 
         // 初始化页码
-        let page = 1;
-        const pageElement = document.querySelector(
-          "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block"
-        );
-
+        const pageElement = document.querySelector(pageIndicatorSelector);
         if (pageElement) {
-          page = parseInt(pageElement.innerHTML.trim().split("/")[0]);
-          gpage = page;
+          gpage = parseInt(pageElement.innerHTML.trim().split("/")[0]);
         }
 
-        // 作业详情页切换 Tab 后 DOM 会重绘，需要重新注入课程名
-  let yzAssignmentCourse = null;
-  let yzAssignmentObserver = null;
-  let yzAssignmentTimer = null;
-  let yzAssignmentClickBound = false;
-
-  function watchAssignmentCourse(course) {
-    if (!course) return;
-    yzAssignmentCourse = course;
-    const tryInsert = () => {
-      if (!yzAssignmentCourse) return;
-      if (
-        !location.href.startsWith(
-          "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
-        )
-      )
-        return;
-      insert(yzAssignmentCourse);
-    };
-    if (!yzAssignmentObserver) {
-      yzAssignmentObserver = new MutationObserver(() => {
-        clearTimeout(yzAssignmentTimer);
-        yzAssignmentTimer = setTimeout(tryInsert, 150);
-      });
-    }
-    const startObserve = () => {
-      if (
-        !location.href.startsWith(
-          "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
-        )
-      )
-        return;
-      const root = document.getElementById("assignment-details");
-      if (!root) {
-        setTimeout(startObserve, 300);
-        return;
-      }
-      try {
-        yzAssignmentObserver.disconnect();
-      } catch (e) {}
-      yzAssignmentObserver.observe(root, { childList: true, subtree: true });
-    };
-    startObserve();
-    if (!yzAssignmentClickBound) {
-      yzAssignmentClickBound = true;
-      document.addEventListener(
-        "click",
-        (e) => {
-          if (e.target && e.target.closest && e.target.closest(".details-tabs")) {
-            setTimeout(tryInsert, 250);
-            setTimeout(tryInsert, 700);
-          }
-        },
-        true
-      );
-    }
-  }
-
-  // 更新作业显示
+        // 更新作业显示
         await updateAssignmentDisplay(list);
       }
       syncHomeLayout();
@@ -5098,7 +4948,6 @@
                   if (downloading) {
                     const btn = document.getElementById("downloadAllButton");
                     const totalCount = resources.length;
-                    let completedCount = 0;
                     btn.innerHTML = "取消下载 (0/" + totalCount + ")";
                     for (let index = 0; index < resources.length; index++) {
                       if (!downloading) return;
@@ -5111,7 +4960,6 @@
                         file.name
                       );
                       if (!downloading) return;
-                      completedCount++;
                     }
                     if (downloading) {
                       downloading = false;
@@ -5176,12 +5024,7 @@
             const hasRedDot = item.querySelector(
               "div.el-badge sup.el-badge__content.is-dot"
             );
-            if (hasRedDot) {
-              item.classList.remove("notification-with-dot");
-              item.classList.add("notification-with-dot");
-            } else {
-              item.classList.remove("notification-with-dot");
-            }
+            item.classList.toggle("notification-with-dot", !!hasRedDot);
           }
           noticeContainer.appendChild(item);
         });
