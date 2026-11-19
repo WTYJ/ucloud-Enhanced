@@ -1392,17 +1392,27 @@ function escapeHtml(text) {
     .wb-head { display: flex; align-items: center; gap: 18px; padding: 16px 20px; border-bottom: 1px solid #eef2f7; }
     .wb-brand { font-size: 16px; font-weight: 700; color: #171725; }
     .wb-tabs { display: flex; gap: 6px; }
-    .wb-tab { border: none; background: transparent; padding: 6px 16px; border-radius: 999px; font-size: 13px; color: #64748b; cursor: pointer; }
+    .wb-tab { display: inline-flex; align-items: center; gap: 5px; border: none; background: transparent; padding: 6px 14px; border-radius: 999px; font-size: 13px; color: #64748b; cursor: pointer; }
     .wb-tab.active { background: rgba(59, 130, 246, 0.12); color: #2563eb; font-weight: 600; }
-    .wb-refresh { margin-left: auto; width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 16px; cursor: pointer; color: #475569; }
-    .wb-refresh:hover { background: #e2e8f0; }
-    .wb-close { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 18px; line-height: 1; cursor: pointer; color: #475569; }
-    .wb-close:hover { background: #e2e8f0; }
+    .wb-tab-count { display: none; min-width: 16px; height: 16px; padding: 0 5px; border-radius: 999px; font-size: 11px; line-height: 16px; font-weight: 600; text-align: center; background: rgba(100, 116, 139, 0.16); color: #475569; box-sizing: border-box; }
+    .wb-tab-count.show { display: inline-block; }
+    .wb-tab.active .wb-tab-count { background: rgba(37, 99, 235, 0.16); color: #2563eb; }
+    .wb-tab-count.unread { background: #ef4444 !important; color: #fff !important; }
+    .wb-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+    .wb-icon-btn { width: 32px; height: 32px; border: none; background: #f1f5f9; border-radius: 10px; font-size: 16px; line-height: 1; cursor: pointer; color: #475569; display: inline-flex; align-items: center; justify-content: center; }
+    .wb-icon-btn:hover { background: #e2e8f0; }
+    .wb-close { font-size: 18px; }
     .wb-body { flex: 1; overflow: auto; padding: 18px 20px 24px; box-sizing: border-box; }
     .wb-inner { width: 100%; max-width: 880px; margin: 0 auto; }
     .wb-pane[hidden] { display: none; }
     .wb-loading, .wb-empty { color: #94a3b8; font-size: 13px; text-align: center; padding: 48px 0; }
+    .wb-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .wb-filter-bar[hidden] { display: none; }
+    .wb-filter-chip { border: 1px solid #e2e8f0; background: #f8fafc; color: #475569; border-radius: 999px; padding: 4px 12px; font-size: 12px; cursor: pointer; transition: all .15s ease; }
+    .wb-filter-chip:hover { border-color: rgba(59, 130, 246, 0.45); color: #2563eb; }
+    .wb-filter-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; font-weight: 600; }
     .wb-card { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; margin-bottom: 10px; cursor: pointer; background: #fff; transition: box-shadow .2s ease, transform .2s ease; }
+    .wb-card[hidden] { display: none; }
     .wb-card:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); transform: translateY(-1px); }
     .wb-card-head { display: flex; align-items: center; gap: 10px; }
     .wb-card-title { flex: 1; min-width: 0; font-size: 14px; font-weight: 600; color: #171725; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1426,14 +1436,19 @@ function escapeHtml(text) {
     .wb-notice-count { font-size: 12.5px; color: #94a3b8; }
     .wb-readall { border: 1px solid rgba(59, 130, 246, 0.35); background: rgba(59, 130, 246, 0.08); color: #2563eb; border-radius: 999px; padding: 5px 14px; font-size: 12.5px; cursor: pointer; }
     .wb-readall:disabled { opacity: 0.5; cursor: default; }
-    .wb-notice { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; background: #fff; cursor: pointer; }
+    .wb-notice { border: 1px solid rgba(148, 163, 184, 0.28); border-radius: 14px; padding: 12px 14px; margin-bottom: 10px; background: #fff; transition: box-shadow .15s ease, border-color .15s ease; }
+    .wb-notice[data-unread="1"] { border-color: rgba(59, 130, 246, 0.45); border-left: 3px solid #2563eb; cursor: pointer; }
     .wb-notice:hover { box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08); }
     .wb-notice-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 600; color: #171725; }
+    .wb-notice-hint { margin-left: auto; font-size: 11px; font-weight: 500; color: #2563eb; opacity: 0.85; flex: none; }
     .wb-dot { width: 7px; height: 7px; border-radius: 50%; background: #ef4444; flex: none; }
     .wb-notice-time { margin-top: 4px; font-size: 12px; color: #94a3b8; }
-    .wb-notice-body { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #475569; white-space: pre-wrap; }
-    :host(.wb-dark) .wb-notice { background: #1b2130; border-color: rgba(59, 130, 246, 0.45); }
+    .wb-notice-body { margin-top: 8px; font-size: 12.5px; line-height: 1.7; color: #475569; white-space: pre-wrap; word-break: break-word; }
+    .wb-link { color: #2563eb; text-decoration: underline; word-break: break-all; }
+    :host(.wb-dark) .wb-notice { background: #1b2130; border-color: rgba(255, 255, 255, 0.1); }
+    :host(.wb-dark) .wb-notice[data-unread="1"] { border-color: rgba(59, 130, 246, 0.45); border-left-color: #60a5fa; }
     :host(.wb-dark) .wb-notice-title { color: #f3f4f6; }
+    :host(.wb-dark) .wb-notice-hint, :host(.wb-dark) .wb-link { color: #93c5fd; }
     :host(.wb-dark) .wb-notice-body { color: #cbd5e1; }
     .wb-course-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
     .wb-course-item { border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 16px; padding: 14px 16px; cursor: pointer; background: #fff; }
@@ -1456,7 +1471,13 @@ function escapeHtml(text) {
     :host(.wb-dark) .wb-brand { color: #f3f4f6; }
     :host(.wb-dark) .wb-tab { color: #94a3b8; }
     :host(.wb-dark) .wb-tab.active { background: rgba(59, 130, 246, 0.2); color: #93c5fd; }
-    :host(.wb-dark) .wb-close, :host(.wb-dark) .wb-refresh { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
+    :host(.wb-dark) .wb-tab-count { background: rgba(255, 255, 255, 0.1); color: #cbd5e1; }
+    :host(.wb-dark) .wb-tab.active .wb-tab-count { background: rgba(59, 130, 246, 0.28); color: #93c5fd; }
+    :host(.wb-dark) .wb-icon-btn { background: rgba(255, 255, 255, 0.08); color: #cbd5e1; }
+    :host(.wb-dark) .wb-icon-btn:hover { background: rgba(255, 255, 255, 0.14); }
+    :host(.wb-dark) .wb-filter-chip { background: #1b2130; border-color: rgba(255, 255, 255, 0.12); color: #cbd5e1; }
+    :host(.wb-dark) .wb-filter-chip:hover { border-color: rgba(96, 165, 250, 0.55); color: #93c5fd; }
+    :host(.wb-dark) .wb-filter-chip.active { background: #2563eb; border-color: #2563eb; color: #fff; }
     :host(.wb-dark) .wb-card, :host(.wb-dark) .wb-course-item { background: #1b2130; border-color: rgba(59, 130, 246, 0.45); }
     :host(.wb-dark) .wb-card-title, :host(.wb-dark) .wb-course-title { color: #f3f4f6; }
     :host(.wb-dark) .wb-course { color: #93c5fd; }
@@ -1470,6 +1491,21 @@ function escapeHtml(text) {
     if (!wbHost) return;
     wbHost.classList.toggle("wb-dark", document.documentElement.classList.contains("ue-dark-mode"));
     wbHost.classList.toggle("wb-full", !!settings.workbench.fullscreen);
+    const fullBtn = wbRoot && wbRoot.querySelector(".wb-fullscreen");
+    if (fullBtn) {
+      fullBtn.title = settings.workbench.fullscreen ? "退出全屏" : "全屏显示";
+      fullBtn.textContent = settings.workbench.fullscreen ? "🗗" : "⛶";
+    }
+  }
+
+  function wbSetTabCount(tab, count, isUnread = false) {
+    if (!wbRoot) return;
+    const badge = wbRoot.querySelector(`.wb-tab[data-tab="${tab}"] .wb-tab-count`);
+    if (!badge) return;
+    const n = Number(count) || 0;
+    badge.textContent = n > 99 ? "99+" : String(n);
+    badge.classList.toggle("show", n > 0);
+    badge.classList.toggle("unread", isUnread && n > 0);
   }
 
   function wbEnsure() {
@@ -1484,12 +1520,15 @@ function escapeHtml(text) {
         <div class="wb-head">
           <div class="wb-brand">🧩 工作台</div>
           <div class="wb-tabs">
-            <button class="wb-tab active" data-tab="todo">待办</button>
-            <button class="wb-tab" data-tab="course">课程</button>
-            <button class="wb-tab" data-tab="notice">通知</button>
+            <button class="wb-tab active" data-tab="todo">待办<span class="wb-tab-count"></span></button>
+            <button class="wb-tab" data-tab="course">课程<span class="wb-tab-count"></span></button>
+            <button class="wb-tab" data-tab="notice">通知<span class="wb-tab-count"></span></button>
           </div>
-          <button class="wb-refresh" title="刷新">↻</button>
-          <button class="wb-close" title="关闭">×</button>
+          <div class="wb-actions">
+            <button class="wb-icon-btn wb-fullscreen" title="全屏显示">⛶</button>
+            <button class="wb-icon-btn wb-refresh" title="刷新">↻</button>
+            <button class="wb-icon-btn wb-close" title="关闭">×</button>
+          </div>
         </div>
         <div class="wb-body">
           <div class="wb-pane" data-pane="todo"><div class="wb-loading">加载中…</div></div>
@@ -1500,6 +1539,17 @@ function escapeHtml(text) {
     document.body.appendChild(wbHost);
     wbRoot.querySelector(".wb-mask").addEventListener("click", wbClose);
     wbRoot.querySelector(".wb-close").addEventListener("click", wbClose);
+    wbRoot.querySelector(".wb-fullscreen").addEventListener("click", () => {
+      const next = !settings.workbench.fullscreen;
+      settings.workbench.fullscreen = next;
+      GM_setValue("workbench_fullscreen", next);
+      document
+        .querySelectorAll('input[id="workbench_fullscreen"]')
+        .forEach((el) => {
+          el.checked = next;
+        });
+      wbApplyTheme();
+    });
     wbRoot.querySelector(".wb-refresh").addEventListener("click", () => {
       if (wbState.tab === "course") wbState.courseLoaded = false;
       else if (wbState.tab === "notice") wbState.noticeLoaded = false;
@@ -1542,6 +1592,8 @@ function escapeHtml(text) {
     wbHost.style.display = "block";
     if (wbState.todoLoaded) wbStartTicker();
     wbSwitchTab(tab || wbState.tab);
+    // 后台预拉一次通知以点亮未读红点角标，切入通知页签时也可立即展示
+    if (!wbState.noticeLoaded) wbLoadNotices();
   }
 
   function wbClose() {
@@ -1552,6 +1604,14 @@ function escapeHtml(text) {
       clearInterval(wbTicker);
       wbTicker = null;
     }
+  }
+
+  function pickTaskTypeLabel(type) {
+    const t = Number(type);
+    if (t === 1) return "💬 讨论";
+    if (t === 2) return "📊 问卷";
+    if (t === 4) return "📝 测试";
+    return "";
   }
 
   function wbRenderTodoMeta(card, task, info) {
@@ -1567,11 +1627,14 @@ function escapeHtml(text) {
       meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
     }
     const mode = (info && info.mode) || pickModeName(task.assignmentType);
+    const typeLabel = pickTaskTypeLabel(task.type);
     if (mode) {
       tags.insertAdjacentHTML(
         "beforeend",
         `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
       );
+    } else if (typeLabel) {
+      tags.insertAdjacentHTML("beforeend", `<span class="wb-mode">${typeLabel}</span>`);
     }
     if (info && info.attachments) meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">附件 ${info.attachments}</span>`);
     if (info && info.evaluation) meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">互评</span>`);
@@ -1611,6 +1674,7 @@ function escapeHtml(text) {
       const res = await getUndoneList();
       const list = (res && res.data && res.data.undoneList) || [];
       const tasks = sortTasksByDeadline(list);
+      wbSetTabCount("todo", tasks.length);
       pane.innerHTML = "";
       if (!tasks.length) {
         pane.innerHTML = '<div class="wb-empty">暂无待办</div>';
@@ -1619,6 +1683,11 @@ function escapeHtml(text) {
       const inner = document.createElement("div");
       inner.className = "wb-inner";
       pane.appendChild(inner);
+      const filterBar = document.createElement("div");
+      filterBar.className = "wb-filter-bar";
+      filterBar.hidden = true;
+      inner.appendChild(filterBar);
+
       const cards = {};
       wbTodoCards = [];
       tasks.forEach((task) => {
@@ -1638,15 +1707,43 @@ function escapeHtml(text) {
       const ids = tasks.map((t) => t.activityId || t.id).filter(Boolean);
       searchCourses(ids)
         .then((infos) => {
+          const courseCounts = new Map();
           tasks.forEach((task) => {
             const card = cards[task.activityId || task.id];
             const info = infos[task.activityId || task.id];
+            const courseName = info ? info.name : "未知课程";
             if (card && card.isConnected) {
+              card.dataset.course = courseName;
               card.querySelector(".wb-course").textContent = info
                 ? info.name + "(" + info.teachers + ")"
                 : "未知课程";
+              courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
             }
           });
+          // 涉及多门课程时显示按课程筛选胶囊
+          if (filterBar.isConnected && courseCounts.size > 1) {
+            let activeCourse = "";
+            const applyFilter = (courseName) => {
+              activeCourse = courseName;
+              wbTodoCards.forEach(({ card }) => {
+                card.hidden = !!activeCourse && card.dataset.course !== activeCourse;
+              });
+              filterBar.querySelectorAll(".wb-filter-chip").forEach((chip) => {
+                chip.classList.toggle("active", chip.dataset.course === activeCourse);
+              });
+            };
+            const addChip = (label, courseKey, active) => {
+              const chip = document.createElement("button");
+              chip.className = "wb-filter-chip" + (active ? " active" : "");
+              chip.dataset.course = courseKey;
+              chip.textContent = label;
+              chip.addEventListener("click", () => applyFilter(courseKey));
+              filterBar.appendChild(chip);
+            };
+            addChip(`全部 (${tasks.length})`, "", true);
+            courseCounts.forEach((cnt, name) => addChip(`${name} (${cnt})`, name, false));
+            filterBar.hidden = false;
+          }
         })
         .catch(() => {});
       tasks.forEach((task) => {
@@ -1658,6 +1755,29 @@ function escapeHtml(text) {
     } catch (e) {
       pane.innerHTML = '<div class="wb-empty">加载失败，请稍后重试</div>';
       wbState.todoLoaded = false;
+    }
+  }
+
+  function renderTextWithLinks(container, text) {
+    container.textContent = "";
+    const urlRe = /https?:\/\/[^\s<>"'()]+/g;
+    let last = 0;
+    let match;
+    while ((match = urlRe.exec(text)) !== null) {
+      if (match.index > last) {
+        container.appendChild(document.createTextNode(text.slice(last, match.index)));
+      }
+      const a = document.createElement("a");
+      a.className = "wb-link";
+      a.href = match[0];
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      a.textContent = match[0];
+      container.appendChild(a);
+      last = match.index + match[0].length;
+    }
+    if (last < text.length) {
+      container.appendChild(document.createTextNode(text.slice(last)));
     }
   }
 
@@ -1674,35 +1794,63 @@ function escapeHtml(text) {
         size: 100,
       }).toString();
       const res = await apiFetch("ykt-basics/api/inform/news/list?" + qs, { method: "POST" });
-      const list = (res && res.data && res.data.records) || [];
+      const rawList = (res && res.data && res.data.records) || [];
+      const list = rawList.slice().sort((a, b) => {
+        const ta = parseDeadline(a.newsCopyTime)?.getTime() || 0;
+        const tb = parseDeadline(b.newsCopyTime)?.getTime() || 0;
+        return tb - ta;
+      });
       pane.innerHTML = "";
       if (!list.length) {
+        wbSetTabCount("notice", 0, true);
         pane.innerHTML = '<div class="wb-empty">暂无通知</div>';
         return;
       }
       const inner = document.createElement("div");
       inner.className = "wb-inner";
-      const unreadIds = list
-        .filter((item) => Number(item.isRead) === 0)
-        .map((item) => item.id);
+      let unreadCount = list.filter((item) => Number(item.isRead) === 0).length;
       const toolbar = document.createElement("div");
       toolbar.className = "wb-notice-toolbar";
       toolbar.innerHTML =
         '<span class="wb-notice-count"></span>' +
-        '<button class="wb-readall"' + (unreadIds.length ? "" : " disabled") + ">全部已读</button>";
-      toolbar.querySelector(".wb-notice-count").textContent =
-        unreadIds.length ? "未读 " + unreadIds.length + " 条" : "全部已读";
+        '<button class="wb-readall">全部已读</button>';
+      const countEl = toolbar.querySelector(".wb-notice-count");
+      const readAllBtn = toolbar.querySelector(".wb-readall");
+      const syncNoticeCount = () => {
+        countEl.textContent = unreadCount > 0 ? "未读 " + unreadCount + " 条" : "全部已读";
+        readAllBtn.disabled = unreadCount <= 0;
+        wbSetTabCount("notice", unreadCount, true);
+      };
+      syncNoticeCount();
       inner.appendChild(toolbar);
+
       const cards = [];
+      const markCardRead = (card, item) => {
+        if (card.dataset.unread !== "1") return;
+        card.dataset.unread = "0";
+        card.querySelector(".wb-dot")?.remove();
+        card.querySelector(".wb-notice-hint")?.remove();
+        unreadCount = Math.max(0, unreadCount - 1);
+        syncNoticeCount();
+        if (item && item.id != null) {
+          apiFetch(
+            "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(item.id),
+            { method: "POST" }
+          ).catch(() => {});
+        }
+      };
+
       list.forEach((item) => {
         const card = document.createElement("div");
         card.className = "wb-notice";
-        let unread = Number(item.isRead) === 0;
+        const unread = Number(item.isRead) === 0;
         card.dataset.unread = unread ? "1" : "0";
         card.innerHTML =
           '<div class="wb-notice-title">' +
           (unread ? '<span class="wb-dot"></span>' : "") +
-          '<span class="wb-notice-text"></span></div>' +
+          '<span class="wb-notice-text"></span>' +
+          (unread ? '<span class="wb-notice-hint">点击已读</span>' : "") +
+          '</div>' +
           '<div class="wb-notice-time"></div>' +
           '<div class="wb-notice-body"></div>';
         card.querySelector(".wb-notice-text").textContent = item.newsTitle || "无标题通知";
@@ -1715,25 +1863,30 @@ function escapeHtml(text) {
         } catch (e) {
           noticeText = "";
         }
-        card.querySelector(".wb-notice-body").textContent = noticeText.trim();
+        renderTextWithLinks(card.querySelector(".wb-notice-body"), noticeText.trim());
+        card.addEventListener("click", () => markCardRead(card, item));
         cards.push(card);
         inner.appendChild(card);
       });
-      toolbar.querySelector(".wb-readall").addEventListener("click", (e) => {
+      readAllBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        cards.forEach((c) => {
-          c.dataset.unread = "0";
-          const dot = c.querySelector(".wb-dot");
-          if (dot) dot.remove();
+        const unreadIds = [];
+        cards.forEach((c, idx) => {
+          if (c.dataset.unread === "1") {
+            c.dataset.unread = "0";
+            c.querySelector(".wb-dot")?.remove();
+            c.querySelector(".wb-notice-hint")?.remove();
+            if (list[idx] && list[idx].id != null) unreadIds.push(list[idx].id);
+          }
         });
-        toolbar.querySelector(".wb-notice-count").textContent = "全部已读";
-        const btn = toolbar.querySelector(".wb-readall");
-        btn.disabled = true;
-        const allIds = list.map((n) => n.id).join(",");
-        apiFetch(
-          "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(allIds),
-          { method: "POST" }
-        ).catch(() => {});
+        unreadCount = 0;
+        syncNoticeCount();
+        if (unreadIds.length) {
+          apiFetch(
+            "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(unreadIds.join(",")),
+            { method: "POST" }
+          ).catch(() => {});
+        }
       });
       pane.appendChild(inner);
     } catch (e) {
@@ -1749,6 +1902,7 @@ function escapeHtml(text) {
     pane.innerHTML = '<div class="wb-loading">加载中…</div>';
     try {
       const list = await getCourseList();
+      wbSetTabCount("course", (list && list.length) || 0);
       pane.innerHTML = "";
       if (!list || !list.length) {
         pane.innerHTML = '<div class="wb-empty">暂无课程</div>';
@@ -1764,32 +1918,37 @@ function escapeHtml(text) {
       const grid = document.createElement("div");
       grid.className = "wb-course-grid";
       inner.appendChild(grid);
+      const emptyTip = document.createElement("div");
+      emptyTip.className = "wb-empty";
+      emptyTip.textContent = "未找到匹配的课程";
+      emptyTip.hidden = true;
+      inner.appendChild(emptyTip);
       const renderGrid = (keyword) => {
         grid.innerHTML = "";
         const kw = (keyword || "").toLowerCase();
-        list
-          .filter((c) => {
-            if (!kw) return true;
-            return [c.name, c.teachers, c.department]
-              .filter(Boolean)
-              .join(" ")
-              .toLowerCase()
-              .includes(kw);
-          })
-          .forEach((course) => {
-            const item = document.createElement("div");
-            item.className = "wb-course-item";
-            item.innerHTML = '<div class="wb-course-title"></div><div class="wb-course-meta"></div>';
-            item.querySelector(".wb-course-title").textContent = course.name || "未命名课程";
-            item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
-              .filter(Boolean)
-              .join(" · ");
-            item.addEventListener("click", () => {
-              wbClose();
-              openCoursePage(course);
-            });
-            grid.appendChild(item);
+        const matched = list.filter((c) => {
+          if (!kw) return true;
+          return [c.name, c.teachers, c.department]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase()
+            .includes(kw);
+        });
+        emptyTip.hidden = matched.length > 0;
+        matched.forEach((course) => {
+          const item = document.createElement("div");
+          item.className = "wb-course-item";
+          item.innerHTML = '<div class="wb-course-title"></div><div class="wb-course-meta"></div>';
+          item.querySelector(".wb-course-title").textContent = course.name || "未命名课程";
+          item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
+            .filter(Boolean)
+            .join(" · ");
+          item.addEventListener("click", () => {
+            wbClose();
+            openCoursePage(course);
           });
+          grid.appendChild(item);
+        });
       };
       search.addEventListener("input", () => renderGrid(search.value.trim()));
       renderGrid("");
@@ -2709,14 +2868,41 @@ function escapeHtml(text) {
       document.body.appendChild(ball);
     }
 
-    // ===== 即改即存：改动立即写入并自动刷新生效 =====
+    // ===== 即改即存：轻量设置即时热生效，依赖注入/Hook 的设置自动刷新 =====
     let applyReloadTimer = null;
+    const HOT_APPLY_KEYS = new Set([
+      "workbench_fullscreen",
+      "workbench_entry",
+      "workbench_autoOpen",
+      "system_darkMode",
+      "system_showConfigButton",
+      "system_autoUpdate",
+    ]);
 
     function saveSettingAndApply(category, key, value) {
+      const settingId = `${category}_${key}`;
       settings[category][key] = value;
-      GM_setValue(`${category}_${key}`, value);
-      // 深色模式先即时生效，随后的刷新保证所有设置整体一致
-      if (category === "system" && key === "darkMode") applyDarkMode();
+      GM_setValue(settingId, value);
+      // 同步快捷面板与设置主面板的同名开关状态
+      document.querySelectorAll(`input[id="${settingId}"]`).forEach((el) => {
+        if (el.checked !== value) el.checked = value;
+      });
+      if (HOT_APPLY_KEYS.has(settingId)) {
+        if (settingId === "system_darkMode") applyDarkMode();
+        else if (settingId === "workbench_fullscreen") wbApplyTheme();
+        else if (settingId === "workbench_entry" && quickPanel.classList.contains("visible")) {
+          buildQuickPanel();
+        } else if (settingId === "system_showConfigButton") {
+          if (value) {
+            if (!ball.isConnected) document.body.appendChild(ball);
+          } else {
+            closeQuickPanel();
+            ball.remove();
+          }
+        }
+        showNotification("已生效", "设置已即时应用");
+        return;
+      }
       showNotification("已保存", "即将刷新生效…");
       clearTimeout(applyReloadTimer);
       applyReloadTimer = setTimeout(() => location.reload(), 700);
