@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-2.1.0-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-2.2.0-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -38,6 +38,15 @@
 - 也可通过 Tampermonkey 菜单或页面右上角个人菜单打开设置
 
 ## 🔄 更新日志
+
+### 2.2.0
+
+- 新增：工作台页签计数角标（待办/课程数量、通知未读红点角标，打开工作台时后台预拉通知以实时点亮未读数）
+- 新增：工作台标题栏「全屏 / 浮窗」一键切换按钮，点击即时生效并同步设置状态
+- 新增：工作台待办按课程筛选（涉及 2 门及以上课程时自动生成筛选胶囊）及非作业类活动类型标签（讨论 / 问卷 / 测试）
+- 新增：工作台通知支持点击单条标记已读、按发布时间降序排列，并在防 XSS 前提下将正文 URL 渲染为可点击安全链接
+- 改进：工作台课程搜索无结果时显示空状态提示；「全部已读」仅上报实际未读条目
+- 改进：轻量设置热生效——工作台全屏/入口/自动打开、自动深色模式、显示悬浮球、自动检查更新六项开关改为即时应用并同步快捷面板与设置主面板状态，不再强制刷新页面
 
 ### 2.1.0
 
