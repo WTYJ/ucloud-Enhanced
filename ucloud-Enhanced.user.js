@@ -1170,46 +1170,79 @@ function escapeHtml(text) {
     return `rgba(${r}, ${g}, ${b}, ${c.a})`;
   }
 
-  function darkenElement(el) {
-    // 脚本自身的 UI（悬浮球/面板/通知/主页课程搜索工具栏）自带亮暗双主题配色，不参与引擎重映射
-    if (
-      el.closest &&
-      el.closest(
-        "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon"
-      )
-    )
-      return;
-    // 处理期间临时禁用过渡动画：避免读到插值中的中间色、以及摘除/写入覆盖时反复重启动画
-    // （这是悬停样式"卡死不恢复"的根源）；同一次 JS 执行内还原，用户无感知
-    const prevTransition = el.style.transition;
-    el.style.transition = "none";
-    // 先摘除本脚本上次写入的 !important 覆盖，确保读到平台当前真实样式（含 hover/激活态）
-    ["background-color", "color", "border-color"].forEach((p) => {
-      if (el.style.getPropertyPriority(p) === "important") {
-        el.style.removeProperty(p);
+  const DARK_EXEMPT_SELECTOR =
+    "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon";
+  const DARK_SKIP_TAGS = new Set([
+    "SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "BR", "HR",
+    "IMG", "VIDEO", "AUDIO", "CANVAS", "IFRAME", "SVG",
+  ]);
+  const DARK_PROPS = ["background-color", "color", "border-color"];
+
+  // 批量读写分离：先统一准备样式，再统一读 getComputedStyle（仅触发 1 次样式重算），最后统一写回
+  function darkenElements(elements) {
+    const targets = [];
+    for (const el of elements) {
+      if (
+        !el ||
+        el.nodeType !== Node.ELEMENT_NODE ||
+        el instanceof SVGElement ||
+        DARK_SKIP_TAGS.has(el.tagName)
+      ) {
+        continue;
       }
+      if (el.closest && el.closest(DARK_EXEMPT_SELECTOR)) continue;
+      targets.push(el);
+    }
+    if (!targets.length) return;
+
+    // Phase 1: 临时禁用过渡并摘除上次写入的 !important 覆盖，避免读到过渡中间态或旧覆盖色
+    const states = targets.map((el) => {
+      const prevTransition = el.style.transition;
+      el.style.transition = "none";
+      if (el.dataset.ueDark === "1") {
+        for (const p of DARK_PROPS) {
+          if (el.style.getPropertyPriority(p) === "important") {
+            el.style.removeProperty(p);
+          }
+        }
+      }
+      return { el, prevTransition, bg: null, fg: null, bd: null };
     });
-    const cs = getComputedStyle(el);
-    // 有背景图/渐变的元素整体保留原样（品牌装饰、彩色横幅、图片纹理）
-    if (cs.backgroundImage === "none") {
-      const bg = parseRGB(cs.backgroundColor);
-      if (bg && bg.a > 0) {
-        const nb = remapColor(bg, "bg");
-        if (nb) el.style.setProperty("background-color", nb, "important");
+
+    // Phase 2: 批量读取计算样式并计算目标色
+    for (const st of states) {
+      const cs = getComputedStyle(st.el);
+      if (cs.display === "none") continue;
+      if (cs.backgroundImage === "none") {
+        const bg = parseRGB(cs.backgroundColor);
+        if (bg && bg.a > 0) st.bg = remapColor(bg, "bg");
       }
+      const fg = parseRGB(cs.color);
+      if (fg) st.fg = remapColor(fg, "text");
+      const bd = parseRGB(cs.borderTopColor);
+      if (bd && bd.a > 0) st.bd = remapColor(bd, "border");
     }
-    const fg = parseRGB(cs.color);
-    if (fg) {
-      const nc = remapColor(fg, "text");
-      if (nc) el.style.setProperty("color", nc, "important");
+
+    // Phase 3: 批量写回并恢复过渡
+    for (const st of states) {
+      const { el } = st;
+      if (st.bg) el.style.setProperty("background-color", st.bg, "important");
+      if (st.fg) el.style.setProperty("color", st.fg, "important");
+      if (st.bd) el.style.setProperty("border-color", st.bd, "important");
+      el.style.transition = st.prevTransition;
+      el.dataset.ueDark = "1";
     }
-    const bd = parseRGB(cs.borderTopColor);
-    if (bd && bd.a > 0) {
-      const nb = remapColor(bd, "border");
-      if (nb) el.style.setProperty("border-color", nb, "important");
-    }
-    el.style.transition = prevTransition;
-    el.dataset.ueDark = "1";
+  }
+
+  function clearDynamicDarkTheme() {
+    document.querySelectorAll('[data-ue-dark="1"]').forEach((el) => {
+      for (const p of DARK_PROPS) {
+        if (el.style.getPropertyPriority(p) === "important") {
+          el.style.removeProperty(p);
+        }
+      }
+      delete el.dataset.ueDark;
+    });
   }
 
   let darkThemeObserver = null;
@@ -1225,18 +1258,24 @@ function escapeHtml(text) {
       darkThemeObserver.disconnect();
       darkThemeObserver = null;
     }
-    if (!isDarkActive() || !document.body) return;
-    document.querySelectorAll("html, body, body *").forEach(darkenElement);
-    // SPA 动态渲染的元素在 MutationObserver 回调内同步处理：
+    if (!document.body) return;
+    if (!isDarkActive()) {
+      clearDynamicDarkTheme();
+      return;
+    }
+    darkenElements(document.querySelectorAll("html, body, body *"));
+    // SPA 动态渲染的元素在 MutationObserver 回调内同步批量处理：
     // 回调运行在 DOM 变更之后、浏览器绘制之前，处理完才绘制，从原理上消除闪白
     darkThemeObserver = new MutationObserver((records) => {
+      const batch = new Set();
       for (const r of records) {
-        r.addedNodes.forEach((node) => {
-          if (node.nodeType !== Node.ELEMENT_NODE) return;
-          darkenElement(node);
-          node.querySelectorAll("*").forEach(darkenElement);
-        });
+        for (const node of r.addedNodes) {
+          if (node.nodeType !== Node.ELEMENT_NODE) continue;
+          batch.add(node);
+          node.querySelectorAll("*").forEach((child) => batch.add(child));
+        }
       }
+      if (batch.size) darkenElements(batch);
     });
     darkThemeObserver.observe(document.body, { childList: true, subtree: true });
   }
@@ -1260,8 +1299,8 @@ function escapeHtml(text) {
       (e) => {
         if (!isDarkActive() || !e.target || e.target === document)
           return;
-        // 悬停发生的瞬间处理目标及其祖先链，此刻读到的即悬停色
-        buildAncestorChain(e.target).forEach(darkenElement);
+        // 悬停发生的瞬间批量处理目标及其祖先链，此刻读到的即悬停色
+        darkenElements(buildAncestorChain(e.target));
       },
       true
     );
@@ -1273,10 +1312,13 @@ function escapeHtml(text) {
         const chain = buildAncestorChain(e.target);
         // 鼠标只是移入链内子元素：交给后续 pointerover，此处不处理
         if (e.relatedTarget && chain.includes(e.relatedTarget)) return;
-        // 真正离开：延迟重映射恢复正常态；双保险覆盖 hover 状态更新与残余动画时序。
-        // darkenElement 每次都读实时计算样式且处理期间禁用过渡，重复处理天然自纠错
-        setTimeout(() => chain.forEach(darkenElement), 80);
-        setTimeout(() => chain.forEach(darkenElement), 320);
+        // 真正离开：延迟重映射恢复正常态；双保险覆盖 hover 状态更新与残余动画时序
+        setTimeout(() => {
+          if (isDarkActive()) darkenElements(chain);
+        }, 80);
+        setTimeout(() => {
+          if (isDarkActive()) darkenElements(chain);
+        }, 320);
       },
       true
     );
@@ -3052,42 +3094,46 @@ function escapeHtml(text) {
     return res.json();
   }
 
-  // 文件下载相关函数
+  // 文件下载相关函数（支持无 Content-Length 降级与异常时安全回收进度计数）
   async function downloadFile(url, filename) {
     console.debug("Call download");
     downloading = true;
     NProgress.configure({ trickle: false, speed: 0 });
+    let addedTotal = 0;
+    let addedLoaded = 0;
     try {
       const response = await fetch(url);
-
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const contentLength = response.headers.get("content-length");
-      if (!contentLength) {
-        throw new Error("Content-Length response header unavailable");
+      const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
+      let blob;
+      if (contentLength > 0 && response.body && response.body.getReader) {
+        addedTotal = contentLength;
+        sumBytes += addedTotal;
+        const reader = response.body.getReader();
+        const chunks = [];
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (!downloading) {
+            reader.cancel().catch(() => {});
+            return;
+          }
+          chunks.push(value);
+          addedLoaded += value.length;
+          loadedBytes += value.length;
+          if (sumBytes > 0) NProgress.set(Math.min(0.99, loadedBytes / sumBytes));
+        }
+        blob = new Blob(chunks);
+      } else {
+        // 服务器未返回 Content-Length 或不支持流式读取时，降级为整块 Blob 下载
+        NProgress.start();
+        blob = await response.blob();
+        if (!downloading) return;
       }
 
-      const total = parseInt(contentLength, 10);
-      sumBytes += total;
-      const reader = response.body.getReader();
-      const chunks = [];
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!downloading) {
-          NProgress.done();
-          return;
-        }
-        chunks.push(value);
-        loadedBytes += value.length;
-        NProgress.set(loadedBytes / sumBytes);
-      }
-      NProgress.done();
-      sumBytes -= total;
-      loadedBytes -= total;
-      const blob = new Blob(chunks);
       const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = downloadUrl;
@@ -3098,6 +3144,10 @@ function escapeHtml(text) {
       window.URL.revokeObjectURL(downloadUrl);
     } catch (error) {
       console.error("Download failed:", error);
+    } finally {
+      sumBytes = Math.max(0, sumBytes - addedTotal);
+      loadedBytes = Math.max(0, loadedBytes - addedLoaded);
+      if (sumBytes === 0 || !downloading) NProgress.done();
     }
   }
 
@@ -3154,7 +3204,28 @@ function escapeHtml(text) {
     }
   }
 
-  // 搜索课程：把一批活动ID匹配到所属课程（作业与测试两类活动并行扫描）
+  // 会话级课程活动缓存（合并并发与重复请求，避免工作台与主页同时扫描造成请求风暴）
+  const courseActivitiesCache = new Map();
+
+  function fetchCourseActivities(siteId) {
+    if (courseActivitiesCache.has(siteId)) return courseActivitiesCache.get(siteId);
+    const p = Promise.all([
+      getTasks(siteId).catch(() => null),
+      getExams(siteId),
+    ])
+      .then(([works, exams]) => {
+        const worksRecords = (works && works.data && works.data.records) || [];
+        return worksRecords.concat(exams);
+      })
+      .catch(() => {
+        courseActivitiesCache.delete(siteId);
+        return [];
+      });
+    courseActivitiesCache.set(siteId, p);
+    return p;
+  }
+
+  // 搜索课程：把一批活动ID匹配到所属课程（作业与测试两类活动并行扫描，支持并发复用）
   async function searchCourses(nids) {
     const result = {};
     const ids = [];
@@ -3172,15 +3243,10 @@ function escapeHtml(text) {
     for (let i = 0; i < list.length; i += 5) {
       const batch = list.slice(i, i + 5);
       const pairs = await Promise.all(
-        batch.map(async (x) => {
-          const [works, exams] = await Promise.all([
-            getTasks(x.id),
-            getExams(x.id),
-          ]);
-          const worksRecords =
-            (works && works.data && works.data.records) || [];
-          return { course: x, records: worksRecords.concat(exams) };
-        })
+        batch.map(async (x) => ({
+          course: x,
+          records: await fetchCourseActivities(x.id),
+        }))
       );
       for (const { course, records } of pairs) {
         for (const item of records) {
@@ -3574,9 +3640,14 @@ function escapeHtml(text) {
     } catch (e) {
       return;
     }
-    const nodes = $x(
-      '//*[@id="layout-container"]/div[2]/div[2]/div/div[2]/div[1]/div[3]/div[2]/div/div'
+    let nodes = Array.from(
+      document.querySelectorAll(".in-progress-section .in-progress-body .in-progress-item")
     );
+    if (!nodes.length) {
+      nodes = $x(
+        '//*[@id="layout-container"]/div[2]/div[2]/div/div[2]/div[1]/div[3]/div[2]/div/div'
+      );
+    }
     if (!nodes.length) return;
     const byTitle = new Map();
     list.forEach((task) => {
@@ -3628,16 +3699,51 @@ function escapeHtml(text) {
     return results;
   }
 
-  // 本地存储
+  // 本地存储（容量上限 300 条 + 剔除大体积 raw 字段 + 异常容错）
+  const CACHE_STORAGE_KEY = "zzxw";
+  const CACHE_MAX_ENTRIES = 300;
+
+  function readCourseCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
   function set(k, v) {
-    const h = JSON.parse(localStorage.getItem("zzxw") || "{}");
-    h[k] = v;
-    localStorage.setItem("zzxw", JSON.stringify(h));
+    if (!k || !v) return;
+    const h = readCourseCache();
+    // 仅持久化必要字段，避免将整条课程 raw 对象重复写入 localStorage
+    const slim =
+      typeof v === "object"
+        ? {
+            id: v.id,
+            name: v.name || "",
+            teachers: v.teachers || "",
+            department: v.department || "",
+          }
+        : v;
+    delete h[k];
+    h[k] = slim;
+    const keys = Object.keys(h);
+    if (keys.length > CACHE_MAX_ENTRIES) {
+      for (let i = 0; i < keys.length - CACHE_MAX_ENTRIES; i++) {
+        delete h[keys[i]];
+      }
+    }
+    try {
+      localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(h));
+    } catch (e) {
+      console.warn("[ucloud-Enhanced] 写入课程缓存失败", e);
+    }
   }
 
   function get(k) {
-    const h = JSON.parse(localStorage.getItem("zzxw") || "{}");
-    return h[k];
+    if (!k) return undefined;
+    return readCourseCache()[k];
   }
 
   // 插入课程信息
@@ -3649,9 +3755,13 @@ function escapeHtml(text) {
       if (attempt < 40) setTimeout(() => insert(x, attempt + 1), 50);
       return;
     }
-    const d = $x(
+    let d = $x(
       "/html/body/div[1]/div/div[2]/div[2]/div/div/div[2]/div/div[2]/div[1]/div/div/div[1]/div/p[1]"
     );
+    if (!d.length) {
+      const firstP = document.querySelector("#assignment-info p");
+      if (firstP) d = [firstP];
+    }
     if (!d.length) {
       if (attempt < 40) setTimeout(() => insert(x, attempt + 1), 50);
       return;
@@ -3747,12 +3857,15 @@ function escapeHtml(text) {
     return new Promise((res) => setTimeout(res, n));
   }
 
-  async function wait(func) {
-    let r = func();
-    if (r instanceof Promise) r = await r;
-    if (r) return r;
-    await sleep(50);
-    return await wait(func);
+  async function wait(func, timeout = 15000, interval = 50) {
+    const deadline = Date.now() + timeout;
+    while (Date.now() < deadline) {
+      let r = func();
+      if (r instanceof Promise) r = await r;
+      if (r) return r;
+      await sleep(interval);
+    }
+    return null;
   }
 
   // 首页"本学期课程"：课程搜索框
@@ -4642,12 +4755,15 @@ function escapeHtml(text) {
           })
         );
 
-        await wait(
-          () =>
-            $x('//*[@id="assignment-info"]/div[2]/div[2]/div[2]/div').length > 0
-        );
+        const getAttachNodes = () =>
+          $x('//*[@id="assignment-info"]/div[2]/div[2]/div[2]/div');
+        const attachNodes = await wait(() => {
+          const list = getAttachNodes();
+          return list.length > 0 ? list : null;
+        });
+        if (!attachNodes) return;
 
-        $x('//*[@id="assignment-info"]/div[2]/div[2]/div[2]/div').forEach(
+        attachNodes.forEach(
           (x, index) => {
             x.querySelector(".by-icon-eye-grey")?.remove();
             x.querySelector(".by-icon-yundown-grey")?.remove();
@@ -4866,18 +4982,18 @@ function escapeHtml(text) {
         const resources = await getSiteResource(id);
 
         // 添加下载按钮到每个资源
-        const resourceItems = $x(
-          '//div[@class="resource-item"]/div[@class="right"]'
+        const resourceItems = Array.from(
+          document.querySelectorAll(".resource-item > .right")
         );
-        const previewItems = $x(
-          '//div[@class="resource-item"]/div[@class="left"]'
+        const previewItems = Array.from(
+          document.querySelectorAll(".resource-item > .left")
         );
 
         if (resourceItems.length > 0) {
           resourceItems.forEach((x, index) => {
             if (index >= resources.length) return;
 
-            if (settings.preview.autoDownload) {
+            if (settings.preview.autoDownload && previewItems[index]) {
               previewItems[index].addEventListener(
                 "click",
                 async (e) => {
@@ -4937,10 +5053,13 @@ function escapeHtml(text) {
             const resourceList = $x(
               "/html/body/div/div/div[2]/div[2]/div/div/div"
             );
-            if (resourceList.length > 0) {
+            const anchor =
+              resourceList[0] ||
+              resourceItems[0].closest(".resource-item")?.parentElement;
+            if (anchor) {
               const containerElement = document.createElement("div");
               containerElement.innerHTML = downloadAllButton;
-              resourceList[0].before(containerElement);
+              anchor.before(containerElement);
 
               document.getElementById("downloadAllButton").onclick =
                 async () => {
