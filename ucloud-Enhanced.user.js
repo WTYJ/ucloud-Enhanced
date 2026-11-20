@@ -1377,6 +1377,7 @@ function escapeHtml(text) {
   let wbCloseTimer = null;
   const wbState = {
     tab: "todo",
+    todoSubTab: "pending",
     open: false,
     detail: null,
     courseView: null,
@@ -1387,6 +1388,8 @@ function escapeHtml(text) {
     prevOverflow: "",
   };
   let wbTodoCards = [];
+  let wbSubmittedCards = [];
+  let wbTodoLoadSeq = 0;
   let wbTicker = null;
 
   const WB_ICONS = {
@@ -2405,12 +2408,21 @@ function escapeHtml(text) {
         return;
       }
       if (wbState.tab === "courseView" && wbState.courseView) {
+        const sid = wbState.courseView.course && wbState.courseView.course.id;
+        if (sid) {
+          courseWorksCache.delete(sid);
+          courseActivitiesCache.delete(sid);
+        }
         wbOpenCourseView(wbState.courseView.course, wbState.courseView.subTab);
         return;
       }
       if (wbState.tab === "course") wbState.courseLoaded = false;
       else if (wbState.tab === "notice") wbState.noticeLoaded = false;
-      else wbState.todoLoaded = false;
+      else {
+        wbState.todoLoaded = false;
+        courseWorksCache.clear();
+        courseActivitiesCache.clear();
+      }
       wbSwitchTab(wbState.tab);
     });
     wbRoot.querySelectorAll(".wb-tab").forEach((btn) => {
@@ -2522,16 +2534,85 @@ function escapeHtml(text) {
     }
   }
 
+  function wbFormatSubmittedRemain(endDate, nowMs = Date.now()) {
+    const diff = endDate.getTime() - nowMs;
+    if (diff <= 0) return "已截止";
+    return "距截止" + formatRemain(diff).text;
+  }
+
   function wbUpdateTodoBadges() {
+    const nowMs = Date.now();
     wbTodoCards.forEach(({ card, task }) => {
       const badge = card.querySelector(".wb-badge");
       const d = parseDeadline(task.endTime);
       if (!badge || !d) return;
-      const rem = formatRemain(d - Date.now());
+      const rem = formatRemain(d - nowMs);
       card.dataset.urgency = rem.cls;
       badge.className = "wb-badge " + rem.cls;
       badge.textContent = rem.text;
     });
+    wbSubmittedCards.forEach(({ card, endDate }) => {
+      const chip = card.querySelector("[data-submitted-remain]");
+      if (!chip || !endDate) return;
+      chip.textContent = wbFormatSubmittedRemain(endDate, nowMs);
+    });
+  }
+
+  async function wbCollectSubmittedActiveWorks() {
+    const courses = await getCourseList();
+    if (!Array.isArray(courses) || !courses.length) return [];
+    const nowMs = Date.now();
+    const seen = new Set();
+    const collected = [];
+    for (let i = 0; i < courses.length; i += 5) {
+      const batch = courses.slice(i, i + 5);
+      const pairs = await Promise.all(
+        batch.map(async (course) => ({
+          course,
+          works: await fetchCourseWorks(course.id),
+        }))
+      );
+      for (const { course, works } of pairs) {
+        for (const work of works) {
+          if (!wbIsWorkSubmittedActive(work, nowMs)) continue;
+          const wid = work.id || work.activityId;
+          if (wid && seen.has(wid)) continue;
+          if (wid) seen.add(wid);
+          const endStr = work.assignmentEndTime || work.endTime;
+          const endDate = parseDeadline(endStr);
+          if (!endDate) continue;
+          collected.push({ work, course, endDate, endStr });
+        }
+      }
+    }
+    collected.sort((a, b) => a.endDate.getTime() - b.endDate.getTime());
+    return collected;
+  }
+
+  function wbAttachCourseFilter(filterBar, cardsList, totalCount, courseCounts) {
+    if (!filterBar.isConnected || courseCounts.size <= 1) return;
+    filterBar.innerHTML = "";
+    let activeCourse = "";
+    const applyFilter = (courseName) => {
+      activeCourse = courseName;
+      cardsList.forEach(({ card }) => {
+        card.hidden = !!activeCourse && card.dataset.course !== activeCourse;
+      });
+      filterBar.querySelectorAll(".wb-filter-chip").forEach((chip) => {
+        chip.classList.toggle("active", chip.dataset.course === activeCourse);
+      });
+    };
+    const addChip = (label, courseKey, active) => {
+      const chip = document.createElement("button");
+      chip.className = "wb-filter-chip" + (active ? " active" : "");
+      chip.dataset.course = courseKey;
+      chip.textContent = label;
+      chip.addEventListener("click", () => applyFilter(courseKey));
+      filterBar.appendChild(chip);
+    };
+    addChip(`全部 (${totalCount})`, "", true);
+    courseCounts.forEach((cnt, name) => addChip(`${name} (${cnt})`, name, false));
+    filterBar.hidden = false;
   }
 
   function wbStartTicker() {
@@ -2545,108 +2626,211 @@ function escapeHtml(text) {
   async function wbLoadTodo() {
     wbState.todoLoaded = true;
     if (!wbRoot) return;
+    const seq = ++wbTodoLoadSeq;
     const pane = wbRoot.querySelector('[data-pane="todo"]');
     pane.innerHTML = wbSkeletonHtml("todo");
     try {
       const res = await getUndoneList();
+      if (seq !== wbTodoLoadSeq) return;
       const list = (res && res.data && res.data.undoneList) || [];
       const tasks = sortTasksByDeadline(list);
       wbSetTabCount("todo", tasks.length);
       pane.innerHTML = "";
-      if (!tasks.length) {
-        pane.innerHTML = wbEmptyHtml("当前没有待办事项");
-        return;
-      }
+
       const inner = document.createElement("div");
       inner.className = "wb-inner";
       pane.appendChild(inner);
-      const filterBar = document.createElement("div");
-      filterBar.className = "wb-filter-bar";
-      filterBar.hidden = true;
-      inner.appendChild(filterBar);
 
-      const cards = {};
-      const taskCourses = new Map();
-      wbTodoCards = [];
-      tasks.forEach((task) => {
-        const tid = task.activityId || task.id;
-        const card = document.createElement("div");
-        card.className = "wb-card";
-        card.innerHTML =
-          '<div class="wb-card-head"><div class="wb-card-title"></div><div class="wb-card-tags"></div></div>' +
-          '<div class="wb-course">课程加载中…</div><div class="wb-meta"></div>';
-        card.querySelector(".wb-card-title").textContent = task.activityName || task.assignmentTitle || "未命名作业";
-        wbRenderTodoMeta(card, task, null);
-        card.addEventListener("click", () => {
-          const t = Number(task.type);
-          if (t === 3 || t === 5) {
-            wbOpenAssignmentDetail(task, taskCourses.get(tid) || get(tid) || null, "todo");
-          } else {
-            openTaskUrl(buildTaskUrl(task));
-          }
+      const subBar = document.createElement("div");
+      subBar.className = "wb-subtabs-bar";
+      subBar.innerHTML = `
+        <div class="wb-subtabs">
+          <button class="wb-subtab" data-sub="pending">待完成<span class="wb-subtab-num">${tasks.length}</span></button>
+          <button class="wb-subtab" data-sub="submitted">已提交<span class="wb-subtab-num" data-submitted-num>…</span></button>
+        </div>`;
+      inner.appendChild(subBar);
+      const submittedNumEl = subBar.querySelector("[data-submitted-num]");
+
+      const subPending = document.createElement("div");
+      const subSubmitted = document.createElement("div");
+      inner.appendChild(subPending);
+      inner.appendChild(subSubmitted);
+
+      const switchSub = (sub) => {
+        const target = sub === "submitted" ? "submitted" : "pending";
+        wbState.todoSubTab = target;
+        subBar.querySelectorAll(".wb-subtab").forEach((b) => {
+          b.classList.toggle("active", b.dataset.sub === target);
         });
-        inner.appendChild(card);
-        cards[tid] = card;
-        wbTodoCards.push({ card: card, task: task });
+        subPending.hidden = target !== "pending";
+        subSubmitted.hidden = target !== "submitted";
+      };
+      subBar.querySelectorAll(".wb-subtab").forEach((b) => {
+        b.addEventListener("click", () => switchSub(b.dataset.sub));
       });
-      wbStartTicker();
-      const ids = tasks.map((t) => t.activityId || t.id).filter(Boolean);
-      searchCourses(ids)
-        .then((infos) => {
-          const courseCounts = new Map();
-          tasks.forEach((task) => {
-            const tid = task.activityId || task.id;
-            const card = cards[tid];
-            const info = infos[tid];
-            if (info) taskCourses.set(tid, info);
-            const courseName = info ? info.name : "未知课程";
-            if (card && card.isConnected) {
-              card.dataset.course = courseName;
-              const courseEl = card.querySelector(".wb-course");
-              courseEl.textContent = "";
-              courseEl.appendChild(document.createTextNode(courseName));
-              if (info && info.teachers) {
-                const tSpan = document.createElement("span");
-                tSpan.className = "wb-course-teacher";
-                tSpan.textContent = " · " + info.teachers;
-                courseEl.appendChild(tSpan);
-              }
-              courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
+      switchSub(wbState.todoSubTab);
+
+      wbTodoCards = [];
+      wbSubmittedCards = [];
+
+      // 子页签 1：待完成
+      if (!tasks.length) {
+        subPending.innerHTML = wbEmptyHtml("当前没有待办事项");
+      } else {
+        const filterBar = document.createElement("div");
+        filterBar.className = "wb-filter-bar";
+        filterBar.hidden = true;
+        subPending.appendChild(filterBar);
+
+        const cards = {};
+        const taskCourses = new Map();
+        tasks.forEach((task) => {
+          const tid = task.activityId || task.id;
+          const card = document.createElement("div");
+          card.className = "wb-card";
+          card.innerHTML =
+            '<div class="wb-card-head"><div class="wb-card-title"></div><div class="wb-card-tags"></div></div>' +
+            '<div class="wb-course">课程加载中…</div><div class="wb-meta"></div>';
+          card.querySelector(".wb-card-title").textContent = task.activityName || task.assignmentTitle || "未命名作业";
+          wbRenderTodoMeta(card, task, null);
+          card.addEventListener("click", () => {
+            const t = Number(task.type);
+            if (t === 3 || t === 5) {
+              wbOpenAssignmentDetail(task, taskCourses.get(tid) || get(tid) || null, "todo");
+            } else {
+              openTaskUrl(buildTaskUrl(task));
             }
           });
-          // 涉及多门课程时显示按课程筛选胶囊
-          if (filterBar.isConnected && courseCounts.size > 1) {
-            let activeCourse = "";
-            const applyFilter = (courseName) => {
-              activeCourse = courseName;
-              wbTodoCards.forEach(({ card }) => {
-                card.hidden = !!activeCourse && card.dataset.course !== activeCourse;
-              });
-              filterBar.querySelectorAll(".wb-filter-chip").forEach((chip) => {
-                chip.classList.toggle("active", chip.dataset.course === activeCourse);
-              });
-            };
-            const addChip = (label, courseKey, active) => {
-              const chip = document.createElement("button");
-              chip.className = "wb-filter-chip" + (active ? " active" : "");
-              chip.dataset.course = courseKey;
-              chip.textContent = label;
-              chip.addEventListener("click", () => applyFilter(courseKey));
-              filterBar.appendChild(chip);
-            };
-            addChip(`全部 (${tasks.length})`, "", true);
-            courseCounts.forEach((cnt, name) => addChip(`${name} (${cnt})`, name, false));
-            filterBar.hidden = false;
-          }
-        })
-        .catch(() => {});
-      tasks.forEach((task) => {
-        fetchAssignmentInfo(task).then((info) => {
-          const card = cards[task.activityId || task.id];
-          if (card && card.isConnected && info) wbRenderTodoMeta(card, task, info);
+          subPending.appendChild(card);
+          cards[tid] = card;
+          wbTodoCards.push({ card: card, task: task });
         });
-      });
+        wbStartTicker();
+        const ids = tasks.map((t) => t.activityId || t.id).filter(Boolean);
+        searchCourses(ids)
+          .then((infos) => {
+            if (seq !== wbTodoLoadSeq) return;
+            const courseCounts = new Map();
+            tasks.forEach((task) => {
+              const tid = task.activityId || task.id;
+              const card = cards[tid];
+              const info = infos[tid];
+              if (info) taskCourses.set(tid, info);
+              const courseName = info ? info.name : "未知课程";
+              if (card && card.isConnected) {
+                card.dataset.course = courseName;
+                const courseEl = card.querySelector(".wb-course");
+                courseEl.textContent = "";
+                courseEl.appendChild(document.createTextNode(courseName));
+                if (info && info.teachers) {
+                  const tSpan = document.createElement("span");
+                  tSpan.className = "wb-course-teacher";
+                  tSpan.textContent = " · " + info.teachers;
+                  courseEl.appendChild(tSpan);
+                }
+                courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
+              }
+            });
+            wbAttachCourseFilter(filterBar, wbTodoCards, tasks.length, courseCounts);
+          })
+          .catch(() => {});
+        tasks.forEach((task) => {
+          fetchAssignmentInfo(task).then((info) => {
+            if (seq !== wbTodoLoadSeq) return;
+            const card = cards[task.activityId || task.id];
+            if (card && card.isConnected && info) wbRenderTodoMeta(card, task, info);
+          });
+        });
+      }
+
+      // 子页签 2：已提交（未截止），后台异步扫描当前学期课程作业
+      subSubmitted.innerHTML = wbSkeletonHtml("todo");
+      wbCollectSubmittedActiveWorks()
+        .then((items) => {
+          if (seq !== wbTodoLoadSeq || !subSubmitted.isConnected) return;
+          if (submittedNumEl) submittedNumEl.textContent = String(items.length);
+          subSubmitted.innerHTML = "";
+          if (!items.length) {
+            subSubmitted.innerHTML = wbEmptyHtml("暂无已提交且未截止的作业");
+            return;
+          }
+          const subFilterBar = document.createElement("div");
+          subFilterBar.className = "wb-filter-bar";
+          subFilterBar.hidden = true;
+          subSubmitted.appendChild(subFilterBar);
+
+          const courseCounts = new Map();
+          const nowMs = Date.now();
+          items.forEach(({ work, course, endDate, endStr }) => {
+            const card = document.createElement("div");
+            card.className = "wb-card";
+            card.dataset.urgency = "later";
+            const courseName = (course && course.name) || "未知课程";
+            card.dataset.course = courseName;
+            courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
+
+            card.innerHTML =
+              '<div class="wb-card-head"><div class="wb-card-title"></div><div class="wb-card-tags"></div></div>' +
+              '<div class="wb-course"></div><div class="wb-meta"></div>';
+            card.querySelector(".wb-card-title").textContent =
+              work.assignmentTitle || work.activityName || "未命名作业";
+            const courseEl = card.querySelector(".wb-course");
+            courseEl.appendChild(document.createTextNode(courseName));
+            if (course && course.teachers) {
+              const tSpan = document.createElement("span");
+              tSpan.className = "wb-course-teacher";
+              tSpan.textContent = " · " + course.teachers;
+              courseEl.appendChild(tSpan);
+            }
+
+            const tags = card.querySelector(".wb-card-tags");
+            const meta = card.querySelector(".wb-meta");
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            const mode = pickModeName(work.assignmentType);
+            if (mode) {
+              tags.insertAdjacentHTML(
+                "beforeend",
+                `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
+              );
+            }
+            const status = wbPickWorkStatus(work);
+            if (status) {
+              meta.insertAdjacentHTML(
+                "beforeend",
+                `<span class="wb-status-chip ${status.cls}">${escapeHtml(status.text)}</span>`
+              );
+            }
+            const submitDate = parseDeadline(work.submitTime);
+            if (submitDate) {
+              meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">提交于 ${fmtDeadline(submitDate)}</span>`);
+            }
+            meta.insertAdjacentHTML(
+              "beforeend",
+              `<span class="wb-chip" data-submitted-remain>${wbFormatSubmittedRemain(endDate, nowMs)}</span>`
+            );
+
+            card.addEventListener("click", () => {
+              const taskObj = Object.assign({}, work, {
+                activityId: work.id || work.activityId,
+                activityName: work.assignmentTitle || work.activityName,
+                endTime: endStr,
+                type: 3,
+              });
+              wbOpenAssignmentDetail(taskObj, course || null, "todo");
+            });
+            subSubmitted.appendChild(card);
+            wbSubmittedCards.push({ card, endDate });
+          });
+          wbAttachCourseFilter(subFilterBar, wbSubmittedCards, items.length, courseCounts);
+          wbStartTicker();
+        })
+        .catch(() => {
+          if (seq !== wbTodoLoadSeq || !subSubmitted.isConnected) return;
+          if (submittedNumEl) submittedNumEl.textContent = "!";
+          subSubmitted.innerHTML = wbEmptyHtml("加载已提交作业失败，请点击刷新重试");
+        });
     } catch (e) {
+      if (seq !== wbTodoLoadSeq) return;
       pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.todoLoaded = false;
     }
@@ -3185,6 +3369,13 @@ function escapeHtml(text) {
     return st === 99 || st === 2;
   }
 
+  function wbIsWorkSubmittedActive(work, nowMs = Date.now()) {
+    const st = wbParseWorkStatus(work);
+    if (st !== 0 && st !== 1) return false;
+    const endDate = parseDeadline(work.assignmentEndTime || work.endTime);
+    return !!(endDate && endDate.getTime() > nowMs);
+  }
+
   function wbPickWorkStatus(work) {
     const st = wbParseWorkStatus(work);
     const score = work.assignmentScore ?? work.score;
@@ -3212,9 +3403,9 @@ function escapeHtml(text) {
 
     const siteId = course.id;
     try {
-      const [tree, worksRes, exams] = await Promise.all([
+      const [tree, worksRecords, exams] = await Promise.all([
         getSiteResourceTree(siteId).catch(() => []),
-        getTasks(siteId).catch(() => null),
+        fetchCourseWorks(siteId).catch(() => []),
         getExams(siteId).catch(() => []),
       ]);
       if (
@@ -3227,7 +3418,7 @@ function escapeHtml(text) {
 
       const groups = wbCollectResourceGroups(tree);
       const allFiles = groups.flatMap((g) => g.files);
-      const works = ((worksRes && worksRes.data && worksRes.data.records) || []).slice().sort((a, b) => {
+      const works = (Array.isArray(worksRecords) ? worksRecords : []).slice().sort((a, b) => {
         const sa = wbIsWorkPending(a) ? 0 : 1;
         const sb = wbIsWorkPending(b) ? 0 : 1;
         if (sa !== sb) return sa - sb;
@@ -4977,19 +5168,29 @@ function escapeHtml(text) {
     }
   }
 
-  // 会话级课程活动缓存（合并并发与重复请求，避免工作台与主页同时扫描造成请求风暴）
+  // 会话级课程作业与活动缓存（合并待办已提交、课程匹配与课程空间的并发与重复请求）
+  const courseWorksCache = new Map();
   const courseActivitiesCache = new Map();
+
+  function fetchCourseWorks(siteId) {
+    if (courseWorksCache.has(siteId)) return courseWorksCache.get(siteId);
+    const p = getTasks(siteId)
+      .then((works) => (works && works.data && works.data.records) || [])
+      .catch(() => {
+        courseWorksCache.delete(siteId);
+        return [];
+      });
+    courseWorksCache.set(siteId, p);
+    return p;
+  }
 
   function fetchCourseActivities(siteId) {
     if (courseActivitiesCache.has(siteId)) return courseActivitiesCache.get(siteId);
     const p = Promise.all([
-      getTasks(siteId).catch(() => null),
+      fetchCourseWorks(siteId),
       getExams(siteId),
     ])
-      .then(([works, exams]) => {
-        const worksRecords = (works && works.data && works.data.records) || [];
-        return worksRecords.concat(exams);
-      })
+      .then(([worksRecords, exams]) => worksRecords.concat(exams))
       .catch(() => {
         courseActivitiesCache.delete(siteId);
         return [];
