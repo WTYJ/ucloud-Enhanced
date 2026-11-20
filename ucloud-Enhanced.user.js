@@ -3019,8 +3019,8 @@ function escapeHtml(text) {
     return json;
   }
 
-  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调与异常时安全回收进度计数）
-  async function downloadFile(url, filename, shouldCancel) {
+  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调/进度回调与异常时安全回收进度计数）
+  async function downloadFile(url, filename, shouldCancel, onProgress) {
     console.debug("Call download");
     const isCancelled = () =>
       typeof shouldCancel === "function" ? !!shouldCancel() : !downloading;
@@ -3041,6 +3041,7 @@ function escapeHtml(text) {
         sumBytes += addedTotal;
         const reader = response.body.getReader();
         const chunks = [];
+        let lastPct = -1;
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
@@ -3052,11 +3053,19 @@ function escapeHtml(text) {
           addedLoaded += value.length;
           loadedBytes += value.length;
           if (sumBytes > 0) NProgress.set(Math.min(0.99, loadedBytes / sumBytes));
+          if (typeof onProgress === "function") {
+            const pct = Math.min(99, Math.floor((addedLoaded / contentLength) * 100));
+            if (pct !== lastPct) {
+              lastPct = pct;
+              onProgress(pct);
+            }
+          }
         }
         blob = new Blob(chunks);
       } else {
         // 服务器未返回 Content-Length 或不支持流式读取时，降级为整块 Blob 下载
         NProgress.start();
+        if (typeof onProgress === "function") onProgress(null);
         blob = await response.blob();
         if (isCancelled()) return;
       }
@@ -4669,6 +4678,16 @@ function escapeHtml(text) {
     .wb-file-ext.img { background: rgba(20, 184, 166, 0.14); color: #0f766e; }
     .wb-file-ext.media { background: rgba(99, 102, 241, 0.14); color: #4f46e5; }
     .wb-file-ext.code { background: var(--wb-surface-2); color: var(--wb-text-2); }
+    .wb-ghost-btn.done {
+      border-color: rgba(16, 185, 129, 0.45);
+      background: rgba(16, 185, 129, 0.12);
+      color: #059669;
+    }
+    :host(.wb-dark) .wb-ghost-btn.done {
+      border-color: rgba(52, 211, 153, 0.4);
+      background: rgba(52, 211, 153, 0.16);
+      color: #6ee7b7;
+    }
     :host(.wb-dark) .wb-file-ext.pdf { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
     :host(.wb-dark) .wb-file-ext.ppt { background: rgba(251, 146, 60, 0.22); color: #fdba74; }
     :host(.wb-dark) .wb-file-ext.doc { background: rgba(96, 165, 250, 0.2); color: #93c5fd; }
@@ -5674,24 +5693,46 @@ function escapeHtml(text) {
     nameEl.title = fname;
 
     const previewBtn = row.querySelector(".wb-act-preview");
+    const previewSpan = previewBtn.querySelector("span");
     previewBtn.addEventListener("click", async () => {
       previewBtn.disabled = true;
+      previewSpan.textContent = "打开中…";
       try {
         await wbPreviewAttachment(normalized);
       } catch (e) {
         showNotification("预览失败", "无法获取文件预览链接");
       } finally {
         previewBtn.disabled = false;
+        previewSpan.textContent = "预览";
       }
     });
 
     const dlBtn = row.querySelector(".wb-act-dl");
+    const dlSpan = dlBtn.querySelector("span");
+    let dlDoneTimer = null;
     dlBtn.addEventListener("click", async () => {
+      clearTimeout(dlDoneTimer);
+      dlBtn.classList.remove("done");
       dlBtn.disabled = true;
+      dlSpan.textContent = "准备中…";
       try {
         const url = await getPreviewURL(rid);
-        await downloadFile(url, fname);
+        dlSpan.textContent = "下载中…";
+        await downloadFile(url, fname, null, (pct) => {
+          if (dlSpan.isConnected) {
+            dlSpan.textContent = pct === null ? "下载中…" : `下载中 ${pct}%`;
+          }
+        });
+        dlBtn.classList.add("done");
+        dlSpan.textContent = "已下载";
+        dlDoneTimer = setTimeout(() => {
+          if (dlBtn.isConnected) {
+            dlBtn.classList.remove("done");
+            dlSpan.textContent = "下载";
+          }
+        }, 1500);
       } catch (e) {
+        dlSpan.textContent = "下载";
         showNotification("下载失败", "无法获取文件下载链接");
       } finally {
         dlBtn.disabled = false;
