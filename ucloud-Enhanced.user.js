@@ -1379,6 +1379,7 @@ function escapeHtml(text) {
     tab: "todo",
     open: false,
     detail: null,
+    courseView: null,
     todoLoaded: false,
     courseLoaded: false,
     noticeLoaded: false,
@@ -2208,6 +2209,116 @@ function escapeHtml(text) {
       background: var(--wb-accent-soft);
     }
     .wb-ghost-btn:disabled { opacity: 0.5; cursor: wait; }
+
+    /* 二级视图：课程空间 */
+    .wb-course-hero {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 16px;
+      padding: 18px 22px;
+      margin-bottom: 14px;
+      box-shadow: var(--wb-card-shadow);
+    }
+    .wb-course-hero-avatar {
+      width: 48px;
+      height: 48px;
+      border-radius: 14px;
+      flex: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      font-weight: 700;
+      background: var(--tone-bg-l);
+      color: var(--tone-fg-l);
+    }
+    :host(.wb-dark) .wb-course-hero-avatar { background: var(--tone-bg-d); color: var(--tone-fg-d); }
+    .wb-course-hero-info { flex: 1; min-width: 0; }
+    .wb-course-hero-title { font-size: 18px; font-weight: 700; color: var(--wb-text); line-height: 1.35; }
+    .wb-course-hero-meta { margin-top: 4px; font-size: 12.5px; color: var(--wb-text-2); }
+    .wb-subtabs-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+    .wb-subtabs {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 12px;
+      background: var(--wb-surface-2);
+    }
+    .wb-subtab {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: none;
+      background: transparent;
+      padding: 6px 14px;
+      border-radius: 9px;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--wb-text-2);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .wb-subtab:hover { color: var(--wb-text); }
+    .wb-subtab.active {
+      background: var(--wb-tab-active-bg);
+      color: var(--wb-accent-text);
+      font-weight: 600;
+      box-shadow: var(--wb-tab-active-shadow);
+    }
+    .wb-subtab-num {
+      font-size: 11px;
+      padding: 0 6px;
+      height: 17px;
+      line-height: 17px;
+      border-radius: 999px;
+      background: var(--wb-surface-2);
+      color: var(--wb-text-2);
+      font-variant-numeric: tabular-nums;
+    }
+    .wb-subtab.active .wb-subtab-num { background: var(--wb-accent-soft); color: var(--wb-accent-text); }
+    .wb-res-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .wb-res-toolbar .wb-search-wrap { flex: 1; margin-bottom: 0; }
+    .wb-res-group {
+      background: var(--wb-surface);
+      border: 1px solid var(--wb-border);
+      border-radius: 14px;
+      padding: 14px 16px;
+      margin-bottom: 12px;
+      box-shadow: var(--wb-card-shadow);
+    }
+    .wb-res-group-title {
+      font-size: 12.5px;
+      font-weight: 700;
+      color: var(--wb-text-2);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .wb-status-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 9px;
+      border-radius: 999px;
+      font-size: 11.5px;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+    .wb-status-chip.pending { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
+    .wb-status-chip.submitted { background: var(--wb-accent-soft); color: var(--wb-accent-text); }
+    .wb-status-chip.graded { background: rgba(16, 185, 129, 0.14); color: #059669; }
+    :host(.wb-dark) .wb-status-chip.pending { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    :host(.wb-dark) .wb-status-chip.graded { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
   `;
 
   function wbApplyTheme() {
@@ -2261,6 +2372,7 @@ function escapeHtml(text) {
           <div class="wb-pane" data-pane="course" hidden>${wbSkeletonHtml("course")}</div>
           <div class="wb-pane" data-pane="notice" hidden>${wbSkeletonHtml("notice")}</div>
           <div class="wb-pane" data-pane="detail" hidden></div>
+          <div class="wb-pane" data-pane="courseView" hidden></div>
         </div>
       </div>`;
     document.body.appendChild(wbHost);
@@ -2290,6 +2402,10 @@ function escapeHtml(text) {
         );
         return;
       }
+      if (wbState.tab === "courseView" && wbState.courseView) {
+        wbOpenCourseView(wbState.courseView.course, wbState.courseView.subTab);
+        return;
+      }
       if (wbState.tab === "course") wbState.courseLoaded = false;
       else if (wbState.tab === "notice") wbState.noticeLoaded = false;
       else wbState.todoLoaded = false;
@@ -2305,10 +2421,12 @@ function escapeHtml(text) {
 
   function wbUpdateTabs() {
     if (!wbRoot) return;
-    const highlightTab =
-      wbState.tab === "detail" && wbState.detail
-        ? wbState.detail.returnTab || "todo"
-        : wbState.tab;
+    let highlightTab = wbState.tab;
+    if (wbState.tab === "detail" && wbState.detail) {
+      highlightTab = wbState.detail.returnTab === "courseView" ? "course" : wbState.detail.returnTab || "todo";
+    } else if (wbState.tab === "courseView") {
+      highlightTab = "course";
+    }
     wbRoot.querySelectorAll(".wb-tab").forEach((btn) => {
       btn.classList.toggle("active", btn.dataset.tab === highlightTab);
     });
@@ -2319,6 +2437,7 @@ function escapeHtml(text) {
 
   function wbSwitchTab(tab) {
     if (tab !== "detail") wbState.detail = null;
+    if (tab !== "courseView" && tab !== "detail") wbState.courseView = null;
     wbState.tab = tab;
     wbUpdateTabs();
     if (tab === "course" && !wbState.courseLoaded) wbLoadCourses();
@@ -2735,8 +2854,7 @@ function escapeHtml(text) {
             .filter(Boolean)
             .join(" · ");
           item.addEventListener("click", () => {
-            wbClose();
-            openCoursePage(course);
+            wbOpenCourseView(course);
           });
           grid.appendChild(item);
         });
@@ -2867,10 +2985,11 @@ function escapeHtml(text) {
       pane.appendChild(inner);
 
       // 顶部操作条
+      const backLabel = returnTab === "courseView" ? "返回课程" : "返回待办";
       const bar = document.createElement("div");
       bar.className = "wb-detail-bar";
       bar.innerHTML =
-        `<button class="wb-back-btn">${WB_ICONS.back}<span>返回待办</span></button>` +
+        `<button class="wb-back-btn">${WB_ICONS.back}<span>${backLabel}</span></button>` +
         `<button class="wb-primary-btn"><span>去原页提交 / 查看</span>${WB_ICONS.external}</button>`;
       bar.querySelector(".wb-back-btn").addEventListener("click", () => wbSwitchTab(returnTab));
       bar.querySelector(".wb-primary-btn").addEventListener("click", () => {
@@ -2897,10 +3016,9 @@ function escapeHtml(text) {
         courseBtn.innerHTML = `${WB_ICONS.book}<span></span>`;
         courseBtn.querySelector("span").textContent = courseLabel;
         if (courseInfo && courseInfo.id) {
-          courseBtn.title = "点击进入课程主页";
+          courseBtn.title = "点击进入课程空间";
           courseBtn.addEventListener("click", () => {
-            if (!settings.home.openInNewTab) wbClose();
-            openCoursePage(courseInfo);
+            wbOpenCourseView(courseInfo);
           });
         }
         hero.appendChild(courseBtn);
@@ -3022,6 +3140,387 @@ function escapeHtml(text) {
     }
   }
 
+  function wbCollectResourceGroups(tree) {
+    const groups = [];
+    const walk = (nodes, pathPrefix) => {
+      if (!Array.isArray(nodes)) return;
+      nodes.forEach((node) => {
+        const nodeTitle = (node.resourceName || node.name || "").trim();
+        const label = pathPrefix && nodeTitle ? `${pathPrefix} / ${nodeTitle}` : nodeTitle || pathPrefix;
+        const files = [];
+        if (Array.isArray(node.attachmentVOs)) {
+          node.attachmentVOs.forEach((att) => {
+            if (att.type !== 2 && att.resource) {
+              files.push({
+                resourceId: att.resource.id || att.resource.resourceId,
+                resourceName: att.resource.name || att.resource.resourceName || "未命名文件",
+              });
+            }
+          });
+        }
+        if (files.length) {
+          groups.push({ title: label || "课程资源", files });
+        }
+        if (Array.isArray(node.children) && node.children.length) {
+          walk(node.children, label);
+        }
+      });
+    };
+    walk(tree, "");
+    return groups;
+  }
+
+  function wbPickWorkStatus(work) {
+    const st = Number(work.assignmentStatus);
+    const score = work.assignmentScore ?? work.score;
+    if (st === 2) {
+      const scoreText =
+        score !== undefined && score !== null && score !== "" ? `已批改 · ${score} 分` : "已批改";
+      return { cls: "graded", text: scoreText };
+    }
+    if (st === 1) return { cls: "submitted", text: "已提交" };
+    if (st === 0) return { cls: "pending", text: "未提交" };
+    return null;
+  }
+
+  async function wbOpenCourseView(course, initialSubTab = "resource") {
+    if (!wbRoot || !course || !course.id) return;
+    wbState.courseView = { course, subTab: initialSubTab };
+    wbState.detail = null;
+    wbState.tab = "courseView";
+    wbUpdateTabs();
+    const pane = wbRoot.querySelector('[data-pane="courseView"]');
+    const bodyEl = wbRoot.querySelector(".wb-body");
+    if (bodyEl) bodyEl.scrollTop = 0;
+    pane.innerHTML = wbSkeletonHtml("todo");
+
+    const siteId = course.id;
+    try {
+      const [tree, worksRes, exams] = await Promise.all([
+        getSiteResourceTree(siteId).catch(() => []),
+        getTasks(siteId).catch(() => null),
+        getExams(siteId).catch(() => []),
+      ]);
+      if (
+        wbState.tab !== "courseView" ||
+        !wbState.courseView ||
+        wbState.courseView.course.id !== siteId
+      ) {
+        return;
+      }
+
+      const groups = wbCollectResourceGroups(tree);
+      const allFiles = groups.flatMap((g) => g.files);
+      const works = ((worksRes && worksRes.data && worksRes.data.records) || []).slice().sort((a, b) => {
+        const sa = Number(a.assignmentStatus) === 0 ? 0 : 1;
+        const sb = Number(b.assignmentStatus) === 0 ? 0 : 1;
+        if (sa !== sb) return sa - sb;
+        const ta = parseDeadline(a.assignmentEndTime || a.endTime)?.getTime() || 0;
+        const tb = parseDeadline(b.assignmentEndTime || b.endTime)?.getTime() || 0;
+        return tb - ta;
+      });
+      const examList = Array.isArray(exams) ? exams : [];
+
+      pane.innerHTML = "";
+      const inner = document.createElement("div");
+      inner.className = "wb-inner";
+      pane.appendChild(inner);
+
+      // 顶部操作条
+      const bar = document.createElement("div");
+      bar.className = "wb-detail-bar";
+      bar.innerHTML =
+        `<button class="wb-back-btn">${WB_ICONS.back}<span>返回课程</span></button>` +
+        `<button class="wb-primary-btn"><span>打开原课程主页</span>${WB_ICONS.external}</button>`;
+      bar.querySelector(".wb-back-btn").addEventListener("click", () => wbSwitchTab("course"));
+      bar.querySelector(".wb-primary-btn").addEventListener("click", () => {
+        if (!settings.home.openInNewTab) wbClose();
+        openCoursePage(course);
+      });
+      inner.appendChild(bar);
+
+      // 课程概览头部卡片
+      const titleText = course.name || "未命名课程";
+      const tone = WB_COURSE_PALETTE[wbPickCourseTone(titleText)];
+      const hero = document.createElement("div");
+      hero.className = "wb-course-hero";
+      hero.innerHTML =
+        '<div class="wb-course-hero-avatar"></div>' +
+        '<div class="wb-course-hero-info"><div class="wb-course-hero-title"></div><div class="wb-course-hero-meta"></div></div>';
+      const avatar = hero.querySelector(".wb-course-hero-avatar");
+      avatar.textContent = titleText.trim().charAt(0) || "课";
+      avatar.style.setProperty("--tone-bg-l", tone[0]);
+      avatar.style.setProperty("--tone-fg-l", tone[1]);
+      avatar.style.setProperty("--tone-bg-d", tone[2]);
+      avatar.style.setProperty("--tone-fg-d", tone[3]);
+      hero.querySelector(".wb-course-hero-title").textContent = titleText;
+      hero.querySelector(".wb-course-hero-meta").textContent =
+        [course.teachers, course.department].filter(Boolean).join(" · ") || "课程空间";
+      inner.appendChild(hero);
+
+      // 子页签栏
+      const subBar = document.createElement("div");
+      subBar.className = "wb-subtabs-bar";
+      subBar.innerHTML = `
+        <div class="wb-subtabs">
+          <button class="wb-subtab" data-sub="resource">课件资源<span class="wb-subtab-num">${allFiles.length}</span></button>
+          <button class="wb-subtab" data-sub="work">课程作业<span class="wb-subtab-num">${works.length}</span></button>
+          <button class="wb-subtab" data-sub="exam">课程测试<span class="wb-subtab-num">${examList.length}</span></button>
+        </div>`;
+      inner.appendChild(subBar);
+
+      const subRes = document.createElement("div");
+      const subWork = document.createElement("div");
+      const subExam = document.createElement("div");
+      inner.appendChild(subRes);
+      inner.appendChild(subWork);
+      inner.appendChild(subExam);
+
+      const switchSub = (sub) => {
+        if (wbState.courseView) wbState.courseView.subTab = sub;
+        subBar.querySelectorAll(".wb-subtab").forEach((b) => {
+          b.classList.toggle("active", b.dataset.sub === sub);
+        });
+        subRes.hidden = sub !== "resource";
+        subWork.hidden = sub !== "work";
+        subExam.hidden = sub !== "exam";
+      };
+      subBar.querySelectorAll(".wb-subtab").forEach((b) => {
+        b.addEventListener("click", () => switchSub(b.dataset.sub));
+      });
+
+      // 子页签 1：课件资源
+      if (!allFiles.length) {
+        subRes.innerHTML = wbEmptyHtml("本课程暂无课件资源");
+      } else {
+        const resBar = document.createElement("div");
+        resBar.className = "wb-res-toolbar";
+        resBar.innerHTML =
+          `<div class="wb-search-wrap"><span class="wb-search-icon">${WB_ICONS.search}</span>` +
+          '<input class="wb-search" placeholder="搜索课件文件名 / 章节"></div>' +
+          `<button class="wb-primary-btn wb-batch-dl">${WB_ICONS.download}<span>全部下载 (${allFiles.length})</span></button>`;
+        subRes.appendChild(resBar);
+
+        const resSearch = resBar.querySelector(".wb-search");
+        const batchBtn = resBar.querySelector(".wb-batch-dl");
+        const batchSpan = batchBtn.querySelector("span");
+        let batchActive = false;
+        batchBtn.addEventListener("click", async () => {
+          if (batchActive) {
+            batchActive = false;
+            downloading = false;
+            batchSpan.textContent = `全部下载 (${allFiles.length})`;
+            return;
+          }
+          batchActive = true;
+          downloading = true;
+          for (let i = 0; i < allFiles.length; i++) {
+            if (!batchActive || !downloading) break;
+            const f = allFiles[i];
+            batchSpan.textContent = `取消下载 (${i + 1}/${allFiles.length})`;
+            try {
+              const url = await getPreviewURL(f.resourceId);
+              if (!batchActive || !downloading) break;
+              await downloadFile(url, f.resourceName);
+            } catch (e) {
+              console.warn("[ucloud-Enhanced] 批量下载单文件失败:", f.resourceName, e);
+            }
+          }
+          batchActive = false;
+          downloading = false;
+          batchSpan.textContent = `全部下载 (${allFiles.length})`;
+        });
+
+        const groupsHost = document.createElement("div");
+        subRes.appendChild(groupsHost);
+
+        const renderResourceGroups = (kw) => {
+          groupsHost.innerHTML = "";
+          const q = (kw || "").toLowerCase();
+          let renderedCount = 0;
+          groups.forEach((g) => {
+            const groupMatched = !q || g.title.toLowerCase().includes(q);
+            const files = groupMatched
+              ? g.files
+              : g.files.filter((f) => f.resourceName.toLowerCase().includes(q));
+            if (!files.length) return;
+            renderedCount += files.length;
+
+            const box = document.createElement("div");
+            box.className = "wb-res-group";
+            box.innerHTML =
+              '<div class="wb-res-group-title"><span class="wb-gt"></span><span class="wb-gc"></span></div>' +
+              '<div class="wb-attach-list"></div>';
+            box.querySelector(".wb-gt").textContent = g.title;
+            box.querySelector(".wb-gc").textContent = `${files.length} 个文件`;
+            const listEl = box.querySelector(".wb-attach-list");
+
+            files.forEach((res) => {
+              const row = document.createElement("div");
+              row.className = "wb-attach-item";
+              row.innerHTML =
+                `<span class="wb-attach-ico">${WB_ICONS.file}</span>` +
+                '<span class="wb-attach-name"></span>' +
+                '<div class="wb-attach-btns">' +
+                `<button class="wb-ghost-btn wb-act-preview">${WB_ICONS.eye}<span>预览</span></button>` +
+                `<button class="wb-ghost-btn wb-act-dl">${WB_ICONS.download}<span>下载</span></button>` +
+                "</div>";
+              const nameEl = row.querySelector(".wb-attach-name");
+              nameEl.textContent = res.resourceName;
+              nameEl.title = res.resourceName;
+
+              const previewBtn = row.querySelector(".wb-act-preview");
+              previewBtn.addEventListener("click", async () => {
+                previewBtn.disabled = true;
+                try {
+                  await wbPreviewAttachment(res);
+                } catch (e) {
+                  showNotification("预览失败", "无法获取课件预览链接");
+                } finally {
+                  previewBtn.disabled = false;
+                }
+              });
+
+              const dlBtn = row.querySelector(".wb-act-dl");
+              dlBtn.addEventListener("click", async () => {
+                dlBtn.disabled = true;
+                try {
+                  const url = await getPreviewURL(res.resourceId);
+                  await downloadFile(url, res.resourceName);
+                } catch (e) {
+                  showNotification("下载失败", "无法获取课件下载链接");
+                } finally {
+                  dlBtn.disabled = false;
+                }
+              });
+              listEl.appendChild(row);
+            });
+            groupsHost.appendChild(box);
+          });
+          if (!renderedCount) {
+            groupsHost.innerHTML = wbEmptyHtml("未找到匹配的课件资源");
+          }
+        };
+        resSearch.addEventListener("input", () => renderResourceGroups(resSearch.value.trim()));
+        renderResourceGroups("");
+      }
+
+      // 子页签 2：课程作业
+      if (!works.length) {
+        subWork.innerHTML = wbEmptyHtml("本课程暂无作业");
+      } else {
+        works.forEach((work) => {
+          const card = document.createElement("div");
+          card.className = "wb-card";
+          const endStr = work.assignmentEndTime || work.endTime;
+          const endDate = parseDeadline(endStr);
+          const status = wbPickWorkStatus(work);
+          const isPending = Number(work.assignmentStatus) === 0;
+          if (endDate && isPending) {
+            card.dataset.urgency = formatRemain(endDate - Date.now()).cls;
+          } else {
+            card.dataset.urgency = "later";
+          }
+          card.innerHTML =
+            '<div class="wb-card-head"><div class="wb-card-title"></div><div class="wb-card-tags"></div></div>' +
+            '<div class="wb-meta"></div>';
+          card.querySelector(".wb-card-title").textContent =
+            work.assignmentTitle || work.activityName || "未命名作业";
+          const tags = card.querySelector(".wb-card-tags");
+          const meta = card.querySelector(".wb-meta");
+          if (endDate) {
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+          }
+          const mode = pickModeName(work.assignmentType);
+          if (mode) {
+            tags.insertAdjacentHTML(
+              "beforeend",
+              `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
+            );
+          }
+          if (status) {
+            meta.insertAdjacentHTML(
+              "beforeend",
+              `<span class="wb-status-chip ${status.cls}">${escapeHtml(status.text)}</span>`
+            );
+          }
+          if (endDate && isPending) {
+            const rem = formatRemain(endDate - Date.now());
+            meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+          }
+          if (work.chapterName) {
+            meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">${escapeHtml(work.chapterName)}</span>`);
+          }
+          card.addEventListener("click", () => {
+            const taskObj = Object.assign({}, work, {
+              activityId: work.id || work.activityId,
+              activityName: work.assignmentTitle || work.activityName,
+              endTime: endStr,
+              type: 3,
+            });
+            wbOpenAssignmentDetail(taskObj, course, "courseView");
+          });
+          subWork.appendChild(card);
+        });
+      }
+
+      // 子页签 3：课程测试
+      if (!examList.length) {
+        subExam.innerHTML = wbEmptyHtml("本课程暂无测试");
+      } else {
+        examList.forEach((exam) => {
+          const card = document.createElement("div");
+          card.className = "wb-card";
+          card.dataset.urgency = "later";
+          const endStr = exam.endTime || exam.examEndTime;
+          const endDate = parseDeadline(endStr);
+          card.innerHTML =
+            '<div class="wb-card-head"><div class="wb-card-title"></div><div class="wb-card-tags"></div></div>' +
+            '<div class="wb-meta"></div>';
+          card.querySelector(".wb-card-title").textContent =
+            exam.examName || exam.title || exam.name || "未命名测试";
+          const tags = card.querySelector(".wb-card-tags");
+          const meta = card.querySelector(".wb-meta");
+          if (endDate) {
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            const rem = formatRemain(endDate - Date.now());
+            if (rem.cls !== "overdue") {
+              card.dataset.urgency = rem.cls;
+              meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+            }
+          }
+          tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">📝 测试</span>');
+          if (exam.score !== undefined && exam.score !== null && exam.score !== "") {
+            meta.insertAdjacentHTML(
+              "beforeend",
+              `<span class="wb-status-chip graded">得分 ${escapeHtml(exam.score)}</span>`
+            );
+          }
+          card.addEventListener("click", () => {
+            const examId = exam.id || exam.examId || exam.activityId;
+            if (!examId) return;
+            if (!settings.home.openInNewTab) wbClose();
+            openTaskUrl("course.html#/answer?id=" + encodeURIComponent(examId));
+          });
+          subExam.appendChild(card);
+        });
+      }
+
+      switchSub(initialSubTab);
+    } catch (e) {
+      pane.innerHTML =
+        `<div class="wb-inner"><div class="wb-detail-bar">` +
+        `<button class="wb-back-btn">${WB_ICONS.back}<span>返回课程</span></button>` +
+        `<button class="wb-primary-btn"><span>打开原课程主页</span>${WB_ICONS.external}</button>` +
+        `</div>${wbEmptyHtml("加载课程空间失败，请重试或直接打开原课程主页")}</div>`;
+      pane.querySelector(".wb-back-btn")?.addEventListener("click", () => wbSwitchTab("course"));
+      pane.querySelector(".wb-primary-btn")?.addEventListener("click", () => {
+        if (!settings.home.openInNewTab) wbClose();
+        openCoursePage(course);
+      });
+    }
+  }
+
   function isHomePage() {
     const href = location.href;
     return (
@@ -3037,6 +3536,8 @@ function escapeHtml(text) {
       if (e.key === "Escape" && wbState.open) {
         if (wbState.tab === "detail" && wbState.detail) {
           wbSwitchTab(wbState.detail.returnTab || "todo");
+        } else if (wbState.tab === "courseView") {
+          wbSwitchTab("course");
         } else {
           wbClose();
         }
@@ -4529,13 +5030,19 @@ function escapeHtml(text) {
     return apiFetch("ykt-site/work/detail?assignmentId=" + id);
   }
 
-  // 获取站点资源
-  async function getSiteResource(id) {
+  // 获取站点资源树（供工作台课程空间按章节展示，并被 getSiteResource 复用）
+  async function getSiteResourceTree(id) {
     const [userid] = getToken();
     const json = await apiFetch(
       "ykt-site/site-resource/tree/student?siteId=" + id + "&userId=" + userid,
       { method: "POST" }
     );
+    return (json && Array.isArray(json.data) && json.data) || [];
+  }
+
+  // 获取站点资源（扁平列表）
+  async function getSiteResource(id) {
+    const tree = await getSiteResourceTree(id);
     const result = [];
     function foreach(data) {
       if (!data || !Array.isArray(data)) return;
@@ -4548,7 +5055,7 @@ function escapeHtml(text) {
         if (x.children) foreach(x.children);
       });
     }
-    foreach(json.data);
+    foreach(tree);
     return result;
   }
 
