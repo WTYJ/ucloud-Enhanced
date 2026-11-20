@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-2.5.0-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-2.5.1-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -57,6 +57,14 @@ python3 build.py
 ```
 
 ## 🔄 更新日志
+
+### 2.5.1
+
+- 改进：工作台作业详情页「去原页提交 / 查看」按钮直达原页「我的作业」提交页签（`activeTabName=second`），省去手动切换
+- 改进：打开工作台时同步后台预拉待办数据，直接进入「课程」页签亦可即时点亮各课待办角标；课件与作业附件列表新增 `PDF / PPT / DOC / XLS / ZIP / IMG / MEDIA` 等彩色格式类型角标
+- 改进：统一课程空间与待办页的「未提交」胶囊为黄色样式；补齐 `README.md` 2.5.x 功能介绍与本地模块化开发构建说明
+- 修复：课程空间「课程测试」已出分条目仍显示紧迫度倒计时与色条；为「课程」「通知」页签补齐刷新序列号防竞态覆盖
+- 重构：将 `fmtDeadline`、`buildTaskUrl`、`openTaskUrl`、`getCourseList`、`openCoursePage`、`getPreviewURL` 与课程本地缓存上提至 `src/10-core.js`，实现独立工作台（`20-workbench.js`）与原页面改版（`30-page-mods.js`）零跨模块依赖
 
 ### 2.5.0
 
