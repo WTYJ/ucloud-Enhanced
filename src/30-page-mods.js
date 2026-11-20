@@ -1159,17 +1159,6 @@
 
   // 主函数
   async function main() {
-    // 获取开关的状态（是否开启）
-    const fixTicketEnabled = settings.system.fixTicketBug;
-
-    // ticket跳转：仅当开关开启且存在ticket参数时执行
-    if (fixTicketEnabled && new URLSearchParams(location.search).get("ticket")?.length) {
-      setTimeout(() => {
-        location.href = "https://ucloud.bupt.edu.cn/uclass/#/student/homePage";
-      }, 500);
-      return;
-    }
-
     // 课件预览页面
     if (
       location.href.startsWith(

@@ -1090,6 +1090,93 @@ function escapeHtml(text) {
     });
   });
 
+  // ===== 修复 SSO ticket 跳转循环与残留（document-start 阶段即介入）=====
+  // 1) 平台登录页用 n.substring(0, n.lastIndexOf("#")) 截取 ticket，URL 缺少 # 时会被截成空串导致循环报错
+  // 2) 登录成功后平台只切换 hash，不清理 location.search 里的 ?ticket=，过期刷新时会重放旧票
+  // 3) 不做定时硬跳转，避免打断 /ykt-basics/oauth/token 正常换票
+  function ensureTicketHash(urlStr) {
+    try {
+      const u = new URL(urlStr);
+      if (!u.searchParams.has("ticket") || u.hash) return null;
+      return u.pathname + u.search + "#/index";
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function stripTicketFromUrl(urlStr) {
+    try {
+      const u = new URL(urlStr);
+      if (!u.searchParams.has("ticket")) return null;
+      u.searchParams.delete("ticket");
+      const qs = u.searchParams.toString();
+      return u.pathname + (qs ? "?" + qs : "") + u.hash;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function isTicketLoginRoute(hashStr) {
+    const h = String(hashStr || "");
+    return !h || h === "#" || h === "#/" || h.startsWith("#/index");
+  }
+
+  function installTicketRedirectFix() {
+    if (!settings.system.fixTicketBug) return;
+    if (!new URLSearchParams(location.search).has("ticket")) return;
+
+    // (1) 若 URL 含 ticket 但缺少 #，在平台 app.js 解析前补齐 #/index，防止 lastIndexOf("#") 截空
+    const patchedWithHash = ensureTicketHash(location.href);
+    if (patchedWithHash) {
+      try {
+        history.replaceState(null, "", patchedWithHash);
+      } catch (e) {}
+    }
+
+    // iframe 内仅补齐 #/index，交由平台自身 window.parent.location 跳出
+    if (window !== window.parent) return;
+
+    const cleanIfLoggedIn = () => {
+      if (!new URLSearchParams(location.search).has("ticket")) return true;
+      if (isTicketLoginRoute(location.hash)) return false;
+      const cleanUrl = stripTicketFromUrl(location.href);
+      if (cleanUrl) {
+        try {
+          history.replaceState(null, "", cleanUrl);
+        } catch (e) {}
+      }
+      return true;
+    };
+
+    // (2) 若当前已在业务路由（如 #/student/homePage）且地址栏残留旧 ticket，立即无刷新剥离
+    if (cleanIfLoggedIn()) return;
+
+    // (3) 正在登录页换票：等待平台完成登录并跳转离开 #/index 后，无刷新剥离 ?ticket=
+    let done = false;
+    let pollTimer = null;
+    const finish = () => {
+      if (done) return;
+      if (!cleanIfLoggedIn()) return;
+      done = true;
+      window.removeEventListener("hashchange", finish);
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
+    };
+    window.addEventListener("hashchange", finish);
+    const startAt = Date.now();
+    pollTimer = setInterval(() => {
+      if (done || Date.now() - startAt > 20000) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+        return;
+      }
+      finish();
+    }, 250);
+  }
+  installTicketRedirectFix();
+
   // 深色模式（Dynamic 主题引擎，处理思路参考 Dark Reader）
   // 不用整页像素级滤镜：遍历元素读取计算样式，在 HSL 空间只重映射亮度——
   // 浅色背景→深色、深色文字→浅色，色相与饱和度原样保留。
@@ -7419,17 +7506,6 @@ function escapeHtml(text) {
 
   // 主函数
   async function main() {
-    // 获取开关的状态（是否开启）
-    const fixTicketEnabled = settings.system.fixTicketBug;
-
-    // ticket跳转：仅当开关开启且存在ticket参数时执行
-    if (fixTicketEnabled && new URLSearchParams(location.search).get("ticket")?.length) {
-      setTimeout(() => {
-        location.href = "https://ucloud.bupt.edu.cn/uclass/#/student/homePage";
-      }, 500);
-      return;
-    }
-
     // 课件预览页面
     if (
       location.href.startsWith(
