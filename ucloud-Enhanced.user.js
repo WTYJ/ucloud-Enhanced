@@ -2852,6 +2852,20 @@ function escapeHtml(text) {
     return apiFetch("ykt-site/work/detail?assignmentId=" + id);
   }
 
+  // 获取学生提交与批改详情（我的作答 / 得分 / 教师评语 / 已交附件 ID）
+  async function getSubmitView(id) {
+    return apiFetch("ykt-site/work/submit-view?assignmentId=" + encodeURIComponent(id));
+  }
+
+  // 根据资源 ID 列表获取已上传附件元信息
+  async function getUploadFilesByIds(ids) {
+    if (!Array.isArray(ids) || !ids.length) return [];
+    const json = await apiFetch(
+      "blade-source/resource/list/byId?resourceIds=" + encodeURIComponent(ids.join(","))
+    );
+    return (json && Array.isArray(json.data) && json.data) || [];
+  }
+
   // 获取站点资源树（供工作台课程空间按章节展示，并被 getSiteResource 复用）
   async function getSiteResourceTree(id) {
     const [userid] = getToken();
@@ -2981,6 +2995,7 @@ function escapeHtml(text) {
     todoLoaded: false,
     courseLoaded: false,
     noticeLoaded: false,
+    scrollPositions: Object.create(null),
     themeObserver: null,
     prevOverflow: "",
   };
@@ -2988,6 +3003,29 @@ function escapeHtml(text) {
   let wbSubmittedCards = [];
   let wbTodoLoadSeq = 0;
   let wbTicker = null;
+  let wbCoursePendingCounts = new Map();
+  let wbCourseGridRerender = null;
+  let wbActiveCourseDownload = null;
+
+  function wbGetPinnedCourses() {
+    try {
+      const saved = GM_getValue("wb_pinned_courses", []);
+      return new Set(Array.isArray(saved) ? saved.map(String) : []);
+    } catch (e) {
+      return new Set();
+    }
+  }
+
+  function wbTogglePinnedCourse(courseId) {
+    const key = String(courseId);
+    const set = wbGetPinnedCourses();
+    if (set.has(key)) set.delete(key);
+    else set.add(key);
+    try {
+      GM_setValue("wb_pinned_courses", Array.from(set));
+    } catch (e) {}
+    return set.has(key);
+  }
 
   const WB_ICONS = {
     brand:
@@ -3016,6 +3054,8 @@ function escapeHtml(text) {
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
     book:
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    star:
+      '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
     empty:
       '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
   };
@@ -3904,7 +3944,113 @@ function escapeHtml(text) {
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 10px;
     }
+    .wb-res-group-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .wb-group-dl-btn {
+      padding: 3px 9px;
+      font-size: 11.5px;
+      font-weight: 600;
+    }
+    .wb-course-badges {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+    .wb-course-pending {
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(239, 68, 68, 0.12);
+      color: #dc2626;
+      white-space: nowrap;
+      font-variant-numeric: tabular-nums;
+    }
+    :host(.wb-dark) .wb-course-pending { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
+    .wb-pin-btn {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      color: var(--wb-text-3);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+    .wb-pin-btn:hover { background: var(--wb-surface-2); color: #f59e0b; }
+    .wb-pin-btn.pinned { color: #f59e0b; }
+    .wb-pin-btn.pinned svg { fill: currentColor; }
+    .wb-notice-controls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+    .wb-notice-controls .wb-search-wrap { flex: 1; min-width: 180px; margin-bottom: 0; }
+    .wb-toggle-chip {
+      height: 36px;
+      padding: 0 12px;
+      border-radius: 10px;
+      border: 1px solid var(--wb-border);
+      background: var(--wb-surface);
+      color: var(--wb-text-2);
+      font-size: 12.5px;
+      font-weight: 500;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .wb-toggle-chip:hover { border-color: var(--wb-border-strong); color: var(--wb-text); }
+    .wb-toggle-chip.active {
+      background: var(--wb-accent-soft);
+      border-color: var(--wb-accent);
+      color: var(--wb-accent-text);
+      font-weight: 600;
+    }
+    .wb-sub-summary {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .wb-score-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.14);
+      color: #059669;
+    }
+    :host(.wb-dark) .wb-score-pill { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
+    .wb-sub-block { margin-top: 12px; }
+    .wb-sub-block:first-child { margin-top: 0; }
+    .wb-sub-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--wb-text-2);
+      margin-bottom: 6px;
+    }
+    .wb-comment-box {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: var(--wb-surface-2);
+      border-left: 3px solid var(--wb-accent);
+    }
+    .wb-comment-box.rejected { border-left-color: #f59e0b; }
     .wb-status-chip {
       display: inline-flex;
       align-items: center;
@@ -4046,11 +4192,49 @@ function escapeHtml(text) {
     });
   }
 
+  function wbGetScrollKey() {
+    if (wbState.tab === "courseView" && wbState.courseView && wbState.courseView.course) {
+      return "courseView:" + wbState.courseView.course.id;
+    }
+    return wbState.tab;
+  }
+
+  function wbSaveCurrentScroll() {
+    if (!wbRoot) return;
+    const bodyEl = wbRoot.querySelector(".wb-body");
+    if (!bodyEl) return;
+    const key = wbGetScrollKey();
+    if (key && key !== "detail") {
+      wbState.scrollPositions[key] = bodyEl.scrollTop;
+    }
+  }
+
+  function wbRestoreCurrentScroll() {
+    if (!wbRoot) return;
+    const bodyEl = wbRoot.querySelector(".wb-body");
+    if (!bodyEl) return;
+    const key = wbGetScrollKey();
+    const pos = wbState.scrollPositions[key];
+    bodyEl.scrollTop = typeof pos === "number" ? pos : 0;
+  }
+
+  function wbCancelCourseDownload() {
+    if (wbActiveCourseDownload) {
+      wbActiveCourseDownload.cancelled = true;
+      wbActiveCourseDownload = null;
+    }
+  }
+
   function wbSwitchTab(tab) {
+    wbSaveCurrentScroll();
     if (tab !== "detail") wbState.detail = null;
-    if (tab !== "courseView" && tab !== "detail") wbState.courseView = null;
+    if (tab !== "courseView" && tab !== "detail") {
+      wbCancelCourseDownload();
+      wbState.courseView = null;
+    }
     wbState.tab = tab;
     wbUpdateTabs();
+    wbRestoreCurrentScroll();
     if (tab === "course" && !wbState.courseLoaded) wbLoadCourses();
     if (tab === "notice" && !wbState.noticeLoaded) wbLoadNotices();
     if (tab === "todo" && !wbState.todoLoaded) wbLoadTodo();
@@ -4075,6 +4259,8 @@ function escapeHtml(text) {
 
   function wbClose() {
     if (!wbHost || !wbState.open) return;
+    wbSaveCurrentScroll();
+    wbCancelCourseDownload();
     wbState.open = false;
     wbHost.classList.remove("wb-open");
     document.body.style.overflow = wbState.prevOverflow || "";
@@ -4272,6 +4458,8 @@ function escapeHtml(text) {
 
       // 子页签 1：待完成
       if (!tasks.length) {
+        wbCoursePendingCounts = new Map();
+        if (wbCourseGridRerender) wbCourseGridRerender();
         subPending.innerHTML = wbEmptyHtml("当前没有待办事项");
       } else {
         const filterBar = document.createElement("div");
@@ -4308,11 +4496,18 @@ function escapeHtml(text) {
           .then((infos) => {
             if (seq !== wbTodoLoadSeq) return;
             const courseCounts = new Map();
+            const pendingById = new Map();
             tasks.forEach((task) => {
               const tid = task.activityId || task.id;
               const card = cards[tid];
               const info = infos[tid];
-              if (info) taskCourses.set(tid, info);
+              if (info) {
+                taskCourses.set(tid, info);
+                if (info.id !== undefined && info.id !== null) {
+                  const cid = String(info.id);
+                  pendingById.set(cid, (pendingById.get(cid) || 0) + 1);
+                }
+              }
               const courseName = info ? info.name : "未知课程";
               if (card && card.isConnected) {
                 card.dataset.course = courseName;
@@ -4328,6 +4523,8 @@ function escapeHtml(text) {
                 courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
               }
             });
+            wbCoursePendingCounts = pendingById;
+            if (wbCourseGridRerender) wbCourseGridRerender();
             wbAttachCourseFilter(filterBar, wbTodoCards, tasks.length, courseCounts);
           })
           .catch(() => {});
@@ -4499,7 +4696,45 @@ function escapeHtml(text) {
       syncNoticeCount();
       inner.appendChild(toolbar);
 
+      const controls = document.createElement("div");
+      controls.className = "wb-notice-controls";
+      controls.innerHTML =
+        `<div class="wb-search-wrap"><span class="wb-search-icon">${WB_ICONS.search}</span>` +
+        '<input class="wb-search" placeholder="搜索通知标题 / 正文"></div>' +
+        '<button class="wb-toggle-chip" type="button">仅看未读</button>';
+      const noticeSearch = controls.querySelector(".wb-search");
+      const unreadOnlyBtn = controls.querySelector(".wb-toggle-chip");
+      inner.appendChild(controls);
+
+      const noticeListHost = document.createElement("div");
+      inner.appendChild(noticeListHost);
+      const noticeEmptyTip = document.createElement("div");
+      noticeEmptyTip.className = "wb-empty";
+      noticeEmptyTip.innerHTML = `<div class="wb-empty-icon">${WB_ICONS.empty}</div><div>未找到匹配的通知</div>`;
+      noticeEmptyTip.hidden = true;
+      inner.appendChild(noticeEmptyTip);
+
+      let unreadOnly = false;
       const cards = [];
+      const applyNoticeFilter = () => {
+        const kw = noticeSearch.value.trim().toLowerCase();
+        let visible = 0;
+        cards.forEach(({ card, searchText }) => {
+          const matchUnread = !unreadOnly || card.dataset.unread === "1";
+          const matchKw = !kw || searchText.includes(kw);
+          const show = matchUnread && matchKw;
+          card.hidden = !show;
+          if (show) visible++;
+        });
+        noticeEmptyTip.hidden = visible > 0;
+      };
+      noticeSearch.addEventListener("input", applyNoticeFilter);
+      unreadOnlyBtn.addEventListener("click", () => {
+        unreadOnly = !unreadOnly;
+        unreadOnlyBtn.classList.toggle("active", unreadOnly);
+        applyNoticeFilter();
+      });
+
       const markCardRead = (card, item) => {
         if (card.dataset.unread !== "1") return;
         card.dataset.unread = "0";
@@ -4507,6 +4742,7 @@ function escapeHtml(text) {
         card.querySelector(".wb-notice-hint")?.remove();
         unreadCount = Math.max(0, unreadCount - 1);
         syncNoticeCount();
+        if (unreadOnly) applyNoticeFilter();
         if (item && item.id != null) {
           apiFetch(
             "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(item.id),
@@ -4528,7 +4764,8 @@ function escapeHtml(text) {
           '</div>' +
           '<div class="wb-notice-time"></div>' +
           '<div class="wb-notice-body"></div>';
-        card.querySelector(".wb-notice-text").textContent = item.newsTitle || "无标题通知";
+        const titleStr = item.newsTitle || "无标题通知";
+        card.querySelector(".wb-notice-text").textContent = titleStr;
         card.querySelector(".wb-notice-time").textContent = item.newsCopyTime || "";
         let noticeText = "";
         try {
@@ -4538,15 +4775,16 @@ function escapeHtml(text) {
         } catch (e) {
           noticeText = "";
         }
-        renderTextWithLinks(card.querySelector(".wb-notice-body"), noticeText.trim());
+        const trimmedText = noticeText.trim();
+        renderTextWithLinks(card.querySelector(".wb-notice-body"), trimmedText);
         card.addEventListener("click", () => markCardRead(card, item));
-        cards.push(card);
-        inner.appendChild(card);
+        cards.push({ card, searchText: (titleStr + " " + trimmedText).toLowerCase() });
+        noticeListHost.appendChild(card);
       });
       readAllBtn.addEventListener("click", (e) => {
         e.stopPropagation();
         const unreadIds = [];
-        cards.forEach((c, idx) => {
+        cards.forEach(({ card: c }, idx) => {
           if (c.dataset.unread === "1") {
             c.dataset.unread = "0";
             c.querySelector(".wb-dot")?.remove();
@@ -4556,6 +4794,7 @@ function escapeHtml(text) {
         });
         unreadCount = 0;
         syncNoticeCount();
+        if (unreadOnly) applyNoticeFilter();
         if (unreadIds.length) {
           apiFetch(
             "ykt-basics/api/inform/news/readNews?ids=" + encodeURIComponent(unreadIds.join(",")),
@@ -4608,24 +4847,37 @@ function escapeHtml(text) {
       const renderGrid = (keyword) => {
         grid.innerHTML = "";
         const kw = (keyword || "").toLowerCase();
-        const matched = list.filter((c) => {
-          if (!kw) return true;
-          return [c.name, c.teachers, c.department]
-            .filter(Boolean)
-            .join(" ")
-            .toLowerCase()
-            .includes(kw);
-        });
+        const pinnedSet = wbGetPinnedCourses();
+        const matched = list
+          .filter((c) => {
+            if (!kw) return true;
+            return [c.name, c.teachers, c.department]
+              .filter(Boolean)
+              .join(" ")
+              .toLowerCase()
+              .includes(kw);
+          })
+          .sort((a, b) => {
+            const pa = pinnedSet.has(String(a.id)) ? 0 : 1;
+            const pb = pinnedSet.has(String(b.id)) ? 0 : 1;
+            return pa - pb;
+          });
         emptyTip.hidden = matched.length > 0;
         matched.forEach((course) => {
           const item = document.createElement("div");
           item.className = "wb-course-item";
           const titleText = course.name || "未命名课程";
           const tone = WB_COURSE_PALETTE[wbPickCourseTone(titleText)];
+          const isPinned = pinnedSet.has(String(course.id));
+          const pendingNum = wbCoursePendingCounts.get(String(course.id)) || 0;
           item.innerHTML =
             '<div class="wb-course-avatar"></div>' +
             '<div class="wb-course-info"><div class="wb-course-title"></div><div class="wb-course-meta"></div></div>' +
-            `<span class="wb-course-arrow">${WB_ICONS.arrow}</span>`;
+            '<div class="wb-course-badges">' +
+            (pendingNum > 0 ? `<span class="wb-course-pending">${pendingNum} 待办</span>` : "") +
+            `<button class="wb-pin-btn${isPinned ? " pinned" : ""}" type="button" title="${isPinned ? "取消置顶" : "星标置顶"}">${WB_ICONS.star}</button>` +
+            `<span class="wb-course-arrow">${WB_ICONS.arrow}</span>` +
+            "</div>";
           const avatar = item.querySelector(".wb-course-avatar");
           avatar.textContent = titleText.trim().charAt(0) || "课";
           avatar.style.setProperty("--tone-bg-l", tone[0]);
@@ -4636,11 +4888,19 @@ function escapeHtml(text) {
           item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
             .filter(Boolean)
             .join(" · ");
+          item.querySelector(".wb-pin-btn").addEventListener("click", (e) => {
+            e.stopPropagation();
+            wbTogglePinnedCourse(course.id);
+            renderGrid(search.value.trim());
+          });
           item.addEventListener("click", () => {
             wbOpenCourseView(course);
           });
           grid.appendChild(item);
         });
+      };
+      wbCourseGridRerender = () => {
+        if (grid.isConnected) renderGrid(search.value.trim());
       };
       search.addEventListener("input", () => renderGrid(search.value.trim()));
       renderGrid("");
@@ -4743,9 +5003,55 @@ function escapeHtml(text) {
     }
   }
 
+  function wbCreateAttachmentRow(res, fallbackName = "未命名附件") {
+    const row = document.createElement("div");
+    row.className = "wb-attach-item";
+    row.innerHTML =
+      `<span class="wb-attach-ico">${WB_ICONS.file}</span>` +
+      '<span class="wb-attach-name"></span>' +
+      '<div class="wb-attach-btns">' +
+      `<button class="wb-ghost-btn wb-act-preview">${WB_ICONS.eye}<span>预览</span></button>` +
+      `<button class="wb-ghost-btn wb-act-dl">${WB_ICONS.download}<span>下载</span></button>` +
+      "</div>";
+    const rid = res.resourceId || res.id;
+    const fname = res.resourceName || res.name || fallbackName;
+    const normalized = { resourceId: rid, resourceName: fname };
+    const nameEl = row.querySelector(".wb-attach-name");
+    nameEl.textContent = fname;
+    nameEl.title = fname;
+
+    const previewBtn = row.querySelector(".wb-act-preview");
+    previewBtn.addEventListener("click", async () => {
+      previewBtn.disabled = true;
+      try {
+        await wbPreviewAttachment(normalized);
+      } catch (e) {
+        showNotification("预览失败", "无法获取文件预览链接");
+      } finally {
+        previewBtn.disabled = false;
+      }
+    });
+
+    const dlBtn = row.querySelector(".wb-act-dl");
+    dlBtn.addEventListener("click", async () => {
+      dlBtn.disabled = true;
+      try {
+        const url = await getPreviewURL(rid);
+        await downloadFile(url, fname);
+      } catch (e) {
+        showNotification("下载失败", "无法获取文件下载链接");
+      } finally {
+        dlBtn.disabled = false;
+      }
+    });
+    return row;
+  }
+
   async function wbOpenAssignmentDetail(task, courseInfo, returnTab = "todo") {
     if (!wbRoot || !task) return;
+    wbSaveCurrentScroll();
     const id = task.activityId || task.id;
+    const backLabel = returnTab === "courseView" ? "返回课程" : "返回待办";
     wbState.detail = { task, course: courseInfo, returnTab };
     wbState.tab = "detail";
     wbUpdateTabs();
@@ -4756,19 +5062,26 @@ function escapeHtml(text) {
 
     const nativeUrl = buildTaskUrl(task);
     try {
-      const json = await getDetail(id);
+      const [json, submitJson] = await Promise.all([
+        getDetail(id),
+        getSubmitView(id).catch(() => null),
+      ]);
       // 防止异步返回时用户已切走或打开了别的作业
       if (wbState.tab !== "detail" || !wbState.detail || (wbState.detail.task.activityId || wbState.detail.task.id) !== id) {
         return;
       }
       const d = (json && json.data) || {};
+      const sub = (submitJson && submitJson.data) || null;
+      const effectiveWork = Object.assign({}, task, sub || {});
+      const workStatus = wbPickWorkStatus(effectiveWork);
+      const isSubmittedOrGraded = !!(workStatus && !wbIsWorkPending(effectiveWork));
+
       pane.innerHTML = "";
       const inner = document.createElement("div");
       inner.className = "wb-inner";
       pane.appendChild(inner);
 
       // 顶部操作条
-      const backLabel = returnTab === "courseView" ? "返回课程" : "返回待办";
       const bar = document.createElement("div");
       bar.className = "wb-detail-bar";
       bar.innerHTML =
@@ -4812,9 +5125,22 @@ function escapeHtml(text) {
       const endTimeStr = d.assignmentEndTime || d.endTime || task.endTime;
       const beginTimeStr = d.assignmentBeginTime || d.beginTime;
       const endDate = parseDeadline(endTimeStr);
+      if (workStatus) {
+        meta.insertAdjacentHTML(
+          "beforeend",
+          `<span class="wb-status-chip ${workStatus.cls}">${escapeHtml(workStatus.text)}</span>`
+        );
+      }
       if (endDate) {
-        const rem = formatRemain(endDate - Date.now());
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+        if (!isSubmittedOrGraded) {
+          const rem = formatRemain(endDate - Date.now());
+          meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+        } else if (endDate.getTime() > Date.now()) {
+          meta.insertAdjacentHTML(
+            "beforeend",
+            `<span class="wb-chip">${wbFormatSubmittedRemain(endDate)}</span>`
+          );
+        }
         meta.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
       }
       const beginDate = parseDeadline(beginTimeStr);
@@ -4850,6 +5176,97 @@ function escapeHtml(text) {
       }
       inner.appendChild(hero);
 
+      // 我的提交与批改卡片（来自 /ykt-site/work/submit-view，无数据时静默跳过）
+      if (sub) {
+        const subSt = wbParseWorkStatus(sub);
+        const subScore = sub.assignmentScore;
+        const groupScore = sub.groupScore;
+        const hasScore = subScore !== undefined && subScore !== null && subScore !== "";
+        const hasGroupScore = groupScore !== undefined && groupScore !== null && groupScore !== "";
+        const hasComment = !!(sub.assignmentComment && String(sub.assignmentComment).trim());
+        const hasContent = !!(sub.assignmentContent && String(sub.assignmentContent).trim());
+        const attIds = Array.isArray(sub.attachmentIds) ? sub.attachmentIds.filter(Boolean) : [];
+        if (
+          subSt === 0 ||
+          subSt === 1 ||
+          subSt === 2 ||
+          hasScore ||
+          hasComment ||
+          hasContent ||
+          attIds.length
+        ) {
+          const subCard = document.createElement("div");
+          subCard.className = "wb-detail-card";
+          const cardTitle = subSt === 1 || hasScore || hasComment ? "我的提交与批改" : "我的提交";
+          subCard.innerHTML = `<div class="wb-section-title">${cardTitle}</div>`;
+
+          const summary = document.createElement("div");
+          summary.className = "wb-sub-summary";
+          if (workStatus) {
+            summary.insertAdjacentHTML(
+              "beforeend",
+              `<span class="wb-status-chip ${workStatus.cls}">${escapeHtml(workStatus.text)}</span>`
+            );
+          }
+          if (hasScore) {
+            summary.insertAdjacentHTML("beforeend", `<span class="wb-score-pill">教师打分 ${escapeHtml(subScore)} 分</span>`);
+          }
+          if (hasGroupScore && String(groupScore) !== String(subScore)) {
+            summary.insertAdjacentHTML("beforeend", `<span class="wb-chip">小组得分 ${escapeHtml(groupScore)} 分</span>`);
+          }
+          const subTimeDate = parseDeadline(sub.submitTime || task.submitTime);
+          if (subTimeDate) {
+            summary.insertAdjacentHTML("beforeend", `<span class="wb-chip">提交于 ${fmtDeadline(subTimeDate)}</span>`);
+          }
+          if (summary.children.length) subCard.appendChild(summary);
+
+          if (hasComment) {
+            const cBlock = document.createElement("div");
+            cBlock.className = "wb-sub-block";
+            cBlock.innerHTML =
+              `<div class="wb-sub-label">${subSt === 2 ? "驳回原因" : "教师评语"}</div>` +
+              `<div class="wb-comment-box${subSt === 2 ? " rejected" : ""}"><div class="wb-rich-body"></div></div>`;
+            wbRenderSafeHtml(cBlock.querySelector(".wb-rich-body"), sub.assignmentComment);
+            subCard.appendChild(cBlock);
+          }
+
+          if (hasContent) {
+            const tBlock = document.createElement("div");
+            tBlock.className = "wb-sub-block";
+            tBlock.innerHTML = '<div class="wb-sub-label">提交正文</div><div class="wb-rich-body"></div>';
+            wbRenderSafeHtml(tBlock.querySelector(".wb-rich-body"), sub.assignmentContent);
+            subCard.appendChild(tBlock);
+          }
+
+          if (attIds.length) {
+            const aBlock = document.createElement("div");
+            aBlock.className = "wb-sub-block";
+            aBlock.innerHTML =
+              `<div class="wb-sub-label">已提交附件（${attIds.length}）</div>` +
+              '<div class="wb-attach-list"><div class="wb-rich-empty">加载附件信息中…</div></div>';
+            subCard.appendChild(aBlock);
+            const listHost = aBlock.querySelector(".wb-attach-list");
+            getUploadFilesByIds(attIds)
+              .then((files) => {
+                if (!listHost.isConnected) return;
+                listHost.innerHTML = "";
+                if (!files.length) {
+                  listHost.innerHTML = '<div class="wb-rich-empty">暂无可预览的已提交附件</div>';
+                  return;
+                }
+                files.forEach((f) => listHost.appendChild(wbCreateAttachmentRow(f, "已提交附件")));
+              })
+              .catch(() => {
+                if (listHost.isConnected) {
+                  listHost.innerHTML = '<div class="wb-rich-empty">已提交附件加载失败，请点击右上角前往原页查看</div>';
+                }
+              });
+          }
+
+          inner.appendChild(subCard);
+        }
+      }
+
       // 作业要求卡片
       const reqCard = document.createElement("div");
       reqCard.className = "wb-detail-card";
@@ -4865,54 +5282,13 @@ function escapeHtml(text) {
         attachCard.className = "wb-detail-card";
         attachCard.innerHTML = `<div class="wb-section-title">作业附件（${resources.length}）</div><div class="wb-attach-list"></div>`;
         const listEl = attachCard.querySelector(".wb-attach-list");
-        resources.forEach((res) => {
-          const row = document.createElement("div");
-          row.className = "wb-attach-item";
-          row.innerHTML =
-            `<span class="wb-attach-ico">${WB_ICONS.file}</span>` +
-            '<span class="wb-attach-name"></span>' +
-            '<div class="wb-attach-btns">' +
-            `<button class="wb-ghost-btn wb-act-preview">${WB_ICONS.eye}<span>预览</span></button>` +
-            `<button class="wb-ghost-btn wb-act-dl">${WB_ICONS.download}<span>下载</span></button>` +
-            "</div>";
-          const fname = res.resourceName || "未命名附件";
-          const nameEl = row.querySelector(".wb-attach-name");
-          nameEl.textContent = fname;
-          nameEl.title = fname;
-
-          const previewBtn = row.querySelector(".wb-act-preview");
-          previewBtn.addEventListener("click", async () => {
-            previewBtn.disabled = true;
-            try {
-              await wbPreviewAttachment(res);
-            } catch (e) {
-              showNotification("预览失败", "无法获取附件预览链接");
-            } finally {
-              previewBtn.disabled = false;
-            }
-          });
-
-          const dlBtn = row.querySelector(".wb-act-dl");
-          dlBtn.addEventListener("click", async () => {
-            dlBtn.disabled = true;
-            try {
-              const url = await getPreviewURL(res.resourceId);
-              await downloadFile(url, fname);
-            } catch (e) {
-              showNotification("下载失败", "无法获取附件下载链接");
-            } finally {
-              dlBtn.disabled = false;
-            }
-          });
-
-          listEl.appendChild(row);
-        });
+        resources.forEach((res) => listEl.appendChild(wbCreateAttachmentRow(res, "未命名附件")));
         inner.appendChild(attachCard);
       }
     } catch (e) {
       pane.innerHTML =
         `<div class="wb-inner"><div class="wb-detail-bar">` +
-        `<button class="wb-back-btn">${WB_ICONS.back}<span>返回待办</span></button>` +
+        `<button class="wb-back-btn">${WB_ICONS.back}<span>${backLabel}</span></button>` +
         `<button class="wb-primary-btn"><span>打开原页面</span>${WB_ICONS.external}</button>` +
         `</div>${wbEmptyHtml("加载作业详情失败，请重试或直接打开原页面")}</div>`;
       pane.querySelector(".wb-back-btn")?.addEventListener("click", () => wbSwitchTab(returnTab));
@@ -4989,6 +5365,8 @@ function escapeHtml(text) {
 
   async function wbOpenCourseView(course, initialSubTab = "resource") {
     if (!wbRoot || !course || !course.id) return;
+    wbSaveCurrentScroll();
+    wbCancelCourseDownload();
     wbState.courseView = { course, subTab: initialSubTab };
     wbState.detail = null;
     wbState.tab = "courseView";
@@ -5108,32 +5486,37 @@ function escapeHtml(text) {
         const resSearch = resBar.querySelector(".wb-search");
         const batchBtn = resBar.querySelector(".wb-batch-dl");
         const batchSpan = batchBtn.querySelector("span");
-        let batchActive = false;
-        batchBtn.addEventListener("click", async () => {
-          if (batchActive) {
-            batchActive = false;
-            downloading = false;
-            batchSpan.textContent = `全部下载 (${allFiles.length})`;
+        const runBatchDownload = async (files, spanEl, idleText) => {
+          if (wbActiveCourseDownload && wbActiveCourseDownload.spanEl === spanEl) {
+            wbCancelCourseDownload();
+            spanEl.textContent = idleText;
             return;
           }
-          batchActive = true;
-          downloading = true;
-          for (let i = 0; i < allFiles.length; i++) {
-            if (!batchActive || !downloading) break;
-            const f = allFiles[i];
-            batchSpan.textContent = `取消下载 (${i + 1}/${allFiles.length})`;
+          if (wbActiveCourseDownload) {
+            const prev = wbActiveCourseDownload;
+            wbCancelCourseDownload();
+            if (prev.spanEl && prev.spanEl.isConnected) prev.spanEl.textContent = prev.idleText;
+          }
+          const job = { cancelled: false, spanEl, idleText };
+          wbActiveCourseDownload = job;
+          for (let i = 0; i < files.length; i++) {
+            if (job.cancelled) break;
+            const f = files[i];
+            if (spanEl.isConnected) spanEl.textContent = `取消下载 (${i + 1}/${files.length})`;
             try {
               const url = await getPreviewURL(f.resourceId);
-              if (!batchActive || !downloading) break;
+              if (job.cancelled) break;
               await downloadFile(url, f.resourceName);
             } catch (e) {
               console.warn("[ucloud-Enhanced] 批量下载单文件失败:", f.resourceName, e);
             }
           }
-          batchActive = false;
-          downloading = false;
-          batchSpan.textContent = `全部下载 (${allFiles.length})`;
-        });
+          if (wbActiveCourseDownload === job) wbActiveCourseDownload = null;
+          if (spanEl.isConnected) spanEl.textContent = idleText;
+        };
+        batchBtn.addEventListener("click", () =>
+          runBatchDownload(allFiles, batchSpan, `全部下载 (${allFiles.length})`)
+        );
 
         const groupsHost = document.createElement("div");
         subRes.appendChild(groupsHost);
@@ -5153,52 +5536,21 @@ function escapeHtml(text) {
             const box = document.createElement("div");
             box.className = "wb-res-group";
             box.innerHTML =
-              '<div class="wb-res-group-title"><span class="wb-gt"></span><span class="wb-gc"></span></div>' +
+              '<div class="wb-res-group-title">' +
+              '<span class="wb-gt"></span>' +
+              '<div class="wb-res-group-actions">' +
+              '<span class="wb-gc"></span>' +
+              `<button class="wb-ghost-btn wb-group-dl-btn" type="button">${WB_ICONS.download}<span>下载本组</span></button>` +
+              "</div></div>" +
               '<div class="wb-attach-list"></div>';
             box.querySelector(".wb-gt").textContent = g.title;
             box.querySelector(".wb-gc").textContent = `${files.length} 个文件`;
+            const grpBtn = box.querySelector(".wb-group-dl-btn");
+            const grpSpan = grpBtn.querySelector("span");
+            grpBtn.addEventListener("click", () => runBatchDownload(files, grpSpan, "下载本组"));
             const listEl = box.querySelector(".wb-attach-list");
 
-            files.forEach((res) => {
-              const row = document.createElement("div");
-              row.className = "wb-attach-item";
-              row.innerHTML =
-                `<span class="wb-attach-ico">${WB_ICONS.file}</span>` +
-                '<span class="wb-attach-name"></span>' +
-                '<div class="wb-attach-btns">' +
-                `<button class="wb-ghost-btn wb-act-preview">${WB_ICONS.eye}<span>预览</span></button>` +
-                `<button class="wb-ghost-btn wb-act-dl">${WB_ICONS.download}<span>下载</span></button>` +
-                "</div>";
-              const nameEl = row.querySelector(".wb-attach-name");
-              nameEl.textContent = res.resourceName;
-              nameEl.title = res.resourceName;
-
-              const previewBtn = row.querySelector(".wb-act-preview");
-              previewBtn.addEventListener("click", async () => {
-                previewBtn.disabled = true;
-                try {
-                  await wbPreviewAttachment(res);
-                } catch (e) {
-                  showNotification("预览失败", "无法获取课件预览链接");
-                } finally {
-                  previewBtn.disabled = false;
-                }
-              });
-
-              const dlBtn = row.querySelector(".wb-act-dl");
-              dlBtn.addEventListener("click", async () => {
-                dlBtn.disabled = true;
-                try {
-                  const url = await getPreviewURL(res.resourceId);
-                  await downloadFile(url, res.resourceName);
-                } catch (e) {
-                  showNotification("下载失败", "无法获取课件下载链接");
-                } finally {
-                  dlBtn.disabled = false;
-                }
-              });
-              listEl.appendChild(row);
-            });
+            files.forEach((res) => listEl.appendChild(wbCreateAttachmentRow(res, "未命名文件")));
             groupsHost.appendChild(box);
           });
           if (!renderedCount) {
@@ -5337,7 +5689,8 @@ function escapeHtml(text) {
 
   function setupWorkbench() {
     document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape" && wbState.open) {
+      if (!wbState.open) return;
+      if (e.key === "Escape") {
         if (wbState.tab === "detail" && wbState.detail) {
           wbSwitchTab(wbState.detail.returnTab || "todo");
         } else if (wbState.tab === "courseView") {
@@ -5345,6 +5698,28 @@ function escapeHtml(text) {
         } else {
           wbClose();
         }
+        return;
+      }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const activeTarget = (typeof e.composedPath === "function" && e.composedPath()[0]) || e.target;
+      const tag = activeTarget && activeTarget.tagName ? activeTarget.tagName.toUpperCase() : "";
+      if (tag === "INPUT" || tag === "TEXTAREA" || (activeTarget && activeTarget.isContentEditable)) {
+        return;
+      }
+      if (e.key === "/") {
+        const activePane = wbRoot && wbRoot.querySelector(`.wb-pane[data-pane="${wbState.tab}"]`);
+        const searchInput = activePane && activePane.querySelector(".wb-search");
+        if (searchInput && searchInput.offsetParent !== null) {
+          e.preventDefault();
+          searchInput.focus();
+          searchInput.select();
+        }
+      } else if (e.key === "1") {
+        wbSwitchTab("todo");
+      } else if (e.key === "2") {
+        wbSwitchTab("course");
+      } else if (e.key === "3") {
+        wbSwitchTab("notice");
       }
     });
     const autoOpen = () => {

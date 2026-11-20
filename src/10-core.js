@@ -2003,6 +2003,20 @@
     return apiFetch("ykt-site/work/detail?assignmentId=" + id);
   }
 
+  // 获取学生提交与批改详情（我的作答 / 得分 / 教师评语 / 已交附件 ID）
+  async function getSubmitView(id) {
+    return apiFetch("ykt-site/work/submit-view?assignmentId=" + encodeURIComponent(id));
+  }
+
+  // 根据资源 ID 列表获取已上传附件元信息
+  async function getUploadFilesByIds(ids) {
+    if (!Array.isArray(ids) || !ids.length) return [];
+    const json = await apiFetch(
+      "blade-source/resource/list/byId?resourceIds=" + encodeURIComponent(ids.join(","))
+    );
+    return (json && Array.isArray(json.data) && json.data) || [];
+  }
+
   // 获取站点资源树（供工作台课程空间按章节展示，并被 getSiteResource 复用）
   async function getSiteResourceTree(id) {
     const [userid] = getToken();
