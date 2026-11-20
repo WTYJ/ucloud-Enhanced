@@ -31,9 +31,19 @@
 
 ## 📥 安装
 
-1. 安装 [Tampermonkey](https://www.tampermonkey.net/) 浏览器扩展
+1. 安装 [Tampermonkey](https://www.tampermonkey.net/)（或 ScriptCat）浏览器扩展
 2. [点击安装 ucloud-Enhanced](https://github.com/WTYJ/ucloud-Enhanced/raw/refs/heads/main/ucloud-Enhanced.user.js)，或复制 `ucloud-Enhanced.user.js` 内容到脚本管理器新建脚本
-3. 访问云邮教学空间，右下角 ⚙️ 打开设置面板
+3. 访问云邮教学空间，点击右下角悬浮球 ⚙️ 即可打开工作台或设置面板
+
+> [!IMPORTANT]
+> **安装后脚本不生效？（Chrome / Edge 等 Chromium 内核高版本必看）**
+>
+> Chromium 内核浏览器在高版本（Manifest V3）中收紧了用户脚本执行权限，仅开启开发者模式已不够，需要手动授权：
+> 1. 地址栏输入 `chrome://extensions/`（Edge 输入 `edge://extensions/`）并回车
+> 2. 打开页面右上角的 **开发者模式（开发人员模式）**
+> 3. 找到 **Tampermonkey（篡改猴）** 或 **ScriptCat（脚本猫）**，点击 **详情（详细信息）**
+> 4. 向下滚动，开启 **允许运行用户脚本（或「允许用户脚本」）**
+> 5. 返回云邮教学空间，按 `Ctrl + F5`（Mac 为 `Cmd + Shift + R`）强制刷新页面
 
 ## ⚙️ 助手 UI
 
