@@ -2989,8 +2989,8 @@ function escapeHtml(text) {
     );
   }
 
-  // 生成待办详情地址（供工作台与卡片共用）
-  function buildTaskUrl(task) {
+  // 生成待办详情地址（供工作台与卡片共用；tabOverride 可指定落点页签如 "second" 直达提交页）
+  function buildTaskUrl(task, tabOverride) {
     const id = task && (task.activityId || task.id);
     if (!id) return "";
     const q = (obj) =>
@@ -3000,7 +3000,7 @@ function escapeHtml(text) {
         .join("&");
     const type = Number(task.type);
     if (type === 3 || type === 5) {
-      const tab = type === 3 ? "first" : "fourth";
+      const tab = tabOverride || (type === 3 ? "first" : "fourth");
       return (
         "course.html#/student/assignmentDetails_fullpage?" +
         q({
@@ -4280,6 +4280,34 @@ function escapeHtml(text) {
     :host(.wb-dark) .wb-status-chip.unsubmitted { background: rgba(250, 204, 21, 0.18); color: #fde047; }
     :host(.wb-dark) .wb-status-chip.rejected { background: rgba(251, 191, 36, 0.18); color: #fcd34d; }
     :host(.wb-dark) .wb-status-chip.graded { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
+    .wb-file-ext {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 34px;
+      height: 20px;
+      padding: 0 5px;
+      border-radius: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      flex-shrink: 0;
+    }
+    .wb-file-ext.pdf { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
+    .wb-file-ext.ppt { background: rgba(249, 115, 22, 0.14); color: #c2410c; }
+    .wb-file-ext.doc { background: rgba(37, 99, 235, 0.12); color: #2563eb; }
+    .wb-file-ext.xls { background: rgba(16, 185, 129, 0.14); color: #059669; }
+    .wb-file-ext.zip { background: rgba(139, 92, 246, 0.14); color: #7c3aed; }
+    .wb-file-ext.img { background: rgba(20, 184, 166, 0.14); color: #0f766e; }
+    .wb-file-ext.media { background: rgba(99, 102, 241, 0.14); color: #4f46e5; }
+    .wb-file-ext.code { background: var(--wb-surface-2); color: var(--wb-text-2); }
+    :host(.wb-dark) .wb-file-ext.pdf { background: rgba(239, 68, 68, 0.22); color: #fca5a5; }
+    :host(.wb-dark) .wb-file-ext.ppt { background: rgba(251, 146, 60, 0.22); color: #fdba74; }
+    :host(.wb-dark) .wb-file-ext.doc { background: rgba(96, 165, 250, 0.2); color: #93c5fd; }
+    :host(.wb-dark) .wb-file-ext.xls { background: rgba(52, 211, 153, 0.2); color: #6ee7b7; }
+    :host(.wb-dark) .wb-file-ext.zip { background: rgba(167, 139, 250, 0.22); color: #c4b5fd; }
+    :host(.wb-dark) .wb-file-ext.img { background: rgba(45, 212, 191, 0.2); color: #5eead4; }
+    :host(.wb-dark) .wb-file-ext.media { background: rgba(129, 140, 248, 0.22); color: #a5b4fc; }
   `;
 
   function wbApplyTheme() {
@@ -4466,8 +4494,9 @@ function escapeHtml(text) {
     requestAnimationFrame(() => wbHost && wbHost.classList.add("wb-open"));
     if (wbState.todoLoaded) wbStartTicker();
     wbSwitchTab(tab || wbState.tab);
-    // 后台预拉一次通知以点亮未读红点角标，切入通知页签时也可立即展示
+    // 后台预拉通知与待办，以便直接进入课程页签时也能点亮未读红点与各课待办角标
     if (!wbState.noticeLoaded) wbLoadNotices();
+    if (!wbState.todoLoaded) wbLoadTodo();
   }
 
   function wbClose() {
@@ -5227,18 +5256,39 @@ function escapeHtml(text) {
     }
   }
 
+  function wbPickFileTypeBadge(filename) {
+    const m = String(filename || "").trim().match(/\.([a-z0-9]+)$/i);
+    if (!m) return null;
+    const ext = m[1].toLowerCase();
+    if (ext === "pdf") return { cls: "pdf", label: "PDF" };
+    if (ext === "ppt" || ext === "pptx") return { cls: "ppt", label: "PPT" };
+    if (ext === "doc" || ext === "docx") return { cls: "doc", label: "DOC" };
+    if (ext === "xls" || ext === "xlsx" || ext === "csv") return { cls: "xls", label: "XLS" };
+    if (/^(zip|rar|7z|tar|gz|tgz)$/.test(ext)) return { cls: "zip", label: "ZIP" };
+    if (/^(png|jpe?g|gif|webp|svg|bmp)$/.test(ext)) return { cls: "img", label: "IMG" };
+    if (/^(mp4|mov|avi|mkv|mp3|wav|m4a)$/.test(ext)) return { cls: "media", label: "MEDIA" };
+    if (/^(txt|md|c|cpp|h|hpp|py|java|js|ts|html|css|json|xml|sql|sh)$/.test(ext)) {
+      return { cls: "code", label: ext.toUpperCase().slice(0, 4) };
+    }
+    return null;
+  }
+
   function wbCreateAttachmentRow(res, fallbackName = "未命名附件") {
+    const rid = res.resourceId || res.id;
+    const fname = res.resourceName || res.name || fallbackName;
+    const extBadge = wbPickFileTypeBadge(fname);
+    const iconHtml = extBadge
+      ? `<span class="wb-file-ext ${extBadge.cls}">${extBadge.label}</span>`
+      : `<span class="wb-attach-ico">${WB_ICONS.file}</span>`;
     const row = document.createElement("div");
     row.className = "wb-attach-item";
     row.innerHTML =
-      `<span class="wb-attach-ico">${WB_ICONS.file}</span>` +
+      iconHtml +
       '<span class="wb-attach-name"></span>' +
       '<div class="wb-attach-btns">' +
       `<button class="wb-ghost-btn wb-act-preview">${WB_ICONS.eye}<span>预览</span></button>` +
       `<button class="wb-ghost-btn wb-act-dl">${WB_ICONS.download}<span>下载</span></button>` +
       "</div>";
-    const rid = res.resourceId || res.id;
-    const fname = res.resourceName || res.name || fallbackName;
     const normalized = { resourceId: rid, resourceName: fname };
     const nameEl = row.querySelector(".wb-attach-name");
     nameEl.textContent = fname;
@@ -5284,7 +5334,7 @@ function escapeHtml(text) {
     if (bodyEl) bodyEl.scrollTop = 0;
     pane.innerHTML = wbSkeletonHtml("todo");
 
-    const nativeUrl = buildTaskUrl(task);
+    const nativeUrl = buildTaskUrl(task, Number(task.type) === 5 ? "fourth" : "second");
     try {
       const [json, submitJson] = await Promise.all([
         getDetail(id),

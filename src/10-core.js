@@ -2140,8 +2140,8 @@
     );
   }
 
-  // 生成待办详情地址（供工作台与卡片共用）
-  function buildTaskUrl(task) {
+  // 生成待办详情地址（供工作台与卡片共用；tabOverride 可指定落点页签如 "second" 直达提交页）
+  function buildTaskUrl(task, tabOverride) {
     const id = task && (task.activityId || task.id);
     if (!id) return "";
     const q = (obj) =>
@@ -2151,7 +2151,7 @@
         .join("&");
     const type = Number(task.type);
     if (type === 3 || type === 5) {
-      const tab = type === 3 ? "first" : "fourth";
+      const tab = tabOverride || (type === 3 ? "first" : "fourth");
       return (
         "course.html#/student/assignmentDetails_fullpage?" +
         q({
