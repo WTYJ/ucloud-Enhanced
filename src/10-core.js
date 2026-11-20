@@ -2692,10 +2692,16 @@
   async function getPreviewURL(storageId) {
     const res = await fetch(
       "https://apiucloud.bupt.edu.cn/blade-source/resource/preview-url?resourceId=" +
-        storageId
+        encodeURIComponent(storageId)
     );
+    if (!res.ok) {
+      throw new Error(`获取预览链接失败 (${res.status})`);
+    }
     const json = await res.json();
-    onlinePreview = json.data.onlinePreview;
+    if (!json || !json.data || !json.data.previewUrl) {
+      throw new Error("预览链接数据缺失");
+    }
+    onlinePreview = json.data.onlinePreview ?? null;
     return json.data.previewUrl;
   }
 

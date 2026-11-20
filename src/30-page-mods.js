@@ -1228,12 +1228,13 @@
         "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
       )
     ) {
-      const q = new URLSearchParams(location.href);
+      const qIdx = location.href.indexOf("?");
+      const q = new URLSearchParams(qIdx >= 0 ? location.href.slice(qIdx + 1) : "");
       const id = q.get("assignmentId");
       const r = get(id);
       const title = q.get("assignmentTitle");
       if (settings.system.betterTitle) {
-        const pageTitle = "[作业] " + title + " - 教学云空间";
+        const pageTitle = "[作业] " + (title || "详情") + " - 教学云空间";
         document.title = pageTitle;
       }
       if (settings.homework.showHomeworkSource) {
@@ -1305,6 +1306,8 @@
                   active: true,
                   insert: true,
                 });
+              } else {
+                openTab(url, { active: true, insert: true });
               }
             });
 
@@ -1579,29 +1582,34 @@
               document.getElementById("downloadAllButton").onclick =
                 async () => {
                   downloading = !downloading;
+                  const btn = document.getElementById("downloadAllButton");
+                  if (!btn) return;
                   if (downloading) {
-                    const btn = document.getElementById("downloadAllButton");
                     const totalCount = resources.length;
-                    btn.innerHTML = "取消下载 (0/" + totalCount + ")";
-                    for (let index = 0; index < resources.length; index++) {
-                      if (!downloading) return;
-                      const file = resources[index];
-                      const shortName = file.name.length > 20 ? file.name.substring(0, 17) + "..." : file.name;
-                      btn.innerHTML =
-                        "取消下载 " + shortName + " (" + (index + 1) + "/" + totalCount + ")";
-                      await downloadFile(
-                        await getPreviewURL(file.id),
-                        file.name
-                      );
-                      if (!downloading) return;
-                    }
-                    if (downloading) {
+                    btn.textContent = "取消下载 (0/" + totalCount + ")";
+                    try {
+                      for (let index = 0; index < resources.length; index++) {
+                        if (!downloading) return;
+                        const file = resources[index];
+                        const shortName = file.name.length > 20 ? file.name.substring(0, 17) + "..." : file.name;
+                        btn.textContent =
+                          "取消下载 " + shortName + " (" + (index + 1) + "/" + totalCount + ")";
+                        try {
+                          await downloadFile(
+                            await getPreviewURL(file.id),
+                            file.name
+                          );
+                        } catch (err) {
+                          console.warn("[ucloud-Enhanced] 批量下载单文件失败:", file.name, err);
+                        }
+                        if (!downloading) return;
+                      }
+                    } finally {
                       downloading = false;
-                      btn.innerHTML = "下载全部";
+                      if (btn.isConnected) btn.textContent = "下载全部";
                     }
                   } else {
-                    document.getElementById("downloadAllButton").innerHTML =
-                      "下载全部";
+                    btn.textContent = "下载全部";
                   }
                 };
             }
@@ -1648,8 +1656,8 @@
             }
             const timeTextA = timeA.textContent.trim();
             const timeTextB = timeB.textContent.trim();
-            const dateA = new Date(timeTextA);
-            const dateB = new Date(timeTextB);
+            const dateA = parseDeadline(timeTextA)?.getTime() || 0;
+            const dateB = parseDeadline(timeTextB)?.getTime() || 0;
             return dateB - dateA;
           });
         }

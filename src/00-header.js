@@ -214,8 +214,14 @@ function escapeHtml(text) {
     ) {
       const params = new URLSearchParams(location.search);
       const url = params.get("furl");
+      if (!url) return;
+      let viewURL;
+      try {
+        viewURL = new URL(url);
+      } catch (e) {
+        return;
+      }
       const filename = params.get("fullfilename") || url;
-      const viewURL = new URL(url);
       const oauthKey = params.get("oauthKey");
       if (oauthKey) {
         const viewURLsearch = new URLSearchParams(viewURL.search);
@@ -236,10 +242,14 @@ function escapeHtml(text) {
           return;
         }
         if (window.stop) window.stop();
-        // 使用浏览器内置预览器，转blob避免出现下载动作
+        // 使用浏览器内置预览器，显式指定 application/pdf 避免 octet-stream 触发下载
         fetch(viewURL.toString())
-          .then((response) => response.blob())
-          .then((blob) => {
+          .then((response) => {
+            if (!response.ok) throw new Error("HTTP " + response.status);
+            return response.arrayBuffer();
+          })
+          .then((buf) => {
+            const blob = new Blob([buf], { type: "application/pdf" });
             const blobUrl = URL.createObjectURL(blob);
             location.href = blobUrl;
           })
