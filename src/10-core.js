@@ -2171,10 +2171,12 @@
     return json;
   }
 
-  // 文件下载相关函数（支持无 Content-Length 降级与异常时安全回收进度计数）
-  async function downloadFile(url, filename) {
+  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调与异常时安全回收进度计数）
+  async function downloadFile(url, filename, shouldCancel) {
     console.debug("Call download");
-    downloading = true;
+    const isCancelled = () =>
+      typeof shouldCancel === "function" ? !!shouldCancel() : !downloading;
+    if (typeof shouldCancel !== "function") downloading = true;
     NProgress.configure({ trickle: false, speed: 0 });
     let addedTotal = 0;
     let addedLoaded = 0;
@@ -2194,7 +2196,7 @@
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          if (!downloading) {
+          if (isCancelled()) {
             reader.cancel().catch(() => {});
             return;
           }
@@ -2208,7 +2210,7 @@
         // 服务器未返回 Content-Length 或不支持流式读取时，降级为整块 Blob 下载
         NProgress.start();
         blob = await response.blob();
-        if (!downloading) return;
+        if (isCancelled()) return;
       }
 
       const downloadUrl = window.URL.createObjectURL(blob);
@@ -2218,13 +2220,15 @@
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      // 延迟释放 Blob URL，避免 Safari/Firefox 尚未接管下载流就被同步回收
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
     } catch (error) {
       console.error("Download failed:", error);
+      throw error;
     } finally {
       sumBytes = Math.max(0, sumBytes - addedTotal);
       loadedBytes = Math.max(0, loadedBytes - addedLoaded);
-      if (sumBytes === 0 || !downloading) NProgress.done();
+      if (sumBytes === 0 || isCancelled()) NProgress.done();
     }
   }
 

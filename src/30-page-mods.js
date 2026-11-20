@@ -1292,7 +1292,7 @@
               const url = urls[index];
               const filename = filenames[index];
               if (settings.preview.autoDownload) {
-                downloadFile(url, filename);
+                downloadFile(url, filename).catch(() => {});
                 console.debug("Autodownload");
               }
               if (OFFICE_EXT_RE.test(filename) && settings.preview.autoSwitchOffice) {
@@ -1316,7 +1316,7 @@
             i2.title = "下载";
             i2.classList.add("by-icon-yundown-grey");
             i2.addEventListener("click", () => {
-              downloadFile(urls[index], filenames[index]);
+              downloadFile(urls[index], filenames[index]).catch(() => {});
             });
 
             // 插入按钮
@@ -1355,54 +1355,64 @@
         );
       }
       if (settings.experimental.todoRedesign || settings.home.showTodoCourseName) {
-        // 未完成任务列表
-        const list = glist || (await getUndoneList()).data.undoneList;
-        if (!list || !Array.isArray(list)) return;
-        glist = list;
-
-        let pageCheckTimer = null;
-        if (homePageObserver) {
-          homePageObserver.disconnect();
-          homePageObserver = null;
+        // 未完成任务列表（异常时不中断后续布局与滚轮翻页初始化）
+        let list = glist;
+        if (!list) {
+          try {
+            const undoneRes = await getUndoneList();
+            list = undoneRes && undoneRes.data && undoneRes.data.undoneList;
+          } catch (e) {
+            console.warn("[ucloud-Enhanced] 主页获取待办列表失败:", e);
+            list = null;
+          }
         }
-        const pageIndicatorSelector =
-          "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block";
-        homePageObserver = new MutationObserver(() => {
-          // 防抖：任何 DOM 变动都会触发回调，集中处理避免重复解析
-          clearTimeout(pageCheckTimer);
-          pageCheckTimer = setTimeout(async () => {
-            const pageElement = document.querySelector(pageIndicatorSelector);
-            if (!pageElement) return;
+        if (Array.isArray(list)) {
+          glist = list;
 
-            // 解析页码
-            const currentPage = parseInt(
-              pageElement.innerHTML.trim().split("/")[0]
-            );
-            if (isNaN(currentPage)) return;
+          let pageCheckTimer = null;
+          if (homePageObserver) {
+            homePageObserver.disconnect();
+            homePageObserver = null;
+          }
+          const pageIndicatorSelector =
+            "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block";
+          homePageObserver = new MutationObserver(() => {
+            // 防抖：任何 DOM 变动都会触发回调，集中处理避免重复解析
+            clearTimeout(pageCheckTimer);
+            pageCheckTimer = setTimeout(async () => {
+              const pageElement = document.querySelector(pageIndicatorSelector);
+              if (!pageElement) return;
 
-            // 页码变化则更新显示
-            if (currentPage !== gpage) {
-              gpage = currentPage;
-              await updateAssignmentDisplay(list);
-            }
-          }, 120);
-        });
+              // 解析页码
+              const currentPage = parseInt(
+                pageElement.innerHTML.trim().split("/")[0]
+              );
+              if (isNaN(currentPage)) return;
 
-        homePageObserver.observe(document.body, {
-          childList: true,
-          subtree: true,
-          attributes: false,
-          characterData: true,
-        });
+              // 页码变化则更新显示
+              if (currentPage !== gpage) {
+                gpage = currentPage;
+                await updateAssignmentDisplay(list);
+              }
+            }, 120);
+          });
 
-        // 初始化页码
-        const pageElement = document.querySelector(pageIndicatorSelector);
-        if (pageElement) {
-          gpage = parseInt(pageElement.innerHTML.trim().split("/")[0]);
+          homePageObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: false,
+            characterData: true,
+          });
+
+          // 初始化页码
+          const pageElement = document.querySelector(pageIndicatorSelector);
+          if (pageElement) {
+            gpage = parseInt(pageElement.innerHTML.trim().split("/")[0]);
+          }
+
+          // 更新作业显示
+          await updateAssignmentDisplay(list);
         }
-
-        // 更新作业显示
-        await updateAssignmentDisplay(list);
       }
       syncHomeLayout();
       setTimeout(syncHomeLayout, 600);
@@ -1511,13 +1521,22 @@
           resourceItems.forEach((x, index) => {
             if (index >= resources.length) return;
 
-            if (settings.preview.autoDownload && previewItems[index]) {
+            if (
+              settings.preview.autoDownload &&
+              previewItems[index] &&
+              previewItems[index].dataset.yzAutoDlBound !== "1"
+            ) {
+              previewItems[index].dataset.yzAutoDlBound = "1";
               previewItems[index].addEventListener(
                 "click",
-                async (e) => {
-                  const url = await getPreviewURL(resources[index].id);
-                  downloadFile(url, resources[index].name);
-                  console.debug("Autodownload");
+                async () => {
+                  try {
+                    const url = await getPreviewURL(resources[index].id);
+                    await downloadFile(url, resources[index].name);
+                    console.debug("Autodownload");
+                  } catch (err) {
+                    console.warn("[ucloud-Enhanced] 自动下载失败:", err);
+                  }
                 },
                 false
               );
@@ -1546,8 +1565,12 @@
                 "click",
                 async (e) => {
                   e.stopPropagation();
-                  const url = await getPreviewURL(resources[index].id);
-                  downloadFile(url, resources[index].name);
+                  try {
+                    const url = await getPreviewURL(resources[index].id);
+                    await downloadFile(url, resources[index].name);
+                  } catch (err) {
+                    showNotification("下载失败", "无法下载该课件，请稍后重试");
+                  }
                 },
                 false
               );

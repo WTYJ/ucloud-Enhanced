@@ -2057,7 +2057,7 @@
     const url = await getPreviewURL(res.resourceId);
     const filename = res.resourceName || "附件";
     if (settings.preview.autoDownload) {
-      downloadFile(url, filename);
+      downloadFile(url, filename).catch(() => {});
     }
     if (OFFICE_EXT_RE.test(filename) && settings.preview.autoSwitchOffice) {
       openTab(
@@ -2598,7 +2598,7 @@
             try {
               const url = await getPreviewURL(f.resourceId);
               if (job.cancelled) break;
-              await downloadFile(url, f.resourceName);
+              await downloadFile(url, f.resourceName, () => job.cancelled);
             } catch (e) {
               console.warn("[ucloud-Enhanced] 批量下载单文件失败:", f.resourceName, e);
             }

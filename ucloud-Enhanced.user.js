@@ -3019,10 +3019,12 @@ function escapeHtml(text) {
     return json;
   }
 
-  // 文件下载相关函数（支持无 Content-Length 降级与异常时安全回收进度计数）
-  async function downloadFile(url, filename) {
+  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调与异常时安全回收进度计数）
+  async function downloadFile(url, filename, shouldCancel) {
     console.debug("Call download");
-    downloading = true;
+    const isCancelled = () =>
+      typeof shouldCancel === "function" ? !!shouldCancel() : !downloading;
+    if (typeof shouldCancel !== "function") downloading = true;
     NProgress.configure({ trickle: false, speed: 0 });
     let addedTotal = 0;
     let addedLoaded = 0;
@@ -3042,7 +3044,7 @@ function escapeHtml(text) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          if (!downloading) {
+          if (isCancelled()) {
             reader.cancel().catch(() => {});
             return;
           }
@@ -3056,7 +3058,7 @@ function escapeHtml(text) {
         // 服务器未返回 Content-Length 或不支持流式读取时，降级为整块 Blob 下载
         NProgress.start();
         blob = await response.blob();
-        if (!downloading) return;
+        if (isCancelled()) return;
       }
 
       const downloadUrl = window.URL.createObjectURL(blob);
@@ -3066,13 +3068,15 @@ function escapeHtml(text) {
       document.body.appendChild(a);
       a.click();
       a.remove();
-      window.URL.revokeObjectURL(downloadUrl);
+      // 延迟释放 Blob URL，避免 Safari/Firefox 尚未接管下载流就被同步回收
+      setTimeout(() => window.URL.revokeObjectURL(downloadUrl), 1000);
     } catch (error) {
       console.error("Download failed:", error);
+      throw error;
     } finally {
       sumBytes = Math.max(0, sumBytes - addedTotal);
       loadedBytes = Math.max(0, loadedBytes - addedLoaded);
-      if (sumBytes === 0 || !downloading) NProgress.done();
+      if (sumBytes === 0 || isCancelled()) NProgress.done();
     }
   }
 
@@ -5614,7 +5618,7 @@ function escapeHtml(text) {
     const url = await getPreviewURL(res.resourceId);
     const filename = res.resourceName || "附件";
     if (settings.preview.autoDownload) {
-      downloadFile(url, filename);
+      downloadFile(url, filename).catch(() => {});
     }
     if (OFFICE_EXT_RE.test(filename) && settings.preview.autoSwitchOffice) {
       openTab(
@@ -6155,7 +6159,7 @@ function escapeHtml(text) {
             try {
               const url = await getPreviewURL(f.resourceId);
               if (job.cancelled) break;
-              await downloadFile(url, f.resourceName);
+              await downloadFile(url, f.resourceName, () => job.cancelled);
             } catch (e) {
               console.warn("[ucloud-Enhanced] 批量下载单文件失败:", f.resourceName, e);
             }
@@ -7699,7 +7703,7 @@ function escapeHtml(text) {
               const url = urls[index];
               const filename = filenames[index];
               if (settings.preview.autoDownload) {
-                downloadFile(url, filename);
+                downloadFile(url, filename).catch(() => {});
                 console.debug("Autodownload");
               }
               if (OFFICE_EXT_RE.test(filename) && settings.preview.autoSwitchOffice) {
@@ -7723,7 +7727,7 @@ function escapeHtml(text) {
             i2.title = "下载";
             i2.classList.add("by-icon-yundown-grey");
             i2.addEventListener("click", () => {
-              downloadFile(urls[index], filenames[index]);
+              downloadFile(urls[index], filenames[index]).catch(() => {});
             });
 
             // 插入按钮
@@ -7762,54 +7766,64 @@ function escapeHtml(text) {
         );
       }
       if (settings.experimental.todoRedesign || settings.home.showTodoCourseName) {
-        // 未完成任务列表
-        const list = glist || (await getUndoneList()).data.undoneList;
-        if (!list || !Array.isArray(list)) return;
-        glist = list;
-
-        let pageCheckTimer = null;
-        if (homePageObserver) {
-          homePageObserver.disconnect();
-          homePageObserver = null;
+        // 未完成任务列表（异常时不中断后续布局与滚轮翻页初始化）
+        let list = glist;
+        if (!list) {
+          try {
+            const undoneRes = await getUndoneList();
+            list = undoneRes && undoneRes.data && undoneRes.data.undoneList;
+          } catch (e) {
+            console.warn("[ucloud-Enhanced] 主页获取待办列表失败:", e);
+            list = null;
+          }
         }
-        const pageIndicatorSelector =
-          "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block";
-        homePageObserver = new MutationObserver(() => {
-          // 防抖：任何 DOM 变动都会触发回调，集中处理避免重复解析
-          clearTimeout(pageCheckTimer);
-          pageCheckTimer = setTimeout(async () => {
-            const pageElement = document.querySelector(pageIndicatorSelector);
-            if (!pageElement) return;
+        if (Array.isArray(list)) {
+          glist = list;
 
-            // 解析页码
-            const currentPage = parseInt(
-              pageElement.innerHTML.trim().split("/")[0]
-            );
-            if (isNaN(currentPage)) return;
+          let pageCheckTimer = null;
+          if (homePageObserver) {
+            homePageObserver.disconnect();
+            homePageObserver = null;
+          }
+          const pageIndicatorSelector =
+            "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-header > div > div:nth-child(2) > div > div.banner-indicator.home-inline-block";
+          homePageObserver = new MutationObserver(() => {
+            // 防抖：任何 DOM 变动都会触发回调，集中处理避免重复解析
+            clearTimeout(pageCheckTimer);
+            pageCheckTimer = setTimeout(async () => {
+              const pageElement = document.querySelector(pageIndicatorSelector);
+              if (!pageElement) return;
 
-            // 页码变化则更新显示
-            if (currentPage !== gpage) {
-              gpage = currentPage;
-              await updateAssignmentDisplay(list);
-            }
-          }, 120);
-        });
+              // 解析页码
+              const currentPage = parseInt(
+                pageElement.innerHTML.trim().split("/")[0]
+              );
+              if (isNaN(currentPage)) return;
 
-        homePageObserver.observe(document.body, {
-          childList: true,
-          subtree: true,
-          attributes: false,
-          characterData: true,
-        });
+              // 页码变化则更新显示
+              if (currentPage !== gpage) {
+                gpage = currentPage;
+                await updateAssignmentDisplay(list);
+              }
+            }, 120);
+          });
 
-        // 初始化页码
-        const pageElement = document.querySelector(pageIndicatorSelector);
-        if (pageElement) {
-          gpage = parseInt(pageElement.innerHTML.trim().split("/")[0]);
+          homePageObserver.observe(document.body, {
+            childList: true,
+            subtree: true,
+            attributes: false,
+            characterData: true,
+          });
+
+          // 初始化页码
+          const pageElement = document.querySelector(pageIndicatorSelector);
+          if (pageElement) {
+            gpage = parseInt(pageElement.innerHTML.trim().split("/")[0]);
+          }
+
+          // 更新作业显示
+          await updateAssignmentDisplay(list);
         }
-
-        // 更新作业显示
-        await updateAssignmentDisplay(list);
       }
       syncHomeLayout();
       setTimeout(syncHomeLayout, 600);
@@ -7918,13 +7932,22 @@ function escapeHtml(text) {
           resourceItems.forEach((x, index) => {
             if (index >= resources.length) return;
 
-            if (settings.preview.autoDownload && previewItems[index]) {
+            if (
+              settings.preview.autoDownload &&
+              previewItems[index] &&
+              previewItems[index].dataset.yzAutoDlBound !== "1"
+            ) {
+              previewItems[index].dataset.yzAutoDlBound = "1";
               previewItems[index].addEventListener(
                 "click",
-                async (e) => {
-                  const url = await getPreviewURL(resources[index].id);
-                  downloadFile(url, resources[index].name);
-                  console.debug("Autodownload");
+                async () => {
+                  try {
+                    const url = await getPreviewURL(resources[index].id);
+                    await downloadFile(url, resources[index].name);
+                    console.debug("Autodownload");
+                  } catch (err) {
+                    console.warn("[ucloud-Enhanced] 自动下载失败:", err);
+                  }
                 },
                 false
               );
@@ -7953,8 +7976,12 @@ function escapeHtml(text) {
                 "click",
                 async (e) => {
                   e.stopPropagation();
-                  const url = await getPreviewURL(resources[index].id);
-                  downloadFile(url, resources[index].name);
+                  try {
+                    const url = await getPreviewURL(resources[index].id);
+                    await downloadFile(url, resources[index].name);
+                  } catch (err) {
+                    showNotification("下载失败", "无法下载该课件，请稍后重试");
+                  }
                 },
                 false
               );
