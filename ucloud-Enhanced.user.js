@@ -2315,9 +2315,11 @@ function escapeHtml(text) {
       white-space: nowrap;
     }
     .wb-status-chip.pending { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
+    .wb-status-chip.rejected { background: rgba(245, 158, 11, 0.14); color: #d97706; }
     .wb-status-chip.submitted { background: var(--wb-accent-soft); color: var(--wb-accent-text); }
     .wb-status-chip.graded { background: rgba(16, 185, 129, 0.14); color: #059669; }
     :host(.wb-dark) .wb-status-chip.pending { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    :host(.wb-dark) .wb-status-chip.rejected { background: rgba(251, 191, 36, 0.18); color: #fcd34d; }
     :host(.wb-dark) .wb-status-chip.graded { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
   `;
 
@@ -3170,16 +3172,30 @@ function escapeHtml(text) {
     return groups;
   }
 
+  function wbParseWorkStatus(work) {
+    const raw = work && work.assignmentStatus;
+    if (raw === undefined || raw === null || raw === "") return NaN;
+    return Number(raw);
+  }
+
+  // 平台 /ykt-site/work/student/list 的 assignmentStatus 枚举：
+  // 99 = 未提交，0 = 已提交（待批改），1 = 已批改，2 = 已驳回
+  function wbIsWorkPending(work) {
+    const st = wbParseWorkStatus(work);
+    return st === 99 || st === 2;
+  }
+
   function wbPickWorkStatus(work) {
-    const st = Number(work.assignmentStatus);
+    const st = wbParseWorkStatus(work);
     const score = work.assignmentScore ?? work.score;
-    if (st === 2) {
+    if (st === 1) {
       const scoreText =
         score !== undefined && score !== null && score !== "" ? `已批改 · ${score} 分` : "已批改";
       return { cls: "graded", text: scoreText };
     }
-    if (st === 1) return { cls: "submitted", text: "已提交" };
-    if (st === 0) return { cls: "pending", text: "未提交" };
+    if (st === 0) return { cls: "submitted", text: "已提交" };
+    if (st === 2) return { cls: "rejected", text: "已驳回" };
+    if (st === 99) return { cls: "pending", text: "未提交" };
     return null;
   }
 
@@ -3212,8 +3228,8 @@ function escapeHtml(text) {
       const groups = wbCollectResourceGroups(tree);
       const allFiles = groups.flatMap((g) => g.files);
       const works = ((worksRes && worksRes.data && worksRes.data.records) || []).slice().sort((a, b) => {
-        const sa = Number(a.assignmentStatus) === 0 ? 0 : 1;
-        const sb = Number(b.assignmentStatus) === 0 ? 0 : 1;
+        const sa = wbIsWorkPending(a) ? 0 : 1;
+        const sb = wbIsWorkPending(b) ? 0 : 1;
         if (sa !== sb) return sa - sb;
         const ta = parseDeadline(a.assignmentEndTime || a.endTime)?.getTime() || 0;
         const tb = parseDeadline(b.assignmentEndTime || b.endTime)?.getTime() || 0;
@@ -3415,7 +3431,7 @@ function escapeHtml(text) {
           const endStr = work.assignmentEndTime || work.endTime;
           const endDate = parseDeadline(endStr);
           const status = wbPickWorkStatus(work);
-          const isPending = Number(work.assignmentStatus) === 0;
+          const isPending = wbIsWorkPending(work);
           if (endDate && isPending) {
             card.dataset.urgency = formatRemain(endDate - Date.now()).cls;
           } else {
