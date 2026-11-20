@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-2.5.1-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-2.5.5-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
@@ -57,6 +57,13 @@ python3 build.py
 ```
 
 ## 🔄 更新日志
+
+### 2.5.5
+
+- 重构：悬浮球快捷面板以工作台为主导重排——顶部置顶「🧩 打开工作台」主按钮与 `待办 / 课程 / 通知` 三页签直达入口，快捷开关精简为 4 项核心高频设置，底部新增「检查更新」快捷按钮
+- 重构：设置中心侧边栏由 8 个零散分类收敛为「工作台与导航 / 课件与预览 / 外观与系统 / 原页面增强 / 实验功能 / 关于助手」（底层 `GM_getValue` 存储键名完全兼容，旧配置无缝继承）
+- 新增：工作台标题栏右上角新增「⚙ 助手设置」入口，在工作台内可直接调出设置中心；提升设置面板与提示通知层级至工作台之上，按 `Esc` 优先关闭设置面板
+- 改进：自动检查更新周期从 24 小时缩短为 2 小时，请求附加分钟级缓存穿透参数与 `Cache-Control: no-cache`，且仅在成功解析远端版本号后记录检查时间戳（网络失败不锁冷却期）
 
 ### 2.5.1
 
