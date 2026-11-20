@@ -43,48 +43,47 @@ function escapeHtml(text) {
 
 (function () {
   "use strict";
+  // 默认关闭「在新标签中打开详情页」时无需劫持 webpackJsonp，避免全量模块扫描与控制台告警
+  if (!GM_getValue("home_openInNewTab", false)) return;
+
+  const patchJobs = [
+    // 原“通知列表 size:10→1000”补丁已移除：大分页疑似导致“标记已读”失效，且展示上千条通知并无必要
+    {
+      name: "studentHomepage",
+      identifiers: ['name:"studentHomepage"', "tapUndone", "tapSiteItem"],
+      patched: false,
+      replacements: [
+        // 规则来自 'tapUndone'
+        [
+          /window\.location\.href\s*=\s*("course\.html#\/teacher\/forum\/topicDetail_fullpage\?tid="\s*\+\s*e\.activityId)/g,
+          'window.open($1, "_blank")',
+        ],
+        [
+          /window\.location\.href\s*=\s*("course\.html#\/student\/assignmentDetails_fullpage\?activeTabName="\s*\+\s*t\s*\+\s*"&assignmentId="\s*\+\s*e\.activityId\s*\+\s*"&assignmentType="\s*\+\s*e\.assignmentType\s*\+\s*"&assignmentTitle="\s*\+\s*e\.activityName\s*\+\s*"&evaluationStatus="\s*\+\s*e\.evaluationStatus\s*\+\s*"&studentGroupId="\s*\+\s*e\.studentGroupId\s*\+\s*"&isOpenEvaluation="\s*\+\s*e\.isOpenEvaluation)/g,
+          'window.open($1, "_blank")',
+        ],
+        [
+          /window\.location\.href\s*=\s*("course\.html#\/answer\?id="\s*\+\s*e\.activityId)/g,
+          'window.open($1, "_blank")',
+        ],
+        // 规则来自 'tapSiteItem'
+        [
+          /window\.location\.href\s*=\s*(["']course\.html#\/student\/courseHomePage\?ind=1["'])/g,
+          'window.open($1, "_blank")',
+        ],
+        [
+          /window\.location\.href\s*=\s*(["']course\.html#\/courseCenterDetail_fullpage["'])/g,
+          'window.open($1, "_blank")',
+        ],
+      ],
+    },
+  ];
+
   /**
    * @param {object} modules - webpack 模块对象
    */
   function patchModules(modules) {
-    const patchJobs = [
-      // 原“通知列表 size:10→1000”补丁已移除：大分页疑似导致“标记已读”失效，且展示上千条通知并无必要
-      {
-        name: "studentHomepage",
-        identifiers: ['name:"studentHomepage"', "tapUndone", "tapSiteItem"],
-        patched: !GM_getValue("home_openInNewTab", false),
-        replacements: [
-          // 规则来自 'tapUndone'
-          [
-            /window\.location\.href\s*=\s*("course\.html#\/teacher\/forum\/topicDetail_fullpage\?tid="\s*\+\s*e\.activityId)/g,
-            'window.open($1, "_blank")',
-          ],
-          [
-            /window\.location\.href\s*=\s*("course\.html#\/student\/assignmentDetails_fullpage\?activeTabName="\s*\+\s*t\s*\+\s*"&assignmentId="\s*\+\s*e\.activityId\s*\+\s*"&assignmentType="\s*\+\s*e\.assignmentType\s*\+\s*"&assignmentTitle="\s*\+\s*e\.activityName\s*\+\s*"&evaluationStatus="\s*\+\s*e\.evaluationStatus\s*\+\s*"&studentGroupId="\s*\+\s*e\.studentGroupId\s*\+\s*"&isOpenEvaluation="\s*\+\s*e\.isOpenEvaluation)/g,
-            'window.open($1, "_blank")',
-          ],
-          [
-            /window\.location\.href\s*=\s*("course\.html#\/answer\?id="\s*\+\s*e\.activityId)/g,
-            'window.open($1, "_blank")',
-          ],
-          // 规则来自 'tapSiteItem'
-          [
-            /window\.location\.href\s*=\s*(["']course\.html#\/student\/courseHomePage\?ind=1["'])/g,
-            'window.open($1, "_blank")',
-          ],
-          [
-            /window\.location\.href\s*=\s*(["']course\.html#\/courseCenterDetail_fullpage["'])/g,
-            'window.open($1, "_blank")',
-          ],
-        ],
-      },
-      // ,{
-      //     name: 'anotherModule',
-      //     identifiers: ['...'],
-      //     patched: false,
-      //     replacements: [ ... ]
-      // } // <-- 新 Hook 示例
-    ];
+    if (!modules || patchJobs.every((j) => j.patched)) return;
 
     /**
      * 尝试对模块字符串应用一个补丁任务
@@ -107,14 +106,12 @@ function escapeHtml(text) {
       return { modifiedSource, isTarget: true };
     }
 
-    const totalPatchesNeeded = patchJobs.length;
-    let patchesApplied = 0;
-
     for (const moduleId in modules) {
-      if (patchesApplied === totalPatchesNeeded) {
+      if (patchJobs.every((j) => j.patched)) {
         break;
       }
       const originalModule = modules[moduleId];
+      if (typeof originalModule !== "function") continue;
       let currentModuleString = originalModule.toString();
       let moduleHasBeenModified = false;
 
@@ -133,9 +130,7 @@ function escapeHtml(text) {
             if (modifiedSource !== currentModuleString) {
               currentModuleString = modifiedSource;
               moduleHasBeenModified = true;
-
               job.patched = true;
-              patchesApplied++;
             } else {
               console.warn(
                 `[ucloud-Enhanced] 找到 '${job.name}' (ID: ${moduleId})，但正则表达式替换失败!`
@@ -158,12 +153,6 @@ function escapeHtml(text) {
           currentModuleString
         );
       }
-    }
-
-    if (patchesApplied < totalPatchesNeeded) {
-      console.warn(
-        `[ucloud-Enhanced] Patch 结束，但未完成全部 patch：${patchesApplied}/${totalPatchesNeeded}。`
-      );
     }
   }
   let originalWebpackJsonp = unsafeWindow.webpackJsonp;

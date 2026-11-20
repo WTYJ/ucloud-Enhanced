@@ -43,48 +43,47 @@ function escapeHtml(text) {
 
 (function () {
   "use strict";
+  // 默认关闭「在新标签中打开详情页」时无需劫持 webpackJsonp，避免全量模块扫描与控制台告警
+  if (!GM_getValue("home_openInNewTab", false)) return;
+
+  const patchJobs = [
+    // 原“通知列表 size:10→1000”补丁已移除：大分页疑似导致“标记已读”失效，且展示上千条通知并无必要
+    {
+      name: "studentHomepage",
+      identifiers: ['name:"studentHomepage"', "tapUndone", "tapSiteItem"],
+      patched: false,
+      replacements: [
+        // 规则来自 'tapUndone'
+        [
+          /window\.location\.href\s*=\s*("course\.html#\/teacher\/forum\/topicDetail_fullpage\?tid="\s*\+\s*e\.activityId)/g,
+          'window.open($1, "_blank")',
+        ],
+        [
+          /window\.location\.href\s*=\s*("course\.html#\/student\/assignmentDetails_fullpage\?activeTabName="\s*\+\s*t\s*\+\s*"&assignmentId="\s*\+\s*e\.activityId\s*\+\s*"&assignmentType="\s*\+\s*e\.assignmentType\s*\+\s*"&assignmentTitle="\s*\+\s*e\.activityName\s*\+\s*"&evaluationStatus="\s*\+\s*e\.evaluationStatus\s*\+\s*"&studentGroupId="\s*\+\s*e\.studentGroupId\s*\+\s*"&isOpenEvaluation="\s*\+\s*e\.isOpenEvaluation)/g,
+          'window.open($1, "_blank")',
+        ],
+        [
+          /window\.location\.href\s*=\s*("course\.html#\/answer\?id="\s*\+\s*e\.activityId)/g,
+          'window.open($1, "_blank")',
+        ],
+        // 规则来自 'tapSiteItem'
+        [
+          /window\.location\.href\s*=\s*(["']course\.html#\/student\/courseHomePage\?ind=1["'])/g,
+          'window.open($1, "_blank")',
+        ],
+        [
+          /window\.location\.href\s*=\s*(["']course\.html#\/courseCenterDetail_fullpage["'])/g,
+          'window.open($1, "_blank")',
+        ],
+      ],
+    },
+  ];
+
   /**
    * @param {object} modules - webpack 模块对象
    */
   function patchModules(modules) {
-    const patchJobs = [
-      // 原“通知列表 size:10→1000”补丁已移除：大分页疑似导致“标记已读”失效，且展示上千条通知并无必要
-      {
-        name: "studentHomepage",
-        identifiers: ['name:"studentHomepage"', "tapUndone", "tapSiteItem"],
-        patched: !GM_getValue("home_openInNewTab", false),
-        replacements: [
-          // 规则来自 'tapUndone'
-          [
-            /window\.location\.href\s*=\s*("course\.html#\/teacher\/forum\/topicDetail_fullpage\?tid="\s*\+\s*e\.activityId)/g,
-            'window.open($1, "_blank")',
-          ],
-          [
-            /window\.location\.href\s*=\s*("course\.html#\/student\/assignmentDetails_fullpage\?activeTabName="\s*\+\s*t\s*\+\s*"&assignmentId="\s*\+\s*e\.activityId\s*\+\s*"&assignmentType="\s*\+\s*e\.assignmentType\s*\+\s*"&assignmentTitle="\s*\+\s*e\.activityName\s*\+\s*"&evaluationStatus="\s*\+\s*e\.evaluationStatus\s*\+\s*"&studentGroupId="\s*\+\s*e\.studentGroupId\s*\+\s*"&isOpenEvaluation="\s*\+\s*e\.isOpenEvaluation)/g,
-            'window.open($1, "_blank")',
-          ],
-          [
-            /window\.location\.href\s*=\s*("course\.html#\/answer\?id="\s*\+\s*e\.activityId)/g,
-            'window.open($1, "_blank")',
-          ],
-          // 规则来自 'tapSiteItem'
-          [
-            /window\.location\.href\s*=\s*(["']course\.html#\/student\/courseHomePage\?ind=1["'])/g,
-            'window.open($1, "_blank")',
-          ],
-          [
-            /window\.location\.href\s*=\s*(["']course\.html#\/courseCenterDetail_fullpage["'])/g,
-            'window.open($1, "_blank")',
-          ],
-        ],
-      },
-      // ,{
-      //     name: 'anotherModule',
-      //     identifiers: ['...'],
-      //     patched: false,
-      //     replacements: [ ... ]
-      // } // <-- 新 Hook 示例
-    ];
+    if (!modules || patchJobs.every((j) => j.patched)) return;
 
     /**
      * 尝试对模块字符串应用一个补丁任务
@@ -107,14 +106,12 @@ function escapeHtml(text) {
       return { modifiedSource, isTarget: true };
     }
 
-    const totalPatchesNeeded = patchJobs.length;
-    let patchesApplied = 0;
-
     for (const moduleId in modules) {
-      if (patchesApplied === totalPatchesNeeded) {
+      if (patchJobs.every((j) => j.patched)) {
         break;
       }
       const originalModule = modules[moduleId];
+      if (typeof originalModule !== "function") continue;
       let currentModuleString = originalModule.toString();
       let moduleHasBeenModified = false;
 
@@ -133,9 +130,7 @@ function escapeHtml(text) {
             if (modifiedSource !== currentModuleString) {
               currentModuleString = modifiedSource;
               moduleHasBeenModified = true;
-
               job.patched = true;
-              patchesApplied++;
             } else {
               console.warn(
                 `[ucloud-Enhanced] 找到 '${job.name}' (ID: ${moduleId})，但正则表达式替换失败!`
@@ -158,12 +153,6 @@ function escapeHtml(text) {
           currentModuleString
         );
       }
-    }
-
-    if (patchesApplied < totalPatchesNeeded) {
-      console.warn(
-        `[ucloud-Enhanced] Patch 结束，但未完成全部 patch：${patchesApplied}/${totalPatchesNeeded}。`
-      );
     }
   }
   let originalWebpackJsonp = unsafeWindow.webpackJsonp;
@@ -1561,14 +1550,22 @@ function escapeHtml(text) {
       }
     }
   }
-  // ===== 通知组件（更新提醒 / 通用提示）：与助手 UI 同一套设计语言，亮/暗自适应 =====
+  // ===== 通知组件（更新提醒 / 通用提示）：与助手 UI 同一套设计语言，亮/暗自适应，多条垂直堆叠 =====
   const NOTIFY_CSS = `
-    .yz-notify {
+    #yzHelper-notify-stack {
       position: fixed;
       bottom: 84px;
       right: 20px;
       z-index: 2147483600;
-      max-width: 300px;
+      display: flex;
+      flex-direction: column-reverse;
+      align-items: flex-end;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .yz-notify {
+      pointer-events: auto;
+      max-width: 310px;
       box-sizing: border-box;
       padding: 14px 16px;
       border-radius: 14px;
@@ -1592,9 +1589,9 @@ function escapeHtml(text) {
       background: #2962ff; flex-shrink: 0;
     }
     .yz-notify .notify-msg { color: #646a73; line-height: 1.6; }
-    .yz-notify .notify-actions { display: flex; gap: 8px; margin-top: 12px; }
+    .yz-notify .notify-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
     .yz-notify .notify-btn {
-      border: none; border-radius: 8px; padding: 6px 14px;
+      border: none; border-radius: 8px; padding: 6px 12px;
       font-size: 12.5px; font-weight: 600; cursor: pointer;
     }
     .yz-notify .notify-btn.primary { background: #2962ff; color: #fff; }
@@ -1618,11 +1615,21 @@ function escapeHtml(text) {
   `;
   GM_addStyle(NOTIFY_CSS);
 
+  function ensureNotifyStack() {
+    let stack = document.getElementById("yzHelper-notify-stack");
+    if (!stack) {
+      stack = document.createElement("div");
+      stack.id = "yzHelper-notify-stack";
+      document.body.appendChild(stack);
+    }
+    return stack;
+  }
+
   function createNotify(html, autoCloseMs = 0) {
     const el = document.createElement("div");
     el.className = "yz-notify";
     el.innerHTML = html;
-    document.body.appendChild(el);
+    ensureNotifyStack().appendChild(el);
     requestAnimationFrame(() => el.classList.add("visible"));
     const close = () => {
       el.classList.remove("visible");
@@ -1643,15 +1650,17 @@ function escapeHtml(text) {
   function showUpdateNotification(newVersion) {
     const { el, close } = createNotify(`
       <div class="notify-title"><span class="notify-dot"></span>发现新版本 v${escapeHtml(newVersion)}</div>
-      <div class="notify-msg">当前版本 v${GM_info.script.version}，更新后可在 README 查看变更内容。</div>
+      <div class="notify-msg">当前版本 v${GM_info.script.version}，可前往 Releases 查看详细更新日志。</div>
       <div class="notify-actions">
         <button class="notify-btn primary" data-act="update">立即更新</button>
+        <button class="notify-btn ghost" data-act="notes">查看日志</button>
         <button class="notify-btn ghost" data-act="later">稍后提醒</button>
       </div>
     `);
     el.addEventListener("click", (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (act === "update") openTab(GM_info.script.downloadURL, { active: true });
+      else if (act === "notes") openTab("https://github.com/WTYJ/ucloud-Enhanced/releases", { active: true });
       if (act) close();
     });
   }
@@ -2913,7 +2922,8 @@ function escapeHtml(text) {
       });
     });
 
-    const ul_observer = new MutationObserver((mutations) => {
+    let ulObserverTimer = null;
+    const ul_observer = new MutationObserver(() => {
       const dropdownMenus = document.querySelectorAll(
         'ul.el-dropdown-menu.el-popper.dropdown-info[id*="dropdown-menu"]'
       );
@@ -2933,12 +2943,15 @@ function escapeHtml(text) {
           }
         });
         ul_observer.disconnect();
+        clearTimeout(ulObserverTimer);
       }
     });
     ul_observer.observe(document.body, {
       childList: true,
       subtree: true,
     });
+    // 在无顶栏菜单的页面（登录页、预览页等）15 秒后自动断开，避免永久监听整棵 DOM
+    ulObserverTimer = setTimeout(() => ul_observer.disconnect(), 15000);
   }
 
   function getCookie(name) {
@@ -2957,6 +2970,7 @@ function escapeHtml(text) {
   // 平台 API 请求统一封装：公共鉴权头 + JSON 解析
   // 所有 apiucloud.bupt.edu.cn 的接口调用都应走这里（getPreviewURL 除外：其 CORS 不带鉴权头，保持原样）
   const API_BASE = "https://apiucloud.bupt.edu.cn/";
+  let apiAuthExpired = false;
 
   async function apiFetch(path, { method = "GET", body, headers = {} } = {}) {
     const [, token] = getToken();
@@ -2971,7 +2985,28 @@ function escapeHtml(text) {
       ),
       body: body === undefined ? null : body,
     });
-    return res.json();
+    if (res.status === 401 || res.status === 403) {
+      apiAuthExpired = true;
+      const err = new Error("登录状态已过期，请刷新页面重新登录");
+      err.code = res.status;
+      err.isAuthError = true;
+      throw err;
+    }
+    if (!res.ok) {
+      const err = new Error(`接口请求失败 (${res.status})`);
+      err.code = res.status;
+      throw err;
+    }
+    const json = await res.json();
+    if (json && (Number(json.code) === 401 || Number(json.status) === 401)) {
+      apiAuthExpired = true;
+      const err = new Error("登录状态已过期，请刷新页面重新登录");
+      err.code = 401;
+      err.isAuthError = true;
+      throw err;
+    }
+    apiAuthExpired = false;
+    return json;
   }
 
   // 文件下载相关函数（支持无 Content-Length 降级与异常时安全回收进度计数）
@@ -5187,7 +5222,9 @@ function escapeHtml(text) {
         });
     } catch (e) {
       if (seq !== wbTodoLoadSeq) return;
-      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
+      pane.innerHTML = wbEmptyHtml(
+        e && e.isAuthError ? "登录状态已过期，请刷新页面重新登录" : "加载失败，请稍后重试"
+      );
       wbState.todoLoaded = false;
     }
   }
@@ -5369,7 +5406,9 @@ function escapeHtml(text) {
       pane.appendChild(inner);
     } catch (e) {
       if (seq !== wbNoticeLoadSeq) return;
-      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
+      pane.innerHTML = wbEmptyHtml(
+        e && e.isAuthError ? "登录状态已过期，请刷新页面重新登录" : "加载失败，请稍后重试"
+      );
       wbState.noticeLoaded = false;
     }
   }
@@ -5386,7 +5425,12 @@ function escapeHtml(text) {
       wbSetTabCount("course", (list && list.length) || 0);
       pane.innerHTML = "";
       if (!list || !list.length) {
-        pane.innerHTML = wbEmptyHtml("暂无课程");
+        if (apiAuthExpired) {
+          wbState.courseLoaded = false;
+          pane.innerHTML = wbEmptyHtml("登录状态已过期，请刷新页面重新登录");
+        } else {
+          pane.innerHTML = wbEmptyHtml("暂无课程");
+        }
         return;
       }
       const inner = document.createElement("div");

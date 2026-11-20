@@ -1681,7 +1681,9 @@
         });
     } catch (e) {
       if (seq !== wbTodoLoadSeq) return;
-      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
+      pane.innerHTML = wbEmptyHtml(
+        e && e.isAuthError ? "登录状态已过期，请刷新页面重新登录" : "加载失败，请稍后重试"
+      );
       wbState.todoLoaded = false;
     }
   }
@@ -1863,7 +1865,9 @@
       pane.appendChild(inner);
     } catch (e) {
       if (seq !== wbNoticeLoadSeq) return;
-      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
+      pane.innerHTML = wbEmptyHtml(
+        e && e.isAuthError ? "登录状态已过期，请刷新页面重新登录" : "加载失败，请稍后重试"
+      );
       wbState.noticeLoaded = false;
     }
   }
@@ -1880,7 +1884,12 @@
       wbSetTabCount("course", (list && list.length) || 0);
       pane.innerHTML = "";
       if (!list || !list.length) {
-        pane.innerHTML = wbEmptyHtml("暂无课程");
+        if (apiAuthExpired) {
+          wbState.courseLoaded = false;
+          pane.innerHTML = wbEmptyHtml("登录状态已过期，请刷新页面重新登录");
+        } else {
+          pane.innerHTML = wbEmptyHtml("暂无课程");
+        }
         return;
       }
       const inner = document.createElement("div");
