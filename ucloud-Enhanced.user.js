@@ -890,19 +890,17 @@ function escapeHtml(text) {
           type: 'checkbox',
           quick: true,
           label: '在新标签中打开详情页',
-          description: '个人主页中的课程和作业详情链接将在新标签页中打开，方便多任务处理。',
+          description: '工作台跳原页/课程主页以及个人主页的详情链接将在新标签页中打开，方便多任务处理。',
           defaultValue: false
         },
         useWheelPageTurner: {
           type: 'checkbox',
-          quick: true,
           label: '使用鼠标滚轮翻页',
           description: '可以使用鼠标滚轮来翻动个人主页的"本学期课程"和"待办"。',
           defaultValue: true
         },
         showTodoCourseName: {
           type: 'checkbox',
-          quick: true,
           label: '待办显示所属课程',
           description: '在个人主页的待办条目上显示所属课程与教师，方便区分不同课程的作业。',
           defaultValue: true
@@ -1031,7 +1029,7 @@ function escapeHtml(text) {
         autoUpdate: {
           type: 'checkbox',
           label: '自动检查更新',
-          description: '每天检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
+          description: '每 2 小时自动检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
           defaultValue: true
         },
         showConfigButton: {
@@ -1482,7 +1480,7 @@ function escapeHtml(text) {
       position: fixed;
       bottom: 84px;
       right: 20px;
-      z-index: 10002;
+      z-index: 2147483600;
       max-width: 300px;
       box-sizing: border-box;
       padding: 14px 16px;
@@ -1581,14 +1579,14 @@ function escapeHtml(text) {
   function checkForUpdates(force = false, onDone) {
     const lastCheckTime = GM_getValue("lastUpdateCheck", 0);
     const now = Date.now();
-    const ONE_DAY = 24 * 60 * 60 * 1000; // 一天的毫秒数
+    const CHECK_INTERVAL = 2 * 60 * 60 * 1000; // 2 小时自动检查间隔
 
-    if (!force && now - lastCheckTime <= ONE_DAY) {
+    if (!force && now - lastCheckTime <= CHECK_INTERVAL) {
       if (onDone) onDone();
       return;
     }
-    GM_setValue("lastUpdateCheck", now);
 
+    const bustParam = "_t=" + Math.floor(now / 60000);
     const trySource = (index) => {
       if (index >= UPDATE_CHECK_SOURCES.length) {
         if (force) {
@@ -1597,9 +1595,12 @@ function escapeHtml(text) {
         if (onDone) onDone();
         return;
       }
+      const baseUrl = UPDATE_CHECK_SOURCES[index];
+      const reqUrl = baseUrl + (baseUrl.includes("?") ? "&" : "?") + bustParam;
       GM_xmlhttpRequest({
         method: "GET",
-        url: UPDATE_CHECK_SOURCES[index],
+        url: reqUrl,
+        headers: { "Cache-Control": "no-cache" },
         onload: function (response) {
           const versionMatch = (response.responseText || "").match(
             /@version\s+([\d.]+)/
@@ -1609,6 +1610,8 @@ function escapeHtml(text) {
             trySource(index + 1);
             return;
           }
+          // 仅在成功解析到版本号后才写入检查时间戳，避免网络失败锁死冷却期
+          GM_setValue("lastUpdateCheck", now);
           const latestVersion = versionMatch[1];
           const currentVersion = GM_info.script.version;
           // 逐段按数值比较，避免 "1.10" < "1.9" 这类字符串比较误判
@@ -1739,44 +1742,100 @@ function escapeHtml(text) {
           flex: 1;
           cursor: pointer;
       }
+      #yzHelper-quick .quick-wb-box {
+          margin: 4px 6px 8px;
+          padding: 8px;
+          border-radius: 12px;
+          background: var(--ue-bg-2);
+          border: 1px solid var(--ue-border);
+      }
       #yzHelper-quick .quick-workbench {
-          display: block;
-          width: calc(100% - 16px);
-          margin: 8px 8px 0;
-          padding: 8px 12px;
-          border: 1px solid rgba(59, 130, 246, 0.35);
-          border-radius: 10px;
-          background: rgba(59, 130, 246, 0.1);
-          color: var(--ue-accent);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          width: 100%;
+          padding: 9px 12px;
+          border: none;
+          border-radius: 9px;
+          background: linear-gradient(135deg, #3d7bff, #2962ff);
+          color: #fff;
           font-size: 13px;
           font-weight: 600;
           cursor: pointer;
+          box-shadow: 0 3px 10px rgba(41, 98, 255, 0.28);
+          transition: filter 0.15s ease;
       }
       #yzHelper-quick .quick-workbench:hover {
-          background: var(--ue-accent);
-          color: #fff;
+          filter: brightness(1.06);
+      }
+      #yzHelper-quick .quick-wb-tabs {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 6px;
+          margin-top: 7px;
+      }
+      #yzHelper-quick .quick-wb-tab {
+          border: 1px solid var(--ue-border);
+          background: var(--ue-bg);
+          color: var(--ue-text-2);
+          border-radius: 7px;
+          padding: 5px 0;
+          font-size: 12px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s ease;
+      }
+      #yzHelper-quick .quick-wb-tab:hover {
+          border-color: var(--ue-accent);
+          color: var(--ue-accent);
+          background: var(--ue-accent-weak);
       }
       #yzHelper-quick .quick-footer {
           display: flex;
           align-items: center;
           justify-content: space-between;
+          gap: 6px;
           border-top: 1px solid var(--ue-border);
           margin-top: 6px;
-          padding: 8px 8px 2px;
+          padding: 8px 6px 2px;
+      }
+      #yzHelper-quick .quick-footer-btns {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
       }
       #yzHelper-quick .quick-all {
           background: var(--ue-accent-weak);
           color: var(--ue-accent);
           border: none;
           border-radius: 8px;
-          padding: 6px 12px;
-          font-size: 12.5px;
+          padding: 6px 11px;
+          font-size: 12px;
           font-weight: 600;
           cursor: pointer;
       }
       #yzHelper-quick .quick-all:hover {
           background: var(--ue-accent);
           color: #fff;
+      }
+      #yzHelper-quick .quick-check-btn {
+          background: var(--ue-bg-2);
+          color: var(--ue-text-2);
+          border: 1px solid var(--ue-border);
+          border-radius: 8px;
+          padding: 5px 9px;
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+      }
+      #yzHelper-quick .quick-check-btn:hover {
+          color: var(--ue-text);
+          border-color: var(--ue-accent);
+      }
+      #yzHelper-quick .quick-check-btn:disabled {
+          opacity: 0.6;
+          cursor: default;
       }
       #yzHelper-quick .quick-ver {
           font-size: 11.5px;
@@ -1792,9 +1851,9 @@ function escapeHtml(text) {
           border: 1px solid var(--ue-border);
           box-shadow: var(--ue-shadow);
           border-radius: 16px;
-          z-index: 10001;
-          width: 560px;
-          height: 480px;
+          z-index: 2147483500;
+          width: 580px;
+          height: 500px;
           color: var(--ue-text);
           overflow: hidden;
           flex-direction: column;
@@ -1802,6 +1861,25 @@ function escapeHtml(text) {
           opacity: 0;
           transform: translateY(10px) scale(0.98);
           transition: opacity 0.25s ease, transform 0.25s ease;
+      }
+      #yzHelper-settings .section-note {
+          font-size: 12px;
+          line-height: 1.55;
+          color: var(--ue-text-2);
+          background: var(--ue-accent-weak);
+          border-radius: 10px;
+          padding: 8px 12px;
+          margin-bottom: 12px;
+      }
+      #yzHelper-settings .section-group-title {
+          font-size: 12px;
+          font-weight: 700;
+          color: var(--ue-text-2);
+          letter-spacing: 0.04em;
+          margin: 14px 4px 8px;
+      }
+      #yzHelper-settings .section-group-title:first-child {
+          margin-top: 2px;
       }
       #yzHelper-settings.visible {
           opacity: 1;
@@ -2303,35 +2381,53 @@ function escapeHtml(text) {
       });
     }
 
-    // ===== 快捷面板：高频开关直拨 =====
+    // ===== 快捷面板：工作台直达置顶 + 核心高频开关 =====
     const quickPanel = document.createElement("div");
     quickPanel.id = "yzHelper-quick";
 
+    const QUICK_SWITCH_ITEMS = [
+      ["workbench", "autoOpen"],
+      ["workbench", "fullscreen"],
+      ["system", "darkMode"],
+      ["home", "openInNewTab"],
+    ];
+
     function buildQuickPanel() {
-      const rows = [];
-      for (const [category, config] of Object.entries(settingsConfig)) {
-        for (const [key, item] of Object.entries(config.items)) {
-          if (!item.quick) continue;
-          const settingId = `${category}_${key}`;
-          rows.push(`
-            <div class="quick-item">
-              <span class="setting-label">${item.label}</span>
-              <label class="switch">
-                <input type="checkbox" id="${settingId}" ${
-            settings[category][key] ? "checked" : ""
-          }>
-                <span class="slider"></span>
-              </label>
+      const rows = QUICK_SWITCH_ITEMS.map(([category, key]) => {
+        const item = settingsConfig[category] && settingsConfig[category].items[key];
+        if (!item) return "";
+        const settingId = `${category}_${key}`;
+        return `
+          <div class="quick-item">
+            <span class="setting-label">${item.label}</span>
+            <label class="switch">
+              <input type="checkbox" id="${settingId}" ${
+          settings[category][key] ? "checked" : ""
+        }>
+              <span class="slider"></span>
+            </label>
+          </div>
+        `;
+      });
+      const wbBoxHtml = settings.workbench.entry
+        ? `<div class="quick-wb-box">
+            <button class="quick-workbench" data-wb-open="todo">🧩 打开工作台</button>
+            <div class="quick-wb-tabs">
+              <button class="quick-wb-tab" data-wb-open="todo">待办</button>
+              <button class="quick-wb-tab" data-wb-open="course">课程</button>
+              <button class="quick-wb-tab" data-wb-open="notice">通知</button>
             </div>
-          `);
-        }
-      }
+          </div>`
+        : "";
       quickPanel.innerHTML = `
+        ${wbBoxHtml}
         <div class="quick-title">快捷开关</div>
         ${rows.join("")}
-        ${settings.workbench.entry ? '<button class="quick-workbench" id="yzHelper-quick-workbench">🧩 打开工作台</button>' : ''}
         <div class="quick-footer">
-          <button class="quick-all" id="yzHelper-quick-all">⚙ 全部设置</button>
+          <div class="quick-footer-btns">
+            <button class="quick-all" id="yzHelper-quick-all">⚙ 全部设置</button>
+            <button class="quick-check-btn" id="yzHelper-quick-update" title="立即检查新版本">检查更新</button>
+          </div>
           <span class="quick-ver">v${GM_info.script.version}</span>
         </div>
       `;
@@ -2339,11 +2435,11 @@ function escapeHtml(text) {
 
     function positionQuickPanel() {
       const rect = ball.getBoundingClientRect();
-      const width = 262;
+      const width = 268;
       let left = rect.left + rect.width / 2 - width / 2;
       left = Math.max(10, Math.min(left, window.innerWidth - width - 10));
       quickPanel.style.left = left + "px";
-      if (rect.top > 320) {
+      if (rect.top > 360) {
         quickPanel.style.bottom = window.innerHeight - rect.top + 12 + "px";
         quickPanel.style.top = "auto";
       } else {
@@ -2370,14 +2466,28 @@ function escapeHtml(text) {
     document.body.appendChild(quickPanel);
     bindAutoSave(quickPanel);
     quickPanel.addEventListener("click", (e) => {
-      if (e.target.closest("#yzHelper-quick-workbench")) {
+      const wbBtn = e.target.closest("[data-wb-open]");
+      if (wbBtn) {
+        const targetTab = wbBtn.getAttribute("data-wb-open") || "todo";
         closeQuickPanel();
-        wbOpen("todo");
+        wbOpen(targetTab);
         return;
       }
       if (e.target.closest("#yzHelper-quick-all")) {
         closeQuickPanel();
         toggleSettingsPanel();
+        return;
+      }
+      const updBtn = e.target.closest("#yzHelper-quick-update");
+      if (updBtn && !updBtn.disabled) {
+        updBtn.disabled = true;
+        updBtn.textContent = "检查中…";
+        checkForUpdates(true, () => {
+          if (updBtn.isConnected) {
+            updBtn.disabled = false;
+            updBtn.textContent = "检查更新";
+          }
+        });
       }
     });
     // 点击快捷面板与悬浮球以外的区域时关闭快捷面板
@@ -2395,12 +2505,126 @@ function escapeHtml(text) {
       true
     );
 
-    // 生成单个设置项的HTML（当前全部设置项均为开关型；数字输入型已随"最近使用"功能移除）
+    // ===== 设置中心：以工作台为主导的 5 分类收敛视图（底层 category_key 存储完全兼容）=====
+    const SETTINGS_NAV_SECTIONS = [
+      {
+        id: "workbench",
+        emoji: "🧩",
+        title: "工作台与导航",
+        note: "工作台提供独立的待办（含已提交未截止）、课程空间、作业详情（含批改透视）与通知中心。",
+        groups: [
+          {
+            title: "工作台体验",
+            items: [
+              ["workbench", "autoOpen"],
+              ["workbench", "fullscreen"],
+              ["workbench", "entry"],
+            ],
+          },
+          {
+            title: "跳转方式",
+            items: [["home", "openInNewTab"]],
+          },
+        ],
+      },
+      {
+        id: "preview",
+        emoji: "🖼️",
+        title: "课件与预览",
+        note: "同时作用于「工作台 → 课程空间 / 作业详情」与平台原网页的课件、附件预览。",
+        groups: [
+          {
+            title: "预览引擎",
+            items: [
+              ["preview", "autoSwitchOffice"],
+              ["preview", "autoSwitchPdf"],
+              ["preview", "autoSwitchImg"],
+            ],
+          },
+          {
+            title: "预览辅助",
+            items: [
+              ["preview", "autoDownload"],
+              ["preview", "autoClosePopup"],
+              ["preview", "hideTimer"],
+            ],
+          },
+        ],
+      },
+      {
+        id: "system",
+        emoji: "⚙️",
+        title: "外观与系统",
+        groups: [
+          {
+            title: "外观与入口",
+            items: [
+              ["system", "darkMode"],
+              ["system", "showConfigButton"],
+              ["system", "autoUpdate"],
+            ],
+          },
+          {
+            title: "通用增强",
+            items: [
+              ["system", "betterTitle"],
+              ["system", "unlockCopy"],
+              ["system", "fixTicketBug"],
+            ],
+          },
+        ],
+      },
+      {
+        id: "pagemods",
+        emoji: "📄",
+        title: "原页面增强",
+        note: "以下开关仅增强云邮平台原网页（不影响独立工作台）。",
+        groups: [
+          {
+            title: "原页个人主页与作业详情",
+            items: [
+              ["home", "showTodoCourseName"],
+              ["home", "useWheelPageTurner"],
+              ["home", "useBiggerButton"],
+              ["homework", "showHomeworkSource"],
+            ],
+          },
+          {
+            title: "原页课程资源与消息通知",
+            items: [
+              ["course", "addBatchDownload"],
+              ["course", "showAllDownloadButoon"],
+              ["notification", "sortNotificationsByTime"],
+              ["notification", "betterNotificationHighlight"],
+            ],
+          },
+        ],
+      },
+      {
+        id: "experimental",
+        emoji: "🧪",
+        title: "实验功能",
+        note: "以下为原网页实验性改版，默认关闭；日常使用推荐直接通过「工作台」处理待办与课程。",
+        groups: [
+          {
+            title: "原页布局与改版",
+            items: [
+              ["experimental", "courseSearchBox"],
+              ["experimental", "todoRedesign"],
+              ["experimental", "hideUserPanel"],
+              ["experimental", "hideSideNav"],
+              ["experimental", "hideVisitHistory"],
+            ],
+          },
+        ],
+      },
+    ];
+
     function generateSettingItem(category, key, item) {
       const settingId = `${category}_${key}`;
       const value = settings[category][key];
-      const disabledAttr = item.disabled ? 'disabled' : '';
-      const checkedAttr = value ? 'checked' : '';
+      const disabledAttr = item.disabled ? "disabled" : "";
+      const checkedAttr = value ? "checked" : "";
       return `
         <div class="setting-item">
           <div class="setting-toggle">
@@ -2417,67 +2641,67 @@ function escapeHtml(text) {
       `;
     }
 
-    // 生成设置区块的HTML（标题不在内容区重复显示，由侧边栏高亮指示当前分类）
-    function generateSettingsSection(category, config, isActive = false) {
-      const activeClass = isActive ? 'active' : '';
-      const items = config.items;
-      const itemsHTML = Object.keys(items).map(key =>
-        generateSettingItem(category, key, items[key])
-      ).join('');
+    function generateNavSection(sec, isActive = false) {
+      const activeClass = isActive ? "active" : "";
+      const noteHtml = sec.note ? `<div class="section-note">${sec.note}</div>` : "";
+      const groupsHtml = sec.groups
+        .map((g) => {
+          const titleHtml = g.title ? `<div class="section-group-title">${g.title}</div>` : "";
+          const itemsHtml = g.items
+            .map(([cat, key]) => {
+              const item = settingsConfig[cat] && settingsConfig[cat].items[key];
+              return item ? generateSettingItem(cat, key, item) : "";
+            })
+            .join("");
+          return titleHtml + itemsHtml;
+        })
+        .join("");
 
       return `
-        <div class="settings-section ${activeClass}" id="section-${category}">
-          ${itemsHTML}
+        <div class="settings-section ${activeClass}" id="section-${sec.id}">
+          ${noteHtml}
+          ${groupsHtml}
         </div>
       `;
     }
 
-    // 生成侧边栏菜单HTML
     function generateSidebarMenu() {
-      const categories = Object.keys(settingsConfig);
-      return categories.map((category, index) => {
-        const config = settingsConfig[category];
-        const activeClass = index === 0 ? 'active' : '';
-        return `
-          <div class="menu-item ${activeClass}" data-section="${category}">
-            <span class="emoji">${config.emoji}</span>
-            <span>${config.title}</span>
-          </div>
-        `;
-      }).join('') + `
+      return (
+        SETTINGS_NAV_SECTIONS.map((sec, index) => {
+          const activeClass = index === 0 ? "active" : "";
+          return `
+            <div class="menu-item ${activeClass}" data-section="${sec.id}">
+              <span class="emoji">${sec.emoji}</span>
+              <span>${sec.title}</span>
+            </div>
+          `;
+        }).join("") +
+        `
         <div class="menu-item" data-section="about">
           <span class="emoji">ℹ️</span>
           <span>关于助手</span>
         </div>
-      `;
+      `
+      );
     }
 
-    // 生成所有设置区块HTML
     function generateAllSections() {
-      let sectionsHTML = '';
-      let isFirst = true;
-      
-      const categories = Object.keys(settingsConfig);
-      for (const category of categories) {
-        sectionsHTML += generateSettingsSection(category, settingsConfig[category], isFirst);
-        isFirst = false;
-      }
-      
-      // 添加关于助手区块
+      let sectionsHTML = SETTINGS_NAV_SECTIONS.map((sec, idx) =>
+        generateNavSection(sec, idx === 0)
+      ).join("");
+
       sectionsHTML += `
         <div class="settings-section" id="section-about">
           <div class="about-content">
-            <p>云邮教学空间助手是一款专为云邮教学空间平台设计的浏览器增强脚本。</p>
+            <p><strong>ucloud-Enhanced</strong> 是一款以「独立工作台」为核心的北邮云邮教学空间增强脚本。</p>
 
-            <h4>🚀 主要功能</h4>
+            <h4>🚀 核心功能</h4>
             <ul>
-              <li>📍 个人主页优化 - 智能布局，提升交互体验</li>
-              <li>🔍 课程搜索 - 快速搜索并打开"本学期课程"</li>
-              <li>📄 课件预览增强 - 流畅浏览，轻松获取学习资源</li>
-              <li>📥 课程管理优化 - 批量下载，多样化下载选项</li>
-              <li>📋 作业管理助手 - 精准显示课程归属，提高管理效率</li>
-              <li>🔔 通知管理优化 - 智能整理，突出重点通知</li>
-              <li>🛠️ 系统功能增强 - 页面标题优化，解除复制限制等实用功能</li>
+              <li>🧩 <strong>独立工作台</strong> - 待办（待完成 / 已提交未截止）、课程、通知三合一，支持快捷键与滚动记忆</li>
+              <li>📝 <strong>作业详情与批改透视</strong> - 直接查看要求、附件、班级进度及「我的得分 / 教师评语 / 已交附件」</li>
+              <li>📚 <strong>课程空间</strong> - 课件按章节分组搜索、在线预览、按章节或整课批量下载，本课作业与测试一览</li>
+              <li>🌓 <strong>自动深色模式</strong> - 跟随系统外观即时切换，工作台与原网页亮/暗双主题适配</li>
+              <li>📄 <strong>课件预览与原页增强</strong> - Office365 / 原生 PDF / 内置图片阅读器、解除复制限制与标题优化</li>
             </ul>
 
             <h4>🔗 相关链接</h4>
@@ -2492,7 +2716,7 @@ function escapeHtml(text) {
 
             <div class="about-update-row">
               <button id="yzHelper-check-update" class="about-btn">立即检查更新</button>
-              <span class="about-update-tip">每天自动检查一次，也可手动检查</span>
+              <span class="about-update-tip">每 2 小时自动检查一次，也可手动检查</span>
             </div>
 
             <p class="feedback-note">
@@ -2503,7 +2727,7 @@ function escapeHtml(text) {
           </div>
         </div>
       `;
-      
+
       return sectionsHTML;
     }
 
@@ -3269,6 +3493,8 @@ function escapeHtml(text) {
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
     star:
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
+    settings:
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     empty:
       '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
   };
@@ -4351,6 +4577,7 @@ function escapeHtml(text) {
             <button class="wb-tab" data-tab="notice">通知<span class="wb-tab-count"></span></button>
           </div>
           <div class="wb-actions">
+            <button class="wb-icon-btn wb-settings" title="助手设置">${WB_ICONS.settings}</button>
             <button class="wb-icon-btn wb-fullscreen" title="全屏显示">${WB_ICONS.expand}</button>
             <button class="wb-icon-btn wb-refresh" title="刷新当前页签">${WB_ICONS.refresh}</button>
             <button class="wb-icon-btn wb-close" title="关闭 (Esc)">${WB_ICONS.close}</button>
@@ -4367,6 +4594,7 @@ function escapeHtml(text) {
     document.body.appendChild(wbHost);
     wbRoot.querySelector(".wb-mask").addEventListener("click", wbClose);
     wbRoot.querySelector(".wb-close").addEventListener("click", wbClose);
+    wbRoot.querySelector(".wb-settings").addEventListener("click", toggleSettingsPanel);
     wbRoot.querySelector(".wb-fullscreen").addEventListener("click", () => {
       const next = !settings.workbench.fullscreen;
       settings.workbench.fullscreen = next;
@@ -5966,6 +6194,13 @@ function escapeHtml(text) {
 
   function setupWorkbench() {
     document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        const settingsEl = document.getElementById("yzHelper-settings");
+        if (settingsEl && settingsEl.classList.contains("visible")) {
+          toggleSettingsPanel();
+          return;
+        }
+      }
       if (!wbState.open) return;
       if (e.key === "Escape") {
         if (wbState.tab === "detail" && wbState.detail) {
