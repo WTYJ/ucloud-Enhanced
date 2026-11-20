@@ -2980,6 +2980,217 @@ function escapeHtml(text) {
     return p;
   }
 
+  // ===== 共享格式化、路由导航、课程列表与资源预览工具（供工作台与原页面模块共用）=====
+  function fmtDeadline(d) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return (
+      d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
+      " " + pad(d.getHours()) + ":" + pad(d.getMinutes())
+    );
+  }
+
+  // 生成待办详情地址（供工作台与卡片共用）
+  function buildTaskUrl(task) {
+    const id = task && (task.activityId || task.id);
+    if (!id) return "";
+    const q = (obj) =>
+      Object.keys(obj)
+        .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
+        .map((k) => k + "=" + encodeURIComponent(obj[k]))
+        .join("&");
+    const type = Number(task.type);
+    if (type === 3 || type === 5) {
+      const tab = type === 3 ? "first" : "fourth";
+      return (
+        "course.html#/student/assignmentDetails_fullpage?" +
+        q({
+          activeTabName: tab,
+          assignmentId: id,
+          assignmentType: task.assignmentType === undefined ? 0 : task.assignmentType,
+          assignmentTitle: task.activityName || task.assignmentTitle || "",
+          evaluationStatus: task.evaluationStatus,
+          studentGroupId: task.studentGroupId,
+          isOpenEvaluation: task.isOpenEvaluation,
+        })
+      );
+    }
+    if (type === 1) return "course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id);
+    if (type === 2) return "course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id);
+    if (type === 4) return "course.html#/answer?id=" + encodeURIComponent(id);
+    return "";
+  }
+
+  // 按“在新标签页打开”设置跳转
+  function openTaskUrl(url) {
+    if (!url) return;
+    if (settings.home.openInNewTab) {
+      window.open(url, "_blank");
+    } else {
+      location.href = url;
+    }
+  }
+
+  const CACHE_STORAGE_KEY = "zzxw";
+  const CACHE_MAX_ENTRIES = 300;
+
+  function readCourseCache() {
+    try {
+      const raw = localStorage.getItem(CACHE_STORAGE_KEY);
+      const parsed = raw ? JSON.parse(raw) : {};
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function set(k, v) {
+    if (!k || !v) return;
+    const h = readCourseCache();
+    // 仅持久化必要字段，避免将整条课程 raw 对象重复写入 localStorage
+    const slim =
+      typeof v === "object"
+        ? {
+            id: v.id,
+            name: v.name || "",
+            teachers: v.teachers || "",
+            department: v.department || "",
+          }
+        : v;
+    delete h[k];
+    h[k] = slim;
+    const keys = Object.keys(h);
+    if (keys.length > CACHE_MAX_ENTRIES) {
+      for (let i = 0; i < keys.length - CACHE_MAX_ENTRIES; i++) {
+        delete h[keys[i]];
+      }
+    }
+    try {
+      localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(h));
+    } catch (e) {
+      console.warn("[ucloud-Enhanced] 写入课程缓存失败", e);
+    }
+  }
+
+  function get(k) {
+    if (!k) return undefined;
+    return readCourseCache()[k];
+  }
+
+  // 本学期课程列表缓存与跳转
+  let courseListCache = null;
+  let courseListPromise = null;
+  let courseListLoading = false;
+
+  function getRoleAliase() {
+    const raw = getCookie("user-role");
+    if (!raw) return "";
+    try {
+      return (JSON.parse(decodeURIComponent(raw)) || {}).roleAliase || "";
+    } catch (e) {
+      try {
+        return (JSON.parse(raw) || {}).roleAliase || "";
+      } catch (err) {
+        return "";
+      }
+    }
+  }
+
+  function mapSiteRecord(record) {
+    let teachers = record.primaryTeachers || "";
+    if (!teachers && Array.isArray(record.teachers)) {
+      teachers = record.teachers
+        .map((t) => t.realName || t.name || "")
+        .filter(Boolean)
+        .join(", ");
+    }
+    return {
+      id: record.id,
+      name: record.siteName || "",
+      teachers: teachers,
+      department: record.departmentName || "",
+      raw: record,
+    };
+  }
+
+  async function fetchCurrentSiteList() {
+    const [userid, token] = getToken();
+    if (!userid || !token) return [];
+    const roleAliase = getRoleAliase();
+    let path = "student/current";
+    let siteRoleCode = 2;
+    if (roleAliase === "JS004" || roleAliase === "JS006") {
+      path = "teacher/current";
+      siteRoleCode = roleAliase === "JS004" ? 1 : 3;
+    }
+    const json = await apiFetch(
+      "ykt-site/site/list/" +
+        path +
+        "?size=999999&current=1&userId=" +
+        userid +
+        "&siteRoleCode=" +
+        siteRoleCode
+    );
+    return (json && json.data && json.data.records) || [];
+  }
+
+  async function getCourseList() {
+    if (courseListCache && courseListCache.length) return courseListCache;
+    if (!courseListPromise) {
+      courseListLoading = true;
+      courseListPromise = fetchCurrentSiteList()
+        .then((records) => records.map(mapSiteRecord))
+        .catch((e) => {
+          console.error("[ucloud-Enhanced] 获取课程列表失败", e);
+          return [];
+        })
+        .then((list) => {
+          courseListCache = list;
+          courseListPromise = null;
+          courseListLoading = false;
+          return list;
+        });
+    }
+    return courseListPromise;
+  }
+
+  function openCoursePage(course) {
+    if (!course || !course.id) return;
+    const cached = (courseListCache || []).find((x) => x.id === course.id);
+    const raw = (cached && cached.raw) || course.raw || {};
+    const siteData = Object.assign({}, raw, {
+      id: course.id,
+      siteName: raw.siteName || course.name || "",
+    });
+    // 平台 Cookie 统一使用 iClass- 前缀（模块 4UAI 的 cookies 封装），
+    // 默认有效期 1 天，与平台 tapSiteItem 行为保持一致
+    document.cookie =
+      "iClass-site-id=" + course.id + "; path=/; max-age=86400";
+    try {
+      localStorage.setItem("site", JSON.stringify(siteData));
+    } catch (e) {
+      console.error("[ucloud-Enhanced] 写入课程信息失败", e);
+    }
+    const roleAliase = getRoleAliase();
+    const view =
+      roleAliase === "JS004" || roleAliase === "JS006" ? "teacher" : "student";
+    const url =
+      "https://ucloud.bupt.edu.cn/uclass/course.html#/" +
+      view +
+      "/courseHomePage?ind=1";
+    openTaskUrl(url);
+  }
+
+  // 预览URL相关
+  async function getPreviewURL(storageId) {
+    const res = await fetch(
+      "https://apiucloud.bupt.edu.cn/blade-source/resource/preview-url?resourceId=" +
+        storageId
+    );
+    const json = await res.json();
+    onlinePreview = json.data.onlinePreview;
+    return json.data.previewUrl;
+  }
+
   // ========== [MODULE: 20-workbench.js] 独立工作台（Shadow DOM：待办 / 课程 / 通知 / 二级视图） ==========
 
   // ===== 工作台：Shadow DOM 独立界面（待办 / 课程 / 通知）=====
@@ -3002,6 +3213,8 @@ function escapeHtml(text) {
   let wbTodoCards = [];
   let wbSubmittedCards = [];
   let wbTodoLoadSeq = 0;
+  let wbCourseLoadSeq = 0;
+  let wbNoticeLoadSeq = 0;
   let wbTicker = null;
   let wbCoursePendingCounts = new Map();
   let wbCourseGridRerender = null;
@@ -4060,12 +4273,10 @@ function escapeHtml(text) {
       font-weight: 600;
       white-space: nowrap;
     }
-    .wb-status-chip.pending { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
     .wb-status-chip.unsubmitted { background: rgba(234, 179, 8, 0.16); color: #a16207; }
     .wb-status-chip.rejected { background: rgba(245, 158, 11, 0.14); color: #d97706; }
     .wb-status-chip.submitted { background: var(--wb-accent-soft); color: var(--wb-accent-text); }
     .wb-status-chip.graded { background: rgba(16, 185, 129, 0.14); color: #059669; }
-    :host(.wb-dark) .wb-status-chip.pending { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
     :host(.wb-dark) .wb-status-chip.unsubmitted { background: rgba(250, 204, 21, 0.18); color: #fde047; }
     :host(.wb-dark) .wb-status-chip.rejected { background: rgba(251, 191, 36, 0.18); color: #fcd34d; }
     :host(.wb-dark) .wb-status-chip.graded { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
@@ -4663,6 +4874,7 @@ function escapeHtml(text) {
   async function wbLoadNotices() {
     wbState.noticeLoaded = true;
     if (!wbRoot) return;
+    const seq = ++wbNoticeLoadSeq;
     const pane = wbRoot.querySelector('[data-pane="notice"]');
     pane.innerHTML = wbSkeletonHtml("notice");
     try {
@@ -4673,6 +4885,7 @@ function escapeHtml(text) {
         size: 100,
       }).toString();
       const res = await apiFetch("ykt-basics/api/inform/news/list?" + qs, { method: "POST" });
+      if (seq !== wbNoticeLoadSeq) return;
       const rawList = (res && res.data && res.data.records) || [];
       const list = rawList.slice().sort((a, b) => {
         const ta = parseDeadline(a.newsCopyTime)?.getTime() || 0;
@@ -4811,6 +5024,7 @@ function escapeHtml(text) {
       });
       pane.appendChild(inner);
     } catch (e) {
+      if (seq !== wbNoticeLoadSeq) return;
       pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.noticeLoaded = false;
     }
@@ -4819,10 +5033,12 @@ function escapeHtml(text) {
   async function wbLoadCourses() {
     wbState.courseLoaded = true;
     if (!wbRoot) return;
+    const seq = ++wbCourseLoadSeq;
     const pane = wbRoot.querySelector('[data-pane="course"]');
     pane.innerHTML = wbSkeletonHtml("course");
     try {
       const list = await getCourseList();
+      if (seq !== wbCourseLoadSeq) return;
       wbSetTabCount("course", (list && list.length) || 0);
       pane.innerHTML = "";
       if (!list || !list.length) {
@@ -4912,6 +5128,7 @@ function escapeHtml(text) {
       search.addEventListener("input", () => renderGrid(search.value.trim()));
       renderGrid("");
     } catch (e) {
+      if (seq !== wbCourseLoadSeq) return;
       pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.courseLoaded = false;
     }
@@ -5366,7 +5583,7 @@ function escapeHtml(text) {
     }
     if (st === 0) return { cls: "submitted", text: "已提交" };
     if (st === 2) return { cls: "rejected", text: "已驳回" };
-    if (st === 99) return { cls: "pending", text: "未提交" };
+    if (st === 99) return { cls: "unsubmitted", text: "未提交" };
     return null;
   }
 
@@ -5644,16 +5861,19 @@ function escapeHtml(text) {
             exam.examName || exam.title || exam.name || "未命名测试";
           const tags = card.querySelector(".wb-card-tags");
           const meta = card.querySelector(".wb-meta");
+          const hasScore = exam.score !== undefined && exam.score !== null && exam.score !== "";
           if (endDate) {
             tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
-            const rem = formatRemain(endDate - Date.now());
-            if (rem.cls !== "overdue") {
-              card.dataset.urgency = rem.cls;
-              meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+            if (!hasScore) {
+              const rem = formatRemain(endDate - Date.now());
+              if (rem.cls !== "overdue") {
+                card.dataset.urgency = rem.cls;
+                meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+              }
             }
           }
           tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">📝 测试</span>');
-          if (exam.score !== undefined && exam.score !== null && exam.score !== "") {
+          if (hasScore) {
             meta.insertAdjacentHTML(
               "beforeend",
               `<span class="wb-status-chip graded">得分 ${escapeHtml(exam.score)}</span>`
@@ -5772,14 +5992,6 @@ function escapeHtml(text) {
   const yzTodoCountdowns = new Map();
   let yzTodoTimer = null;
 
-  function fmtDeadline(d) {
-    const pad = (n) => String(n).padStart(2, "0");
-    return (
-      d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-      " " + pad(d.getHours()) + ":" + pad(d.getMinutes())
-    );
-  }
-
   function removeTodoContinuous() {
     const section = document.querySelector(".in-progress-section");
     if (section) {
@@ -5868,47 +6080,6 @@ function escapeHtml(text) {
       chip.textContent =
         "班级已交 " + info.stat.submitted + " / " + info.stat.total + " 人";
       meta.appendChild(chip);
-    }
-  }
-
-  // 生成待办详情地址（供工作台与卡片共用）
-  function buildTaskUrl(task) {
-    const id = task && (task.activityId || task.id);
-    if (!id) return "";
-    const q = (obj) =>
-      Object.keys(obj)
-        .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
-        .map((k) => k + "=" + encodeURIComponent(obj[k]))
-        .join("&");
-    const type = Number(task.type);
-    if (type === 3 || type === 5) {
-      const tab = type === 3 ? "first" : "fourth";
-      return (
-        "course.html#/student/assignmentDetails_fullpage?" +
-        q({
-          activeTabName: tab,
-          assignmentId: id,
-          assignmentType: task.assignmentType === undefined ? 0 : task.assignmentType,
-          assignmentTitle: task.activityName || task.assignmentTitle || "",
-          evaluationStatus: task.evaluationStatus,
-          studentGroupId: task.studentGroupId,
-          isOpenEvaluation: task.isOpenEvaluation,
-        })
-      );
-    }
-    if (type === 1) return "course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id);
-    if (type === 2) return "course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id);
-    if (type === 4) return "course.html#/answer?id=" + encodeURIComponent(id);
-    return "";
-  }
-
-  // 按“在新标签页打开”设置跳转
-  function openTaskUrl(url) {
-    if (!url) return;
-    if (settings.home.openInNewTab) {
-      window.open(url, "_blank");
-    } else {
-      location.href = url;
     }
   }
 
@@ -6072,52 +6243,6 @@ function escapeHtml(text) {
   }
 
   // 本地存储（容量上限 300 条 + 剔除大体积 raw 字段 + 异常容错）
-  const CACHE_STORAGE_KEY = "zzxw";
-  const CACHE_MAX_ENTRIES = 300;
-
-  function readCourseCache() {
-    try {
-      const raw = localStorage.getItem(CACHE_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function set(k, v) {
-    if (!k || !v) return;
-    const h = readCourseCache();
-    // 仅持久化必要字段，避免将整条课程 raw 对象重复写入 localStorage
-    const slim =
-      typeof v === "object"
-        ? {
-            id: v.id,
-            name: v.name || "",
-            teachers: v.teachers || "",
-            department: v.department || "",
-          }
-        : v;
-    delete h[k];
-    h[k] = slim;
-    const keys = Object.keys(h);
-    if (keys.length > CACHE_MAX_ENTRIES) {
-      for (let i = 0; i < keys.length - CACHE_MAX_ENTRIES; i++) {
-        delete h[keys[i]];
-      }
-    }
-    try {
-      localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(h));
-    } catch (e) {
-      console.warn("[ucloud-Enhanced] 写入课程缓存失败", e);
-    }
-  }
-
-  function get(k) {
-    if (!k) return undefined;
-    return readCourseCache()[k];
-  }
-
   // 插入课程信息
   function insert(x, retry) {
     if (!x) return;
@@ -6246,108 +6371,6 @@ function escapeHtml(text) {
   }
 
   // 首页"本学期课程"：课程搜索框
-  let courseListCache = null;
-  let courseListPromise = null;
-  let courseListLoading = false;
-
-  function getRoleAliase() {
-    const raw = getCookie("user-role");
-    if (!raw) return "";
-    try {
-      return (JSON.parse(decodeURIComponent(raw)) || {}).roleAliase || "";
-    } catch (e) {
-      try {
-        return (JSON.parse(raw) || {}).roleAliase || "";
-      } catch (err) {
-        return "";
-      }
-    }
-  }
-
-  function mapSiteRecord(record) {
-    let teachers = record.primaryTeachers || "";
-    if (!teachers && Array.isArray(record.teachers)) {
-      teachers = record.teachers
-        .map((t) => t.realName || t.name || "")
-        .filter(Boolean)
-        .join(", ");
-    }
-    return {
-      id: record.id,
-      name: record.siteName || "",
-      teachers: teachers,
-      department: record.departmentName || "",
-      raw: record,
-    };
-  }
-
-  async function fetchCurrentSiteList() {
-    const [userid, token] = getToken();
-    if (!userid || !token) return [];
-    const roleAliase = getRoleAliase();
-    let path = "student/current";
-    let siteRoleCode = 2;
-    if (roleAliase === "JS004" || roleAliase === "JS006") {
-      path = "teacher/current";
-      siteRoleCode = roleAliase === "JS004" ? 1 : 3;
-    }
-    const json = await apiFetch(
-      "ykt-site/site/list/" +
-        path +
-        "?size=999999&current=1&userId=" +
-        userid +
-        "&siteRoleCode=" +
-        siteRoleCode
-    );
-    return (json && json.data && json.data.records) || [];
-  }
-
-  async function getCourseList() {
-    if (courseListCache && courseListCache.length) return courseListCache;
-    if (!courseListPromise) {
-      courseListLoading = true;
-      courseListPromise = fetchCurrentSiteList()
-        .then((records) => records.map(mapSiteRecord))
-        .catch((e) => {
-          console.error("[ucloud-Enhanced] 获取课程列表失败", e);
-          return [];
-        })
-        .then((list) => {
-          courseListCache = list;
-          courseListPromise = null;
-          courseListLoading = false;
-          return list;
-        });
-    }
-    return courseListPromise;
-  }
-
-  function openCoursePage(course) {
-    if (!course || !course.id) return;
-    const cached = (courseListCache || []).find((x) => x.id === course.id);
-    const raw = (cached && cached.raw) || course.raw || {};
-    const siteData = Object.assign({}, raw, {
-      id: course.id,
-      siteName: raw.siteName || course.name || "",
-    });
-    // 平台 Cookie 统一使用 iClass- 前缀（模块 4UAI 的 cookies 封装），
-    // 默认有效期 1 天，与平台 tapSiteItem 行为保持一致
-    document.cookie =
-      "iClass-site-id=" + course.id + "; path=/; max-age=86400";
-    try {
-      localStorage.setItem("site", JSON.stringify(siteData));
-    } catch (e) {
-      console.error("[ucloud-Enhanced] 写入课程信息失败", e);
-    }
-    const roleAliase = getRoleAliase();
-    const view =
-      roleAliase === "JS004" || roleAliase === "JS006" ? "teacher" : "student";
-    const url =
-      "https://ucloud.bupt.edu.cn/uclass/course.html#/" +
-      view +
-      "/courseHomePage?ind=1";
-    openTaskUrl(url);
-  }
 
   function findLessonSection() {
     const sections = document.querySelectorAll(
@@ -6533,17 +6556,6 @@ function escapeHtml(text) {
     toolbar.appendChild(searchWrap);
 
     header.appendChild(toolbar);
-  }
-
-  // 预览URL相关
-  async function getPreviewURL(storageId) {
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/blade-source/resource/preview-url?resourceId=" +
-        storageId
-    );
-    const json = await res.json();
-    onlinePreview = json.data.onlinePreview;
-    return json.data.previewUrl;
   }
 
   // 启用文本选择、页面美化与按需功能样式（合并为单次 GM_addStyle 注入）

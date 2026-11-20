@@ -18,6 +18,8 @@
   let wbTodoCards = [];
   let wbSubmittedCards = [];
   let wbTodoLoadSeq = 0;
+  let wbCourseLoadSeq = 0;
+  let wbNoticeLoadSeq = 0;
   let wbTicker = null;
   let wbCoursePendingCounts = new Map();
   let wbCourseGridRerender = null;
@@ -1076,12 +1078,10 @@
       font-weight: 600;
       white-space: nowrap;
     }
-    .wb-status-chip.pending { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
     .wb-status-chip.unsubmitted { background: rgba(234, 179, 8, 0.16); color: #a16207; }
     .wb-status-chip.rejected { background: rgba(245, 158, 11, 0.14); color: #d97706; }
     .wb-status-chip.submitted { background: var(--wb-accent-soft); color: var(--wb-accent-text); }
     .wb-status-chip.graded { background: rgba(16, 185, 129, 0.14); color: #059669; }
-    :host(.wb-dark) .wb-status-chip.pending { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
     :host(.wb-dark) .wb-status-chip.unsubmitted { background: rgba(250, 204, 21, 0.18); color: #fde047; }
     :host(.wb-dark) .wb-status-chip.rejected { background: rgba(251, 191, 36, 0.18); color: #fcd34d; }
     :host(.wb-dark) .wb-status-chip.graded { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
@@ -1679,6 +1679,7 @@
   async function wbLoadNotices() {
     wbState.noticeLoaded = true;
     if (!wbRoot) return;
+    const seq = ++wbNoticeLoadSeq;
     const pane = wbRoot.querySelector('[data-pane="notice"]');
     pane.innerHTML = wbSkeletonHtml("notice");
     try {
@@ -1689,6 +1690,7 @@
         size: 100,
       }).toString();
       const res = await apiFetch("ykt-basics/api/inform/news/list?" + qs, { method: "POST" });
+      if (seq !== wbNoticeLoadSeq) return;
       const rawList = (res && res.data && res.data.records) || [];
       const list = rawList.slice().sort((a, b) => {
         const ta = parseDeadline(a.newsCopyTime)?.getTime() || 0;
@@ -1827,6 +1829,7 @@
       });
       pane.appendChild(inner);
     } catch (e) {
+      if (seq !== wbNoticeLoadSeq) return;
       pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.noticeLoaded = false;
     }
@@ -1835,10 +1838,12 @@
   async function wbLoadCourses() {
     wbState.courseLoaded = true;
     if (!wbRoot) return;
+    const seq = ++wbCourseLoadSeq;
     const pane = wbRoot.querySelector('[data-pane="course"]');
     pane.innerHTML = wbSkeletonHtml("course");
     try {
       const list = await getCourseList();
+      if (seq !== wbCourseLoadSeq) return;
       wbSetTabCount("course", (list && list.length) || 0);
       pane.innerHTML = "";
       if (!list || !list.length) {
@@ -1928,6 +1933,7 @@
       search.addEventListener("input", () => renderGrid(search.value.trim()));
       renderGrid("");
     } catch (e) {
+      if (seq !== wbCourseLoadSeq) return;
       pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
       wbState.courseLoaded = false;
     }
@@ -2382,7 +2388,7 @@
     }
     if (st === 0) return { cls: "submitted", text: "已提交" };
     if (st === 2) return { cls: "rejected", text: "已驳回" };
-    if (st === 99) return { cls: "pending", text: "未提交" };
+    if (st === 99) return { cls: "unsubmitted", text: "未提交" };
     return null;
   }
 
@@ -2660,16 +2666,19 @@
             exam.examName || exam.title || exam.name || "未命名测试";
           const tags = card.querySelector(".wb-card-tags");
           const meta = card.querySelector(".wb-meta");
+          const hasScore = exam.score !== undefined && exam.score !== null && exam.score !== "";
           if (endDate) {
             tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
-            const rem = formatRemain(endDate - Date.now());
-            if (rem.cls !== "overdue") {
-              card.dataset.urgency = rem.cls;
-              meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+            if (!hasScore) {
+              const rem = formatRemain(endDate - Date.now());
+              if (rem.cls !== "overdue") {
+                card.dataset.urgency = rem.cls;
+                meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+              }
             }
           }
           tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">📝 测试</span>');
-          if (exam.score !== undefined && exam.score !== null && exam.score !== "") {
+          if (hasScore) {
             meta.insertAdjacentHTML(
               "beforeend",
               `<span class="wb-status-chip graded">得分 ${escapeHtml(exam.score)}</span>`

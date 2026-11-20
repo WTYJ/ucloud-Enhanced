@@ -17,14 +17,6 @@
   const yzTodoCountdowns = new Map();
   let yzTodoTimer = null;
 
-  function fmtDeadline(d) {
-    const pad = (n) => String(n).padStart(2, "0");
-    return (
-      d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-      " " + pad(d.getHours()) + ":" + pad(d.getMinutes())
-    );
-  }
-
   function removeTodoContinuous() {
     const section = document.querySelector(".in-progress-section");
     if (section) {
@@ -113,47 +105,6 @@
       chip.textContent =
         "班级已交 " + info.stat.submitted + " / " + info.stat.total + " 人";
       meta.appendChild(chip);
-    }
-  }
-
-  // 生成待办详情地址（供工作台与卡片共用）
-  function buildTaskUrl(task) {
-    const id = task && (task.activityId || task.id);
-    if (!id) return "";
-    const q = (obj) =>
-      Object.keys(obj)
-        .filter((k) => obj[k] !== undefined && obj[k] !== null && obj[k] !== "")
-        .map((k) => k + "=" + encodeURIComponent(obj[k]))
-        .join("&");
-    const type = Number(task.type);
-    if (type === 3 || type === 5) {
-      const tab = type === 3 ? "first" : "fourth";
-      return (
-        "course.html#/student/assignmentDetails_fullpage?" +
-        q({
-          activeTabName: tab,
-          assignmentId: id,
-          assignmentType: task.assignmentType === undefined ? 0 : task.assignmentType,
-          assignmentTitle: task.activityName || task.assignmentTitle || "",
-          evaluationStatus: task.evaluationStatus,
-          studentGroupId: task.studentGroupId,
-          isOpenEvaluation: task.isOpenEvaluation,
-        })
-      );
-    }
-    if (type === 1) return "course.html#/teacher/forum/topicDetail_fullpage?tid=" + encodeURIComponent(id);
-    if (type === 2) return "course.html#/survey/surveyDetail_fullpage?id=" + encodeURIComponent(id);
-    if (type === 4) return "course.html#/answer?id=" + encodeURIComponent(id);
-    return "";
-  }
-
-  // 按“在新标签页打开”设置跳转
-  function openTaskUrl(url) {
-    if (!url) return;
-    if (settings.home.openInNewTab) {
-      window.open(url, "_blank");
-    } else {
-      location.href = url;
     }
   }
 
@@ -317,52 +268,6 @@
   }
 
   // 本地存储（容量上限 300 条 + 剔除大体积 raw 字段 + 异常容错）
-  const CACHE_STORAGE_KEY = "zzxw";
-  const CACHE_MAX_ENTRIES = 300;
-
-  function readCourseCache() {
-    try {
-      const raw = localStorage.getItem(CACHE_STORAGE_KEY);
-      const parsed = raw ? JSON.parse(raw) : {};
-      return parsed && typeof parsed === "object" ? parsed : {};
-    } catch (e) {
-      return {};
-    }
-  }
-
-  function set(k, v) {
-    if (!k || !v) return;
-    const h = readCourseCache();
-    // 仅持久化必要字段，避免将整条课程 raw 对象重复写入 localStorage
-    const slim =
-      typeof v === "object"
-        ? {
-            id: v.id,
-            name: v.name || "",
-            teachers: v.teachers || "",
-            department: v.department || "",
-          }
-        : v;
-    delete h[k];
-    h[k] = slim;
-    const keys = Object.keys(h);
-    if (keys.length > CACHE_MAX_ENTRIES) {
-      for (let i = 0; i < keys.length - CACHE_MAX_ENTRIES; i++) {
-        delete h[keys[i]];
-      }
-    }
-    try {
-      localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(h));
-    } catch (e) {
-      console.warn("[ucloud-Enhanced] 写入课程缓存失败", e);
-    }
-  }
-
-  function get(k) {
-    if (!k) return undefined;
-    return readCourseCache()[k];
-  }
-
   // 插入课程信息
   function insert(x, retry) {
     if (!x) return;
@@ -491,108 +396,6 @@
   }
 
   // 首页"本学期课程"：课程搜索框
-  let courseListCache = null;
-  let courseListPromise = null;
-  let courseListLoading = false;
-
-  function getRoleAliase() {
-    const raw = getCookie("user-role");
-    if (!raw) return "";
-    try {
-      return (JSON.parse(decodeURIComponent(raw)) || {}).roleAliase || "";
-    } catch (e) {
-      try {
-        return (JSON.parse(raw) || {}).roleAliase || "";
-      } catch (err) {
-        return "";
-      }
-    }
-  }
-
-  function mapSiteRecord(record) {
-    let teachers = record.primaryTeachers || "";
-    if (!teachers && Array.isArray(record.teachers)) {
-      teachers = record.teachers
-        .map((t) => t.realName || t.name || "")
-        .filter(Boolean)
-        .join(", ");
-    }
-    return {
-      id: record.id,
-      name: record.siteName || "",
-      teachers: teachers,
-      department: record.departmentName || "",
-      raw: record,
-    };
-  }
-
-  async function fetchCurrentSiteList() {
-    const [userid, token] = getToken();
-    if (!userid || !token) return [];
-    const roleAliase = getRoleAliase();
-    let path = "student/current";
-    let siteRoleCode = 2;
-    if (roleAliase === "JS004" || roleAliase === "JS006") {
-      path = "teacher/current";
-      siteRoleCode = roleAliase === "JS004" ? 1 : 3;
-    }
-    const json = await apiFetch(
-      "ykt-site/site/list/" +
-        path +
-        "?size=999999&current=1&userId=" +
-        userid +
-        "&siteRoleCode=" +
-        siteRoleCode
-    );
-    return (json && json.data && json.data.records) || [];
-  }
-
-  async function getCourseList() {
-    if (courseListCache && courseListCache.length) return courseListCache;
-    if (!courseListPromise) {
-      courseListLoading = true;
-      courseListPromise = fetchCurrentSiteList()
-        .then((records) => records.map(mapSiteRecord))
-        .catch((e) => {
-          console.error("[ucloud-Enhanced] 获取课程列表失败", e);
-          return [];
-        })
-        .then((list) => {
-          courseListCache = list;
-          courseListPromise = null;
-          courseListLoading = false;
-          return list;
-        });
-    }
-    return courseListPromise;
-  }
-
-  function openCoursePage(course) {
-    if (!course || !course.id) return;
-    const cached = (courseListCache || []).find((x) => x.id === course.id);
-    const raw = (cached && cached.raw) || course.raw || {};
-    const siteData = Object.assign({}, raw, {
-      id: course.id,
-      siteName: raw.siteName || course.name || "",
-    });
-    // 平台 Cookie 统一使用 iClass- 前缀（模块 4UAI 的 cookies 封装），
-    // 默认有效期 1 天，与平台 tapSiteItem 行为保持一致
-    document.cookie =
-      "iClass-site-id=" + course.id + "; path=/; max-age=86400";
-    try {
-      localStorage.setItem("site", JSON.stringify(siteData));
-    } catch (e) {
-      console.error("[ucloud-Enhanced] 写入课程信息失败", e);
-    }
-    const roleAliase = getRoleAliase();
-    const view =
-      roleAliase === "JS004" || roleAliase === "JS006" ? "teacher" : "student";
-    const url =
-      "https://ucloud.bupt.edu.cn/uclass/course.html#/" +
-      view +
-      "/courseHomePage?ind=1";
-    openTaskUrl(url);
-  }
 
   function findLessonSection() {
     const sections = document.querySelectorAll(
@@ -778,17 +581,6 @@
     toolbar.appendChild(searchWrap);
 
     header.appendChild(toolbar);
-  }
-
-  // 预览URL相关
-  async function getPreviewURL(storageId) {
-    const res = await fetch(
-      "https://apiucloud.bupt.edu.cn/blade-source/resource/preview-url?resourceId=" +
-        storageId
-    );
-    const json = await res.json();
-    onlinePreview = json.data.onlinePreview;
-    return json.data.previewUrl;
   }
 
   // 启用文本选择、页面美化与按需功能样式（合并为单次 GM_addStyle 注入）
