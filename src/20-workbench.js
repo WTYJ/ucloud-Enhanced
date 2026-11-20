@@ -1077,10 +1077,12 @@
       white-space: nowrap;
     }
     .wb-status-chip.pending { background: rgba(239, 68, 68, 0.12); color: #dc2626; }
+    .wb-status-chip.unsubmitted { background: rgba(234, 179, 8, 0.16); color: #a16207; }
     .wb-status-chip.rejected { background: rgba(245, 158, 11, 0.14); color: #d97706; }
     .wb-status-chip.submitted { background: var(--wb-accent-soft); color: var(--wb-accent-text); }
     .wb-status-chip.graded { background: rgba(16, 185, 129, 0.14); color: #059669; }
     :host(.wb-dark) .wb-status-chip.pending { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    :host(.wb-dark) .wb-status-chip.unsubmitted { background: rgba(250, 204, 21, 0.18); color: #fde047; }
     :host(.wb-dark) .wb-status-chip.rejected { background: rgba(251, 191, 36, 0.18); color: #fcd34d; }
     :host(.wb-dark) .wb-status-chip.graded { background: rgba(52, 211, 153, 0.18); color: #6ee7b7; }
   `;
@@ -1304,6 +1306,11 @@
     if (!meta || !tags) return;
     meta.innerHTML = "";
     tags.innerHTML = "";
+    if (wbParseWorkStatus(task) === 2) {
+      meta.insertAdjacentHTML("beforeend", '<span class="wb-status-chip rejected">已驳回</span>');
+    } else {
+      meta.insertAdjacentHTML("beforeend", '<span class="wb-status-chip unsubmitted">未提交</span>');
+    }
     const d = parseDeadline(task.endTime);
     if (d) {
       tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(d)}</span>`);
