@@ -485,7 +485,7 @@
   }
 
   const DARK_SKIP_SELECTOR_RE =
-    /ue-dark-mode|#yzHelper-|\.yz-notify|\.yz-todo-|\.yz-lesson-|#downloadAllButton|#nprogress/;
+    /ue-dark-mode|#yzHelper-|\.yz-notify|#downloadAllButton|#nprogress/;
 
   function scopeDarkSelector(selectorText) {
     const scoped = [];

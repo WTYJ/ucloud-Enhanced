@@ -1556,7 +1556,11 @@
             if (t === 3 || t === 5) {
               wbOpenAssignmentDetail(task, taskCourses.get(tid) || get(tid) || null, "todo");
             } else {
-              openTaskUrl(buildTaskUrl(task));
+              const url = buildTaskUrl(task);
+              if (url) {
+                wbClose();
+                openTaskUrl(url);
+              }
             }
           });
           subPending.appendChild(card);
@@ -1707,21 +1711,27 @@
 
   function renderTextWithLinks(container, text) {
     container.textContent = "";
-    const urlRe = /https?:\/\/[^\s<>"'()]+/g;
+    const urlRe = /https?:\/\/[^\s<>"'()（）【】《》，。；：！？、]+/g;
     let last = 0;
     let match;
     while ((match = urlRe.exec(text)) !== null) {
       if (match.index > last) {
         container.appendChild(document.createTextNode(text.slice(last, match.index)));
       }
+      const rawUrl = match[0];
+      const cleanUrl = rawUrl.replace(/[.,;:!?]+$/, "");
+      const trailing = rawUrl.slice(cleanUrl.length);
       const a = document.createElement("a");
       a.className = "wb-link";
-      a.href = match[0];
+      a.href = cleanUrl;
       a.target = "_blank";
       a.rel = "noopener noreferrer";
-      a.textContent = match[0];
+      a.textContent = cleanUrl;
       container.appendChild(a);
-      last = match.index + match[0].length;
+      if (trailing) {
+        container.appendChild(document.createTextNode(trailing));
+      }
+      last = match.index + rawUrl.length;
     }
     if (last < text.length) {
       container.appendChild(document.createTextNode(text.slice(last)));
@@ -1993,7 +2003,9 @@
       renderGrid("");
     } catch (e) {
       if (seq !== wbCourseLoadSeq) return;
-      pane.innerHTML = wbEmptyHtml("加载失败，请稍后重试");
+      pane.innerHTML = wbEmptyHtml(
+        e && e.isAuthError ? "登录状态已过期，请刷新页面重新登录" : "加载失败，请稍后重试"
+      );
       wbState.courseLoaded = false;
     }
   }
@@ -2651,45 +2663,63 @@
 
         const groupsHost = document.createElement("div");
         subRes.appendChild(groupsHost);
+        const resEmptyTip = document.createElement("div");
+        resEmptyTip.innerHTML = wbEmptyHtml("未找到匹配的课件资源");
+        resEmptyTip.hidden = true;
+        subRes.appendChild(resEmptyTip);
 
-        const renderResourceGroups = (kw) => {
-          groupsHost.innerHTML = "";
+        // 一次性创建分组与文件行 DOM，搜索时仅切换 hidden，保留正在进行的单文件/分组下载进度与取消按钮
+        const renderedGroups = groups.map((g) => {
+          const box = document.createElement("div");
+          box.className = "wb-res-group";
+          box.innerHTML =
+            '<div class="wb-res-group-title">' +
+            '<span class="wb-gt"></span>' +
+            '<div class="wb-res-group-actions">' +
+            '<span class="wb-gc"></span>' +
+            `<button class="wb-ghost-btn wb-group-dl-btn" type="button">${WB_ICONS.download}<span>下载本组</span></button>` +
+            "</div></div>" +
+            '<div class="wb-attach-list"></div>';
+          box.querySelector(".wb-gt").textContent = g.title;
+          const gcEl = box.querySelector(".wb-gc");
+          gcEl.textContent = `${g.files.length} 个文件`;
+          const grpBtn = box.querySelector(".wb-group-dl-btn");
+          const grpSpan = grpBtn.querySelector("span");
+          const listEl = box.querySelector(".wb-attach-list");
+
+          const rows = g.files.map((res) => {
+            const row = wbCreateAttachmentRow(res, "未命名文件");
+            listEl.appendChild(row);
+            return { row, res, nameLower: String(res.resourceName || "").toLowerCase() };
+          });
+          grpBtn.addEventListener("click", () => {
+            const visibleFiles = rows.filter((r) => !r.row.hidden).map((r) => r.res);
+            runBatchDownload(visibleFiles.length ? visibleFiles : g.files, grpSpan, "下载本组");
+          });
+          groupsHost.appendChild(box);
+          return { box, titleLower: String(g.title || "").toLowerCase(), gcEl, rows };
+        });
+
+        const filterResourceGroups = (kw) => {
           const q = (kw || "").toLowerCase();
           let renderedCount = 0;
-          groups.forEach((g) => {
-            const groupMatched = !q || g.title.toLowerCase().includes(q);
-            const files = groupMatched
-              ? g.files
-              : g.files.filter((f) => f.resourceName.toLowerCase().includes(q));
-            if (!files.length) return;
-            renderedCount += files.length;
-
-            const box = document.createElement("div");
-            box.className = "wb-res-group";
-            box.innerHTML =
-              '<div class="wb-res-group-title">' +
-              '<span class="wb-gt"></span>' +
-              '<div class="wb-res-group-actions">' +
-              '<span class="wb-gc"></span>' +
-              `<button class="wb-ghost-btn wb-group-dl-btn" type="button">${WB_ICONS.download}<span>下载本组</span></button>` +
-              "</div></div>" +
-              '<div class="wb-attach-list"></div>';
-            box.querySelector(".wb-gt").textContent = g.title;
-            box.querySelector(".wb-gc").textContent = `${files.length} 个文件`;
-            const grpBtn = box.querySelector(".wb-group-dl-btn");
-            const grpSpan = grpBtn.querySelector("span");
-            grpBtn.addEventListener("click", () => runBatchDownload(files, grpSpan, "下载本组"));
-            const listEl = box.querySelector(".wb-attach-list");
-
-            files.forEach((res) => listEl.appendChild(wbCreateAttachmentRow(res, "未命名文件")));
-            groupsHost.appendChild(box);
+          renderedGroups.forEach(({ box, titleLower, gcEl, rows }) => {
+            const groupMatched = !q || titleLower.includes(q);
+            let groupVisible = 0;
+            rows.forEach(({ row, nameLower }) => {
+              const show = groupMatched || nameLower.includes(q);
+              row.hidden = !show;
+              if (show) groupVisible++;
+            });
+            box.hidden = groupVisible === 0;
+            if (groupVisible > 0) {
+              gcEl.textContent = `${groupVisible} 个文件`;
+              renderedCount += groupVisible;
+            }
           });
-          if (!renderedCount) {
-            groupsHost.innerHTML = wbEmptyHtml("未找到匹配的课件资源");
-          }
+          resEmptyTip.hidden = renderedCount > 0;
         };
-        resSearch.addEventListener("input", () => renderResourceGroups(resSearch.value.trim()));
-        renderResourceGroups("");
+        resSearch.addEventListener("input", () => filterResourceGroups(resSearch.value.trim()));
       }
 
       // 子页签 2：课程作业

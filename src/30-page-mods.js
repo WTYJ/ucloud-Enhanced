@@ -811,7 +811,11 @@
                 false
               );
             }
-            if (settings.course.showAllDownloadButoon) {
+            if (
+              settings.course.showAllDownloadButoon &&
+              x.dataset.yzDlInjected !== "1"
+            ) {
+              x.dataset.yzDlInjected = "1";
               const i = document.createElement("i");
               i.title = "下载";
               i.classList.add("by-icon-download");
