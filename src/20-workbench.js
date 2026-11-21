@@ -1195,7 +1195,7 @@
       settings.workbench.fullscreen = next;
       GM_setValue("workbench_fullscreen", next);
       document
-        .querySelectorAll('input[id="workbench_fullscreen"]')
+        .querySelectorAll('input[id="workbench_fullscreen"], input[data-setting-id="workbench_fullscreen"]')
         .forEach((el) => {
           el.checked = next;
         });

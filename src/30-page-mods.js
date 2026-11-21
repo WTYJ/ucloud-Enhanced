@@ -422,6 +422,24 @@
 
   // 主函数
   async function main() {
+    const isStudentHome =
+      location.href.startsWith(
+        "https://ucloud.bupt.edu.cn/uclass/#/student/homePage"
+      ) ||
+      location.href.startsWith(
+        "https://ucloud.bupt.edu.cn/uclass/index.html#/student/homePage"
+      );
+    const isAssignmentDetail = location.href.startsWith(
+      "https://ucloud.bupt.edu.cn/uclass/course.html#/student/assignmentDetails_fullpage"
+    );
+    if (!isStudentHome && homePageObserver) {
+      homePageObserver.disconnect();
+      homePageObserver = null;
+    }
+    if (!isAssignmentDetail && yzAssignmentObserver) {
+      yzAssignmentObserver.disconnect();
+    }
+
     // 课件预览页面
     if (
       location.href.startsWith(
@@ -872,7 +890,8 @@
                         try {
                           await downloadFile(
                             await getPreviewURL(file.id),
-                            file.name
+                            file.name,
+                            () => !downloading
                           );
                         } catch (err) {
                           console.warn("[ucloud-Enhanced] 批量下载单文件失败:", file.name, err);

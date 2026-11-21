@@ -21,7 +21,6 @@
 // @grant        GM_registerMenuCommand
 // @grant        GM_xmlhttpRequest
 // @grant        GM_openInTab
-// @grant        unsafeWindow
 // @run-at       document-start
 // @license      MIT
 // @updateURL    https://github.com/WTYJ/ucloud-Enhanced/raw/refs/heads/main/ucloud-Enhanced.user.js

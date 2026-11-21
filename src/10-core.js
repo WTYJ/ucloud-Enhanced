@@ -842,26 +842,6 @@
   let glist = null;
   let onlinePreview = null;
 
-  // 修复：主页"在新标签页打开"的详情页没有历史记录，页面内任何返回入口（标题栏左箭头等，
-  // 底层都是 $router.back() → history.go(-1)）都是空操作。这里直接拦截 history.go/back：
-  // 无历史可退且本页由 window.open 打开时改为关闭标签页，行为上等同返回。不依赖按钮选择器
-  function installBackButtonFix() {
-    const win = typeof unsafeWindow !== "undefined" ? unsafeWindow : window;
-    const hist = win.history;
-    const originalGo = hist.go.bind(hist);
-    const originalBack = hist.back.bind(hist);
-    const noHistory = () => hist.length <= 1 && win.opener;
-    hist.go = function (delta) {
-      if (delta === -1 && noHistory()) return win.close();
-      return originalGo(delta);
-    };
-    hist.back = function () {
-      if (noHistory()) return win.close();
-      return originalBack();
-    };
-  }
-
-
   // 初始化扩展功能
   function initializeExtension() {
     // 注册菜单命令
@@ -874,7 +854,6 @@
     loadui();
 
     addFunctionalCSS();
-    installBackButtonFix();
     // DOM 就绪后扫描已加载样式表并开启 <head> 新样式监听（不再遍历 body 或监听 pointerover）
     ensureDarkEngine();
     window.addEventListener("load", () => ensureDarkEngine(), { once: true });
@@ -1115,6 +1094,7 @@
       GM_xmlhttpRequest({
         method: "GET",
         url: reqUrl,
+        timeout: 8000,
         headers: { "Cache-Control": "no-cache" },
         onload: function (response) {
           const versionMatch = (response.responseText || "").match(
@@ -1147,6 +1127,9 @@
           if (onDone) onDone();
         },
         onerror: function () {
+          trySource(index + 1);
+        },
+        ontimeout: function () {
           trySource(index + 1);
         },
       });
@@ -1860,9 +1843,11 @@
       settings[category][key] = value;
       GM_setValue(settingId, value);
       // 同步快捷面板与设置主面板的同名开关状态
-      document.querySelectorAll(`input[id="${settingId}"]`).forEach((el) => {
-        if (el.checked !== value) el.checked = value;
-      });
+      document
+        .querySelectorAll(`input[id="${settingId}"], input[data-setting-id="${settingId}"]`)
+        .forEach((el) => {
+          if (el.checked !== value) el.checked = value;
+        });
       if (HOT_APPLY_KEYS.has(settingId)) {
         if (settingId === "system_darkMode") applyDarkMode();
         else if (settingId === "workbench_fullscreen") wbApplyTheme();
@@ -1887,8 +1872,9 @@
     function bindAutoSave(container) {
       container.addEventListener("change", (e) => {
         const input = e.target;
-        if (!input || !input.id || !input.id.includes("_")) return;
-        const [category, settingName] = input.id.split("_");
+        const settingId = input && ((input.dataset && input.dataset.settingId) || input.id);
+        if (!settingId || !settingId.includes("_")) return;
+        const [category, settingName] = settingId.split("_");
         if (!settings[category]) return;
         if (input.type === "checkbox") {
           saveSettingAndApply(category, settingName, input.checked);
@@ -1915,7 +1901,7 @@
           <div class="quick-item">
             <span class="setting-label">${item.label}</span>
             <label class="switch">
-              <input type="checkbox" id="${settingId}" ${
+              <input type="checkbox" data-setting-id="${settingId}" ${
           settings[category][key] ? "checked" : ""
         }>
               <span class="slider"></span>
@@ -2278,10 +2264,12 @@
       });
 
     // 设置描述显示/隐藏功能
-    document.querySelectorAll(".setting-label").forEach((label) => {
+    document.querySelectorAll("#yzHelper-settings .setting-label").forEach((label) => {
       label.addEventListener("click", function () {
         const descriptionId = this.getAttribute("data-for");
+        if (!descriptionId) return;
         const description = document.getElementById(descriptionId);
+        if (!description) return;
 
         // 隐藏所有其他描述
         document.querySelectorAll(".setting-description").forEach((desc) => {
@@ -2375,8 +2363,7 @@
   async function downloadFile(url, filename, shouldCancel, onProgress) {
     console.debug("Call download");
     const isCancelled = () =>
-      typeof shouldCancel === "function" ? !!shouldCancel() : !downloading;
-    if (typeof shouldCancel !== "function") downloading = true;
+      typeof shouldCancel === "function" ? !!shouldCancel() : false;
     NProgress.configure({ trickle: false, speed: 0 });
     let addedTotal = 0;
     let addedLoaded = 0;
