@@ -1425,16 +1425,20 @@ function escapeHtml(text) {
       const rule = rules[i];
       if (rule.type === 1 && rule.selectorText && rule.style) {
         const s = rule.style;
+        const pri = (prop) =>
+          typeof s.getPropertyPriority === "function" && s.getPropertyPriority(prop) === "important"
+            ? " !important"
+            : "";
         const decls = [];
         if (s.backgroundColor && (!s.backgroundImage || s.backgroundImage === "none")) {
           const c = parseCssColor(s.backgroundColor);
           const mapped = c && remapColor(c, "bg");
-          if (mapped) decls.push(`background-color:${mapped}`);
+          if (mapped) decls.push(`background-color:${mapped}${pri("background-color")}`);
         }
         if (s.color) {
           const c = parseCssColor(s.color);
           const mapped = c && remapColor(c, "text");
-          if (mapped) decls.push(`color:${mapped}`);
+          if (mapped) decls.push(`color:${mapped}${pri("color")}`);
         }
         const bTop = s.borderTopColor;
         const bRight = s.borderRightColor;
@@ -1443,7 +1447,14 @@ function escapeHtml(text) {
         if (bTop && bTop === bRight && bTop === bBottom && bTop === bLeft) {
           const c = parseCssColor(bTop);
           const mapped = c && remapColor(c, "border");
-          if (mapped) decls.push(`border-color:${mapped}`);
+          if (mapped) {
+            const bImp =
+              pri("border-top-color") ||
+              pri("border-right-color") ||
+              pri("border-bottom-color") ||
+              pri("border-left-color");
+            decls.push(`border-color:${mapped}${bImp}`);
+          }
         } else {
           const sides = [
             ["border-top-color", bTop],
@@ -1455,7 +1466,7 @@ function escapeHtml(text) {
             if (!val) continue;
             const c = parseCssColor(val);
             const mapped = c && remapColor(c, "border");
-            if (mapped) decls.push(`${prop}:${mapped}`);
+            if (mapped) decls.push(`${prop}:${mapped}${pri(prop)}`);
           }
         }
         if (decls.length) {
@@ -1511,8 +1522,8 @@ function escapeHtml(text) {
       darkProcessedSheets.add(sheet);
       return;
     }
-    darkProcessedSheets.add(sheet);
     if (!rules || !rules.length) return;
+    darkProcessedSheets.add(sheet);
     const out = [];
     rewriteCssRuleList(rules, out);
     if (!out.length || !document.head) return;
@@ -5106,9 +5117,12 @@ function escapeHtml(text) {
         wbOpenCourseView(wbState.courseView.course, wbState.courseView.subTab);
         return;
       }
-      if (wbState.tab === "course") wbState.courseLoaded = false;
-      else if (wbState.tab === "notice") wbState.noticeLoaded = false;
-      else {
+      if (wbState.tab === "course") {
+        wbState.courseLoaded = false;
+        courseListCache = null;
+      } else if (wbState.tab === "notice") {
+        wbState.noticeLoaded = false;
+      } else {
         wbState.todoLoaded = false;
         courseWorksCache.clear();
         courseActivitiesCache.clear();

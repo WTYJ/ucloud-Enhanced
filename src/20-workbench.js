@@ -1223,9 +1223,12 @@
         wbOpenCourseView(wbState.courseView.course, wbState.courseView.subTab);
         return;
       }
-      if (wbState.tab === "course") wbState.courseLoaded = false;
-      else if (wbState.tab === "notice") wbState.noticeLoaded = false;
-      else {
+      if (wbState.tab === "course") {
+        wbState.courseLoaded = false;
+        courseListCache = null;
+      } else if (wbState.tab === "notice") {
+        wbState.noticeLoaded = false;
+      } else {
         wbState.todoLoaded = false;
         courseWorksCache.clear();
         courseActivitiesCache.clear();
