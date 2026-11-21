@@ -822,24 +822,3 @@ function escapeHtml(text) {
     }
   }
 })();
-(function interceptXHR() {
-  const originalOpen = XMLHttpRequest.prototype.open;
-
-  XMLHttpRequest.prototype.open = function (
-    method,
-    url,
-    async,
-    user,
-    password
-  ) {
-    // hook XHR：课程历史列表单页数量调整为 15 条
-    if (
-      typeof url === "string" &&
-      url.includes("/ykt-site/site/list/student/history")
-    ) {
-      url = url.replace(/size=\d+/, "size=15");
-    }
-
-    return originalOpen.call(this, method, url, async, user, password);
-  };
-})();

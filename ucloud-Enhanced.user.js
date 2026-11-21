@@ -822,27 +822,6 @@ function escapeHtml(text) {
     }
   }
 })();
-(function interceptXHR() {
-  const originalOpen = XMLHttpRequest.prototype.open;
-
-  XMLHttpRequest.prototype.open = function (
-    method,
-    url,
-    async,
-    user,
-    password
-  ) {
-    // hook XHR：课程历史列表单页数量调整为 15 条
-    if (
-      typeof url === "string" &&
-      url.includes("/ykt-site/site/list/student/history")
-    ) {
-      url = url.replace(/size=\d+/, "size=15");
-    }
-
-    return originalOpen.call(this, method, url, async, user, password);
-  };
-})();
 
   // ========== [MODULE: 10-core.js] 核心层（设置体系 / 深色引擎 / 助手 UI / 平台共享 API） ==========
 
@@ -978,24 +957,6 @@ function escapeHtml(text) {
         }
       }
     },
-    notification: {
-      emoji: '📢',
-      title: '消息通知',
-      items: {
-        sortNotificationsByTime: {
-          type: 'checkbox',
-          label: '通知按时间排序',
-          description: '将通知按照时间先后顺序排列，更容易找到最新或最早的通知。',
-          defaultValue: true,
-        },
-        betterNotificationHighlight: {
-          type: 'checkbox',
-          label: '优化未读通知高亮',
-          description: '为未读通知添加更显眼的视觉效果，避免遗漏重要信息。',
-          defaultValue: true
-        }
-      }
-    },
     system: {
       emoji: '⚙️',
       title: '系统设置',
@@ -1036,42 +997,6 @@ function escapeHtml(text) {
           label: '显示悬浮球',
           description: '在页面显示可拖动的助手悬浮球（点击打开快捷面板）；关闭后仍可从油猴菜单打开设置。',
           defaultValue: true
-        }
-      }
-    },
-    experimental: {
-      emoji: '🧪',
-      title: '实验功能',
-      items: {
-        courseSearchBox: {
-          type: 'checkbox',
-          label: '主页课程搜索框',
-          description: '在个人主页「本学期课程」区域增加搜索框，按课程名/教师/院系搜索并打开课程。实验性功能。',
-          defaultValue: false
-        },
-        todoRedesign: {
-          type: 'checkbox',
-          label: '待办改版（连续列表 + 卡片样式）',
-          description: '把平台待办改为连续列表并套用新卡片样式。实验性功能，平台改版后可能失效；推荐使用「工作台」查看待办。',
-          defaultValue: false
-        },
-        hideUserPanel: {
-          type: 'checkbox',
-          label: '隐藏学生信息与统计',
-          description: '隐藏个人主页顶部学生信息卡与课程数、待办数统计卡。实验性功能。',
-          defaultValue: false
-        },
-        hideSideNav: {
-          type: 'checkbox',
-          label: '隐藏左侧导航',
-          description: '隐藏个人主页左侧导航并加宽内容区。实验性功能。',
-          defaultValue: false
-        },
-        hideVisitHistory: {
-          type: 'checkbox',
-          label: '隐藏访问历史',
-          description: '隐藏个人主页右侧「访问历史」板块。实验性功能。',
-          defaultValue: false
         }
       }
     }
@@ -3020,30 +2945,10 @@ function escapeHtml(text) {
             ],
           },
           {
-            title: "原页课程资源与消息通知",
+            title: "原页课程资源",
             items: [
               ["course", "addBatchDownload"],
               ["course", "showAllDownloadButoon"],
-              ["notification", "sortNotificationsByTime"],
-              ["notification", "betterNotificationHighlight"],
-            ],
-          },
-        ],
-      },
-      {
-        id: "experimental",
-        emoji: "🧪",
-        title: "实验功能",
-        note: "以下为原网页实验性改版，默认关闭；日常使用推荐直接通过「工作台」处理待办与课程。",
-        groups: [
-          {
-            title: "原页布局与改版",
-            items: [
-              ["experimental", "courseSearchBox"],
-              ["experimental", "todoRedesign"],
-              ["experimental", "hideUserPanel"],
-              ["experimental", "hideSideNav"],
-              ["experimental", "hideVisitHistory"],
             ],
           },
         ],
@@ -6781,205 +6686,6 @@ function escapeHtml(text) {
 
   // ========== [MODULE: 30-page-mods.js] 原页面注入与改版（主页 / 详情页 / 课程资源 / 通知页 / 入口） ==========
 
-  // 右侧栏为空时收起，让左栏（课程/待办）填满并保持居中
-  function syncHomeLayout() {
-    const page = document.querySelector(".teacher-home-page");
-    if (!page) return;
-    const right = page.querySelector(".home-right-container");
-    let hasVisible = false;
-    if (right) {
-      hasVisible = Array.from(right.children).some((c) => {
-        const cs = getComputedStyle(c);
-        return cs.display !== "none" && cs.visibility !== "hidden" && c.offsetHeight > 8;
-      });
-    }
-    page.classList.toggle("yz-no-right", !hasVisible);
-  }
-
-  // ===== 连续待办列表（不分页）=====
-  const yzTodoCountdowns = new Map();
-  let yzTodoTimer = null;
-
-  function removeTodoContinuous() {
-    const section = document.querySelector(".in-progress-section");
-    if (section) {
-      section.classList.remove("yz-todo-continuous-on");
-      const wrap = section.querySelector(".yz-todo-continuous");
-      if (wrap) wrap.remove();
-    }
-    yzTodoCountdowns.clear();
-  }
-
-  function updateTodoCountdown(card) {
-    const rec = yzTodoCountdowns.get(card);
-    if (!rec) return;
-    const d = parseDeadline(rec.endTime);
-    if (!d) return;
-    const info = formatRemain(d - Date.now());
-    rec.badge.className = "yz-overdue-badge " + info.cls;
-    rec.badge.textContent = info.text;
-  }
-
-  function startTodoTicker() {
-    if (yzTodoTimer) return;
-    yzTodoTimer = setInterval(() => {
-      let alive = 0;
-      for (const card of yzTodoCountdowns.keys()) {
-        if (!card.isConnected) {
-          yzTodoCountdowns.delete(card);
-          continue;
-        }
-        alive++;
-        updateTodoCountdown(card);
-      }
-      if (!alive) {
-        clearInterval(yzTodoTimer);
-        yzTodoTimer = null;
-      }
-    }, 60 * 1000);
-  }
-
-  function renderTodoChips(card, task, info) {
-    const meta = card.querySelector(".yz-todo-meta");
-    if (!meta) return;
-    const headMeta = card.querySelector(".yz-todo-headmeta");
-    meta.textContent = "";
-    if (headMeta) headMeta.textContent = "";
-    yzTodoCountdowns.delete(card);
-    const attrHost = headMeta || meta;
-
-    const d = parseDeadline(task.endTime);
-    if (d) {
-      const chip = document.createElement("span");
-      chip.className = "yz-deadline-chip";
-      chip.textContent = "截止 " + fmtDeadline(d);
-      attrHost.appendChild(chip);
-
-      const badge = document.createElement("span");
-      const rem = formatRemain(d - Date.now());
-      badge.className = "yz-overdue-badge " + rem.cls;
-      badge.textContent = rem.text;
-      meta.appendChild(badge);
-      yzTodoCountdowns.set(card, { badge: badge, endTime: task.endTime });
-      startTodoTicker();
-    }
-    const mode = (info && info.mode) || pickModeName(task.assignmentType);
-    if (mode) {
-      const chip = document.createElement("span");
-      chip.className = "yz-task-chip mode";
-      chip.textContent = (mode === "小组作业" ? "👥 " : "👤 ") + mode;
-      attrHost.appendChild(chip);
-    }
-    if (info && info.attachments) {
-      const chip = document.createElement("span");
-      chip.className = "yz-task-chip info";
-      chip.textContent = "附件 " + info.attachments;
-      meta.appendChild(chip);
-    }
-    if (info && info.evaluation) {
-      const chip = document.createElement("span");
-      chip.className = "yz-task-chip info";
-      chip.textContent = "互评";
-      meta.appendChild(chip);
-    }
-    if (info && info.stat) {
-      const chip = document.createElement("span");
-      chip.className = "yz-task-chip";
-      chip.textContent =
-        "班级已交 " + info.stat.submitted + " / " + info.stat.total + " 人";
-      meta.appendChild(chip);
-    }
-  }
-
-  function buildTodoCard(task) {
-    const card = document.createElement("div");
-    card.className = "yz-todo-item";
-    card.dataset.activityId = task.activityId || task.id || "";
-
-    const icon = document.createElement("div");
-    icon.className = "yz-todo-icon";
-    icon.innerHTML =
-      '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/><path d="M9.5 13h6"/><path d="M9.5 16.5h4"/></svg>';
-    card.appendChild(icon);
-
-    const box = document.createElement("div");
-    box.className = "yz-todo-box";
-    card.appendChild(box);
-
-    const head = document.createElement("div");
-    head.className = "yz-todo-head";
-    box.appendChild(head);
-    const title = document.createElement("div");
-    title.className = "yz-todo-title";
-    title.textContent = task.activityName || task.assignmentTitle || "未命名作业";
-    head.appendChild(title);
-    const headMeta = document.createElement("div");
-    headMeta.className = "yz-todo-headmeta";
-    head.appendChild(headMeta);
-
-    const course = document.createElement("div");
-    course.className = "yz-todo-course";
-    course.textContent = "课程加载中…";
-    box.appendChild(course);
-
-    const meta = document.createElement("div");
-    meta.className = "yz-todo-meta";
-    box.appendChild(meta);
-
-    card.addEventListener("click", () => openTaskUrl(buildTaskUrl(task)));
-
-    renderTodoChips(card, task, null);
-    return card;
-  }
-
-  function renderTodoContinuous(list) {
-    const section = document.querySelector(".in-progress-section");
-    if (!section || !list || !list.length) return;
-    const body = section.querySelector(".in-progress-body");
-    if (!body) return;
-    section.classList.add("yz-todo-continuous-on");
-    let wrap = section.querySelector(".yz-todo-continuous");
-    if (!wrap) {
-      wrap = document.createElement("div");
-      wrap.className = "yz-todo-continuous";
-      body.parentNode.insertBefore(wrap, body.nextSibling);
-    }
-    wrap.textContent = "";
-    yzTodoCountdowns.clear();
-
-    const tasks = sortTasksByDeadline(list);
-
-    const cards = new Map();
-    tasks.forEach((task) => {
-      const card = buildTodoCard(task);
-      wrap.appendChild(card);
-      cards.set(task.activityId || task.id, card);
-    });
-
-    const ids = tasks.map((t) => t.activityId || t.id).filter(Boolean);
-    searchCourses(ids)
-      .then((infos) => {
-        tasks.forEach((task) => {
-          const id = task.activityId || task.id;
-          const card = cards.get(id);
-          if (!card || !card.isConnected) return;
-          const info = infos[id];
-          const el = card.querySelector(".yz-todo-course");
-          if (el) el.textContent = info ? info.name + "(" + info.teachers + ")" : "未知课程";
-        });
-      })
-      .catch(() => {});
-
-    tasks.forEach((task) => {
-      const id = task.activityId || task.id;
-      fetchAssignmentInfo(task).then((info) => {
-        const card = cards.get(id);
-        if (!card || !card.isConnected || !info) return;
-        renderTodoChips(card, task, info);
-      });
-    });
-  }
-
   // 仅注入课程名（不改版待办，供“待办显示所属课程”开关使用）
   async function injectTodoCourseNames(list) {
     if (!list || !list.length) return;
@@ -7022,15 +6728,10 @@ function escapeHtml(text) {
     });
   }
 
-  // 更新待办显示：改版开启时用连续列表；关闭时保持平台结构，仅按需注入课程名
+  // 更新待办显示：保持平台原结构，按需注入所属课程名
   async function updateAssignmentDisplay(list) {
     if (!list || list.length === 0) return;
-    if (!settings.experimental.todoRedesign) {
-      removeTodoContinuous();
-      if (settings.home.showTodoCourseName) injectTodoCourseNames(list);
-      return;
-    }
-    renderTodoContinuous(list);
+    if (settings.home.showTodoCourseName) injectTodoCourseNames(list);
   }
 
   // XPath选择器
@@ -7210,161 +6911,6 @@ function escapeHtml(text) {
     return null;
   }
 
-  async function setupLessonSearch() {
-    if (!settings.experimental.courseSearchBox) return;
-    const section = await waitForLessonSection();
-    if (!section || section.querySelector(".yz-lesson-toolbar")) return;
-    const header = section.querySelector(".my-lesson-header");
-    if (!header) return;
-
-    const toolbar = document.createElement("div");
-    toolbar.className = "yz-lesson-toolbar";
-
-    let input = null;
-    let results = null;
-    let activeIndex = -1;
-
-    const hideResults = () => {
-      if (!results) return;
-      results.hidden = true;
-      activeIndex = -1;
-    };
-
-    const renderResults = () => {
-      if (!results || !input) return;
-      const list = courseListCache || [];
-      const keyword = input.value.trim().toLowerCase();
-      results.innerHTML = "";
-      if (courseListLoading || !list.length) {
-        const tip = document.createElement("div");
-        tip.className = "yz-lesson-search-empty";
-        tip.textContent = courseListLoading ? "正在加载课程…" : "暂无课程数据";
-        results.appendChild(tip);
-        results.hidden = false;
-        activeIndex = -1;
-        return;
-      }
-      const scored = [];
-      for (const course of list) {
-        const name = course.name.toLowerCase();
-        let score;
-        if (!keyword) score = 0;
-        else if (name.startsWith(keyword)) score = 0;
-        else if (name.includes(keyword)) score = 1;
-        else if (course.teachers.toLowerCase().includes(keyword)) score = 2;
-        else if (course.department.toLowerCase().includes(keyword)) score = 3;
-        else continue;
-        scored.push({ course, score });
-      }
-      scored.sort((a, b) => a.score - b.score);
-      const matched = scored.slice(0, 50).map((x) => x.course);
-      if (!matched.length) {
-        const tip = document.createElement("div");
-        tip.className = "yz-lesson-search-empty";
-        tip.textContent = "未找到匹配的课程";
-        results.appendChild(tip);
-        results.hidden = false;
-        activeIndex = -1;
-        return;
-      }
-      matched.forEach((course) => {
-        const item = document.createElement("div");
-        item.className = "yz-lesson-search-item";
-        item.dataset.id = course.id;
-        const nameEl = document.createElement("div");
-        nameEl.className = "yz-lesson-search-name";
-        nameEl.textContent = course.name;
-        item.appendChild(nameEl);
-        const meta = [course.teachers, course.department]
-          .filter(Boolean)
-          .join(" · ");
-        if (meta) {
-          const metaEl = document.createElement("div");
-          metaEl.className = "yz-lesson-search-meta";
-          metaEl.textContent = meta;
-          item.appendChild(metaEl);
-        }
-        item.addEventListener("click", () => {
-          hideResults();
-          openCoursePage(course);
-        });
-        results.appendChild(item);
-      });
-      activeIndex = -1;
-      results.hidden = false;
-    };
-
-    const searchWrap = document.createElement("div");
-    searchWrap.className = "yz-lesson-search";
-
-    input = document.createElement("input");
-    input.type = "text";
-    input.className = "yz-lesson-search-input";
-    input.placeholder = "搜索课程 / 教师 / 院系";
-    input.autocomplete = "off";
-    input.spellcheck = false;
-
-    const icon = document.createElement("span");
-    icon.className = "yz-lesson-search-icon";
-    icon.innerHTML =
-      '<svg viewBox="0 0 1024 1024" width="13" height="13" aria-hidden="true"><path d="M448 128a320 320 0 1 1 0 640 320 320 0 0 1 0-640zm0 64a256 256 0 1 0 0 512 256 256 0 0 0 0-512z" fill="#b2b7c2"/><path d="M697.7 651.5l155.4 155.4-45.2 45.2-155.4-155.4z" fill="#b2b7c2"/></svg>';
-
-    results = document.createElement("div");
-    results.className = "yz-lesson-search-results";
-    results.hidden = true;
-    results.addEventListener("mousedown", (e) => e.preventDefault());
-
-    input.addEventListener("focus", async () => {
-      renderResults();
-      await getCourseList();
-      if (document.activeElement === input) renderResults();
-    });
-    input.addEventListener("input", async () => {
-      renderResults();
-      await getCourseList();
-      if (document.activeElement === input) renderResults();
-    });
-    input.addEventListener("keydown", (e) => {
-      const items = results
-        ? Array.from(results.querySelectorAll(".yz-lesson-search-item"))
-        : [];
-      if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-        if (!items.length) return;
-        e.preventDefault();
-        if (e.key === "ArrowDown") {
-          activeIndex = (activeIndex + 1) % items.length;
-        } else {
-          activeIndex = (activeIndex - 1 + items.length) % items.length;
-        }
-        items.forEach((item, index) =>
-          item.classList.toggle("active", index === activeIndex)
-        );
-        items[activeIndex].scrollIntoView({ block: "nearest" });
-      } else if (e.key === "Enter") {
-        if (!items.length) return;
-        e.preventDefault();
-        const target = items[activeIndex >= 0 ? activeIndex : 0];
-        const course = (courseListCache || []).find(
-          (c) => c.id === target.dataset.id
-        );
-        if (course) {
-          hideResults();
-          openCoursePage(course);
-        }
-      } else if (e.key === "Escape") {
-        hideResults();
-        input.blur();
-      }
-    });
-    input.addEventListener("blur", () => setTimeout(hideResults, 150));
-
-    searchWrap.appendChild(input);
-    searchWrap.appendChild(icon);
-    searchWrap.appendChild(results);
-    toolbar.appendChild(searchWrap);
-
-    header.appendChild(toolbar);
-  }
 
   // 启用文本选择、页面美化与按需功能样式（合并为单次 GM_addStyle 注入）
   function addFunctionalCSS() {
@@ -7547,226 +7093,6 @@ function escapeHtml(text) {
       }
       `);
     }
-    if (settings.experimental.hideUserPanel) {
-      cssParts.push(`
-      .teacher-home-page .teacher-driver-section {
-        display: none !important;
-      }
-      `);
-    }
-    if (settings.experimental.hideSideNav) {
-      cssParts.push(`
-      .main-content .router-container .menu-nav {
-        display: none !important;
-      }
-      .main-content:has(.teacher-home-page),
-      .main-content:has(.teacher-home-page) .router-container {
-        width: 100% !important;
-      }
-      .main-content:has(.teacher-home-page) .router-container .box {
-        width: 100% !important;
-        max-width: none !important;
-        display: block !important;
-        margin: 0 auto !important;
-      }
-      .teacher-home-page {
-        box-sizing: border-box !important;
-        width: 100% !important;
-        max-width: 1680px !important;
-        margin-left: auto !important;
-        margin-right: auto !important;
-        padding: 0 16px !important;
-      }
-      .teacher-home-page .home-left-container {
-        width: calc(100% - 588px) !important;
-      }
-      .teacher-home-page .home-right-container {
-        width: 540px !important;
-        margin-right: 16px !important;
-      }
-      .teacher-home-page.yz-no-right {
-        max-width: 1180px !important;
-      }
-      .teacher-home-page.yz-no-right .home-left-container {
-        display: block !important;
-        width: 100% !important;
-        max-width: none !important;
-        margin-left: 0 !important;
-        margin-right: 0 !important;
-      }
-      .teacher-home-page.yz-no-right .home-right-container {
-        display: none !important;
-      }
-      `);
-    }
-    if (settings.experimental.hideVisitHistory) {
-      cssParts.push(`
-      .visit-history-section {
-        display: none !important;
-      }
-      `);
-    }
-    if (settings.experimental.todoRedesign) {
-      cssParts.push(`
-      .yz-deadline-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 8px;
-        border-radius: 999px;
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        background: rgba(148, 163, 184, 0.18);
-        color: #94a3b8;
-        font-size: 12px;
-        line-height: 1.4;
-        white-space: nowrap;
-      }
-      .yz-task-chip {
-        display: inline-flex;
-        align-items: center;
-        padding: 1px 8px;
-        font-size: 12px;
-        line-height: 1.4;
-        border-radius: 999px;
-        border: 1px solid rgba(59, 130, 246, 0.35);
-        color: #2563eb;
-        background: rgba(59, 130, 246, 0.08);
-        white-space: nowrap;
-      }
-      .yz-task-chip.mode {
-        border-color: rgba(139, 92, 246, 0.35);
-        color: #7c3aed;
-        background: rgba(139, 92, 246, 0.1);
-      }
-      .yz-task-chip.info {
-        border-color: rgba(148, 163, 184, 0.35);
-        color: #64748b;
-        background: rgba(148, 163, 184, 0.1);
-      }
-      .yz-overdue-badge {
-        display: inline-block;
-        padding: 2px 8px;
-        border-radius: 10px;
-        font-size: 12px;
-        font-weight: 600;
-        margin-left: 8px;
-        vertical-align: middle;
-        line-height: 1.4;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-      }
-      .yz-overdue-badge.overdue { background: #b91c1c; color: #fff; }
-      .yz-overdue-badge.urgent { background: #ef4444; color: #fff; }
-      .yz-overdue-badge.soon { background: #e6a23c; color: #fff; }
-      .yz-overdue-badge.later {
-        background: rgba(148, 163, 184, 0.22);
-        border: 1px solid rgba(148, 163, 184, 0.45);
-        color: #94a3b8;
-      }
-      .in-progress-section.yz-todo-continuous-on .in-progress-body,
-      .in-progress-section.yz-todo-continuous-on .in-progress-header .header-control {
-        display: none !important;
-      }
-      .yz-todo-continuous {
-        display: flex;
-        flex-direction: column;
-        gap: 10px;
-        padding: 0 0 24px;
-      }
-      .yz-todo-item {
-        display: flex;
-        align-items: flex-start;
-        gap: 14px;
-        padding: 14px 16px;
-        border-radius: 14px;
-        background-color: #fff;
-        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.3);
-        cursor: pointer;
-        transition: box-shadow 0.2s ease, transform 0.2s ease;
-      }
-      .yz-todo-item:hover {
-        box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.55), 0 8px 20px rgba(15, 23, 42, 0.08);
-        transform: translateY(-1px);
-      }
-      .yz-todo-icon {
-        flex: none;
-        width: 44px;
-        height: 44px;
-        border-radius: 12px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(59, 130, 246, 0.18);
-        border: 1px solid rgba(59, 130, 246, 0.45);
-        color: #1d4ed8;
-        font-size: 20px;
-      }
-      html.ue-dark-mode .yz-todo-icon {
-        background: rgba(59, 130, 246, 0.28);
-        border-color: rgba(59, 130, 246, 0.55);
-        color: #93c5fd;
-      }
-      .yz-todo-box {
-        flex: 1;
-        min-width: 0;
-      }
-      .yz-todo-head {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-      .yz-todo-title {
-        flex: 1;
-        min-width: 0;
-        font-size: 14px;
-        font-weight: 600;
-        line-height: 20px;
-        color: #171725;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .yz-todo-headmeta {
-        flex: none;
-        display: flex;
-        align-items: center;
-        gap: 6px;
-      }
-      .yz-todo-course {
-        margin-top: 2px;
-        font-size: 12px;
-        line-height: 16px;
-        font-weight: 600;
-        color: #2563eb;
-      }
-      .yz-todo-meta {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        margin-top: 6px;
-        font-size: 12px;
-        line-height: 1.4;
-      }
-      `);
-    }
-    if (settings.notification.betterNotificationHighlight) {
-      cssParts.push(`
-      .notification-with-dot {
-        background-color: #fff8f8 !important;
-        border-left: 5px solid #f56c6c !important;
-        box-shadow: 0 2px 6px rgba(245, 108, 108, 0.2) !important;
-        padding: 0 22px !important;
-        margin-bottom: 8px !important;
-        border-radius: 4px !important;
-        transition: all 0.3s ease !important;
-      }
-      .notification-with-dot:hover {
-        background-color: #fff0f0 !important;
-        box-shadow: 0 4px 12px rgba(245, 108, 108, 0.3) !important;
-        transform: translateY(-2px) !important;
-      }
-      `);
-    }
     if (settings.system.unlockCopy) {
       cssParts.push(`
       .el-checkbox, .el-checkbox-button__inner, .el-empty__image img, .el-radio,
@@ -7808,130 +7134,6 @@ function escapeHtml(text) {
         display: flex;
         align-items: center;
         justify-content: center;
-      }
-      `);
-    }
-    if (settings.experimental.courseSearchBox) {
-      cssParts.push(`
-      .yz-lesson-toolbar {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px 12px;
-        padding: 12px 24px 0;
-        box-sizing: border-box;
-      }
-      .yz-lesson-search {
-        position: relative;
-        width: 260px;
-        max-width: 100%;
-      }
-      .yz-lesson-search-input {
-        width: 100%;
-        height: 34px;
-        box-sizing: border-box;
-        padding: 0 12px 0 32px;
-        border: 1px solid transparent;
-        border-radius: 10px;
-        background: #f2f3f7;
-        color: #171725;
-        font-size: 13px;
-        outline: none;
-        transition: border-color .2s, background .2s, box-shadow .2s;
-      }
-      .yz-lesson-search-input::placeholder {
-        color: #b2b7c2;
-      }
-      .yz-lesson-search-input:focus {
-        border-color: #2962ff;
-        background: #fff;
-        box-shadow: 0 0 0 3px rgba(41, 98, 255, .12);
-      }
-      .yz-lesson-search-icon {
-        position: absolute;
-        top: 50%;
-        left: 10px;
-        display: flex;
-        transform: translateY(-50%);
-        pointer-events: none;
-      }
-      .yz-lesson-search-results {
-        position: absolute;
-        top: 40px;
-        left: 0;
-        z-index: 100;
-        width: 340px;
-        max-width: 70vw;
-        max-height: 300px;
-        overflow-y: auto;
-        padding: 6px;
-        box-sizing: border-box;
-        background: #fff;
-        border: 1px solid rgba(31, 35, 41, .08);
-        border-radius: 12px;
-        box-shadow: 0 10px 30px rgba(31, 35, 41, .16);
-      }
-      .yz-lesson-search-item {
-        padding: 8px 10px;
-        border-radius: 8px;
-        cursor: pointer;
-        transition: background .15s;
-      }
-      .yz-lesson-search-item:hover,
-      .yz-lesson-search-item.active {
-        background: rgba(41, 98, 255, .09);
-      }
-      .yz-lesson-search-item.active .yz-lesson-search-name {
-        color: #2962ff;
-      }
-      .yz-lesson-search-name {
-        font-size: 13px;
-        font-weight: 500;
-        line-height: 18px;
-        color: #171725;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .yz-lesson-search-meta {
-        margin-top: 2px;
-        font-size: 12px;
-        line-height: 16px;
-        color: #92929d;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-      }
-      .yz-lesson-search-empty {
-        padding: 18px 8px;
-        text-align: center;
-        font-size: 12px;
-        color: #92929d;
-      }
-      /* 深色模式：本工具栏已豁免页面深色引擎，显式指定深色配色 */
-      html.ue-dark-mode .yz-lesson-search-input {
-        background: #2a2e31;
-        border-color: transparent;
-        color: #e8eaed;
-      }
-      html.ue-dark-mode .yz-lesson-search-input::placeholder {
-        color: #8a9099;
-      }
-      html.ue-dark-mode .yz-lesson-search-input:focus {
-        background: #202325;
-        border-color: #2962ff;
-      }
-      html.ue-dark-mode .yz-lesson-search-results {
-        background: #202325;
-        border-color: rgba(232, 234, 237, 0.16);
-        box-shadow: 0 12px 34px rgba(0, 0, 0, 0.55);
-      }
-      html.ue-dark-mode .yz-lesson-search-name {
-        color: #e8eaed;
-      }
-      html.ue-dark-mode .yz-lesson-search-meta,
-      html.ue-dark-mode .yz-lesson-search-empty {
-        color: #9aa0a6;
       }
       `);
     }
@@ -8132,12 +7334,7 @@ function escapeHtml(text) {
         const pageTitle = "个人主页 - 教学云空间";
         document.title = pageTitle;
       }
-      if (settings.experimental.courseSearchBox) {
-        setupLessonSearch().catch((e) =>
-          console.error("[ucloud-Enhanced] 初始化课程搜索失败", e)
-        );
-      }
-      if (settings.experimental.todoRedesign || settings.home.showTodoCourseName) {
+      if (settings.home.showTodoCourseName) {
         // 未完成任务列表（异常时不中断后续布局与滚轮翻页初始化）
         let list = glist;
         if (!list) {
@@ -8197,15 +7394,10 @@ function escapeHtml(text) {
           await updateAssignmentDisplay(list);
         }
       }
-      syncHomeLayout();
-      setTimeout(syncHomeLayout, 600);
-      setTimeout(syncHomeLayout, 1800);
-
       function wheelPageTurner() {
         const pageConfigs = [
           {
             // 待办
-            skip: () => !!settings.experimental.todoRedesign,
             targetSelector:
               "#layout-container > div.main-content > div.router-container > div > div.teacher-home-page > div.home-left-container.home-inline-block > div.in-progress-section.home-card > div.in-progress-body",
             prevPageSelector:
@@ -8250,7 +7442,6 @@ function escapeHtml(text) {
           };
         }
         const bindConfig = (config, attempt) => {
-          if (config.skip && config.skip()) return;
           const targetDiv = document.querySelector(config.targetSelector);
           const prevPageElement = document.querySelector(config.prevPageSelector);
           const nextPageElement = document.querySelector(config.nextPageSelector);
@@ -8440,70 +7631,6 @@ function escapeHtml(text) {
         document.title = pageTitle;
       }
 
-      function processNotifications() {
-        const noticeContainer = document.querySelector(
-          "#layout-container > div.main-content > div.router-container > div > div > div.setNotice-body > ul"
-        );
-        if (!noticeContainer) {
-          console.warn("通知容器未找到");
-          return;
-        }
-        const noticeItems = Array.from(noticeContainer.querySelectorAll("li"));
-        if (noticeItems.length === 0) {
-          console.warn("未找到通知项");
-          return;
-        }
-        if (settings.notification.sortNotificationsByTime) {
-          noticeItems.sort((a, b) => {
-            const timeA = a.querySelector("span._left-time");
-            const timeB = b.querySelector("span._left-time");
-            if (!timeA || !timeB) {
-              return 0;
-            }
-            const timeTextA = timeA.textContent.trim();
-            const timeTextB = timeB.textContent.trim();
-            const dateA = parseDeadline(timeTextA)?.getTime() || 0;
-            const dateB = parseDeadline(timeTextB)?.getTime() || 0;
-            return dateB - dateA;
-          });
-        }
-        noticeItems.forEach((item) => {
-          if (settings.notification.betterNotificationHighlight) {
-            const hasRedDot = item.querySelector(
-              "div.el-badge sup.el-badge__content.is-dot"
-            );
-            item.classList.toggle("notification-with-dot", !!hasRedDot);
-          }
-          noticeContainer.appendChild(item);
-        });
-      }
-      if (
-        settings.notification.sortNotificationsByTime ||
-        settings.notification.betterNotificationHighlight
-      ) {
-        // 等待通知元素加载好了再处理
-        const loadingMaskSelector =
-          "#layout-container > div.main-content > div.router-container > div > div > div.setNotice-body > div.el-loading-mask";
-        const observer = new MutationObserver((mutations) => {
-          const loadingMask = document.querySelector(loadingMaskSelector);
-          if (loadingMask && loadingMask.style.display === "none") {
-            processNotifications();
-            observer.disconnect();
-          }
-        });
-
-        const loadingMask = document.querySelector(loadingMaskSelector);
-        if (loadingMask && loadingMask.style.display === "none") {
-          processNotifications();
-        } else {
-          observer.observe(document.body, {
-            attributes: true,
-            attributeFilter: ["style"],
-            subtree: true,
-          });
-          setTimeout(() => observer.disconnect(), 10000);
-        }
-      }
     }
   }
 })();

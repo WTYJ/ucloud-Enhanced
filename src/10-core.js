@@ -130,24 +130,6 @@
         }
       }
     },
-    notification: {
-      emoji: '📢',
-      title: '消息通知',
-      items: {
-        sortNotificationsByTime: {
-          type: 'checkbox',
-          label: '通知按时间排序',
-          description: '将通知按照时间先后顺序排列，更容易找到最新或最早的通知。',
-          defaultValue: true,
-        },
-        betterNotificationHighlight: {
-          type: 'checkbox',
-          label: '优化未读通知高亮',
-          description: '为未读通知添加更显眼的视觉效果，避免遗漏重要信息。',
-          defaultValue: true
-        }
-      }
-    },
     system: {
       emoji: '⚙️',
       title: '系统设置',
@@ -188,42 +170,6 @@
           label: '显示悬浮球',
           description: '在页面显示可拖动的助手悬浮球（点击打开快捷面板）；关闭后仍可从油猴菜单打开设置。',
           defaultValue: true
-        }
-      }
-    },
-    experimental: {
-      emoji: '🧪',
-      title: '实验功能',
-      items: {
-        courseSearchBox: {
-          type: 'checkbox',
-          label: '主页课程搜索框',
-          description: '在个人主页「本学期课程」区域增加搜索框，按课程名/教师/院系搜索并打开课程。实验性功能。',
-          defaultValue: false
-        },
-        todoRedesign: {
-          type: 'checkbox',
-          label: '待办改版（连续列表 + 卡片样式）',
-          description: '把平台待办改为连续列表并套用新卡片样式。实验性功能，平台改版后可能失效；推荐使用「工作台」查看待办。',
-          defaultValue: false
-        },
-        hideUserPanel: {
-          type: 'checkbox',
-          label: '隐藏学生信息与统计',
-          description: '隐藏个人主页顶部学生信息卡与课程数、待办数统计卡。实验性功能。',
-          defaultValue: false
-        },
-        hideSideNav: {
-          type: 'checkbox',
-          label: '隐藏左侧导航',
-          description: '隐藏个人主页左侧导航并加宽内容区。实验性功能。',
-          defaultValue: false
-        },
-        hideVisitHistory: {
-          type: 'checkbox',
-          label: '隐藏访问历史',
-          description: '隐藏个人主页右侧「访问历史」板块。实验性功能。',
-          defaultValue: false
         }
       }
     }
@@ -2172,30 +2118,10 @@
             ],
           },
           {
-            title: "原页课程资源与消息通知",
+            title: "原页课程资源",
             items: [
               ["course", "addBatchDownload"],
               ["course", "showAllDownloadButoon"],
-              ["notification", "sortNotificationsByTime"],
-              ["notification", "betterNotificationHighlight"],
-            ],
-          },
-        ],
-      },
-      {
-        id: "experimental",
-        emoji: "🧪",
-        title: "实验功能",
-        note: "以下为原网页实验性改版，默认关闭；日常使用推荐直接通过「工作台」处理待办与课程。",
-        groups: [
-          {
-            title: "原页布局与改版",
-            items: [
-              ["experimental", "courseSearchBox"],
-              ["experimental", "todoRedesign"],
-              ["experimental", "hideUserPanel"],
-              ["experimental", "hideSideNav"],
-              ["experimental", "hideVisitHistory"],
             ],
           },
         ],
