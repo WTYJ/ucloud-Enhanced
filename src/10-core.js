@@ -328,19 +328,41 @@
   }
   installTicketRedirectFix();
 
-  // 深色模式（Dynamic 主题引擎，处理思路参考 Dark Reader）
-  // 不用整页像素级滤镜：遍历元素读取计算样式，在 HSL 空间只重映射亮度——
-  // 浅色背景→深色、深色文字→浅色，色相与饱和度原样保留。
-  // 彩色内容（品牌蓝、彩色按钮）、图片、渐变装饰天然不受影响，无整体降饱和的"灰蒙蒙"
-  const DARK_CANVAS = "#1f2223"; // 页面画布目标色
+  // ===== 深色模式 v2：CSSOM 样式表自动重写（全站兜底）+ 手写现代色板精调（对齐工作台）=====
+  // 彻底告别逐 DOM 元素 getComputedStyle 遍历与 pointerover 监听：
+  // 1) 直接读取同源 document.styleSheets（含懒加载分包）并重写浅底/深字/浅边框为 html.ue-dark-mode 前缀 CSS
+  // 2) 原生保留所有 :hover/:focus/transition，零鼠标悬停重排、切深浅色仅切换单个类名瞬时完成
+  // 3) 叠加手写 Element UI & 云邮高频容器现代深色色板（#0f1117 / #171a21 / #1f242d）与工作台视觉统一
+  const DARK_CANVAS = "#0f1117";
 
-  function parseRGB(str) {
+  function parseCssColor(str) {
     if (!str) return null;
-    const m = str.match(
+    const s = String(str).trim().toLowerCase();
+    if (!s || s === "transparent" || s === "inherit" || s === "initial" || s === "currentcolor") {
+      return null;
+    }
+    if (s === "white") return { r: 255, g: 255, b: 255, a: 1 };
+    if (s === "black") return { r: 0, g: 0, b: 0, a: 1 };
+    const m = s.match(
       /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+)\s*)?\)/
     );
-    if (!m) return null;
-    return { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] };
+    if (m) {
+      const a = m[4] === undefined ? 1 : +m[4];
+      return a > 0 ? { r: +m[1], g: +m[2], b: +m[3], a } : null;
+    }
+    const hm = s.match(/^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/);
+    if (hm) {
+      let hex = hm[1];
+      if (hex.length === 3) {
+        hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+      }
+      const r = parseInt(hex.slice(0, 2), 16);
+      const g = parseInt(hex.slice(2, 4), 16);
+      const b = parseInt(hex.slice(4, 6), 16);
+      const a = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) / 255 : 1;
+      return a > 0 ? { r, g, b, a } : null;
+    }
+    return null;
   }
 
   function rgbToHsl(r, g, b) {
@@ -393,98 +415,216 @@
     ];
   }
 
-  // 背景/边框：接近白的浅色映射为深色（纯白落在 #1f2223 的亮度档）；彩色（饱和度高）与深色保持原样
-  // 文字：偏深及中灰的文字映射为浅色，保证深底上的可读性；浅色文字保持原样
+  // 对齐工作台冷灰深色色板（#0f1117 画布 / #171a21 卡片 / #1f242d 浮层）
   function remapColor(c, kind) {
     const [h, s, l] = rgbToHsl(c.r, c.g, c.b);
+    let nh = h;
+    let ns = s;
     let nl = l;
+    const SLATE_H = 220 / 360;
+
     if (kind === "text") {
-      if (l < 0.62) nl = Math.min(0.86, 0.66 + (0.62 - l) * 0.6);
-    } else {
+      if (l >= 0.62) return null;
+      if (s < 0.2) {
+        // 深黑/深灰文字 → 高对比柔白，中灰 → 柔和次级灰
+        nh = SLATE_H;
+        ns = 0.14;
+        nl = Math.min(0.9, 0.66 + (0.62 - l) * 0.44);
+      } else {
+        // 彩色深字（如深蓝链接）保留色相并适度提亮
+        nl = Math.min(0.76, 0.56 + (0.62 - l) * 0.35);
+      }
+    } else if (kind === "border") {
       const grayish = s < 0.25;
-      if (l > 0.86 || (grayish && l > 0.6)) nl = 0.115 + (1 - l) * 0.06;
+      if (l > 0.72 || (grayish && l > 0.52)) {
+        nh = grayish ? SLATE_H : h;
+        ns = grayish ? 0.16 : Math.min(s, 0.45);
+        nl = 0.21 + (1 - Math.min(1, l)) * 0.12;
+      } else {
+        return null;
+      }
+    } else {
+      // bg
+      const grayish = s < 0.22;
+      if (grayish && l > 0.58) {
+        nh = SLATE_H;
+        ns = 0.18;
+        // 纯白(#fff) → 卡片面 ~0.11；浅灰底(#f5f7fa) → 略区分层次 ~0.145
+        nl = l >= 0.97 ? 0.11 : 0.125 + (1 - l) * 0.14;
+      } else if (!grayish && l > 0.84) {
+        // 极浅彩色提示底（如 #ecf5ff / #f0f9eb / #fef0f0）保留色相转深色轻底
+        ns = Math.min(s, 0.52);
+        nl = 0.165;
+      } else {
+        return null;
+      }
     }
+
     if (Math.abs(nl - l) < 0.01) return null;
-    const [r, g, b] = hslToRGB(h, s, nl);
-    return `rgba(${r}, ${g}, ${b}, ${c.a})`;
+    const [r, g, b] = hslToRGB(nh, ns, nl);
+    const alpha = Math.round(c.a * 1000) / 1000;
+    return alpha >= 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
-  const DARK_EXEMPT_SELECTOR =
-    "#yzHelper-ball,#yzHelper-quick,#yzHelper-settings,.yz-notify,.yz-lesson-toolbar,.yz-task-chip,.yz-deadline-chip,.yz-overdue-badge,.yz-todo-icon,.yz-course-link,#downloadAllButton";
-  const DARK_SKIP_TAGS = new Set([
-    "SCRIPT", "STYLE", "LINK", "META", "NOSCRIPT", "BR", "HR",
-    "IMG", "VIDEO", "AUDIO", "CANVAS", "IFRAME", "SVG",
-  ]);
-  const DARK_PROPS = ["background-color", "color", "border-color"];
-
-  // 批量读写分离：先统一准备样式，再统一读 getComputedStyle（仅触发 1 次样式重算），最后统一写回
-  function darkenElements(elements) {
-    const targets = [];
-    for (const el of elements) {
-      if (
-        !el ||
-        el.nodeType !== Node.ELEMENT_NODE ||
-        el instanceof SVGElement ||
-        DARK_SKIP_TAGS.has(el.tagName)
-      ) {
-        continue;
+  function splitTopLevelSelectors(selectorText) {
+    const parts = [];
+    let buf = "";
+    let paren = 0;
+    let bracket = 0;
+    for (let i = 0; i < selectorText.length; i++) {
+      const ch = selectorText[i];
+      if (ch === "(") paren++;
+      else if (ch === ")" && paren > 0) paren--;
+      else if (ch === "[") bracket++;
+      else if (ch === "]" && bracket > 0) bracket--;
+      if (ch === "," && paren === 0 && bracket === 0) {
+        const trimmed = buf.trim();
+        if (trimmed) parts.push(trimmed);
+        buf = "";
+      } else {
+        buf += ch;
       }
-      if (el.closest && el.closest(DARK_EXEMPT_SELECTOR)) continue;
-      targets.push(el);
     }
-    if (!targets.length) return;
+    const last = buf.trim();
+    if (last) parts.push(last);
+    return parts;
+  }
 
-    // Phase 1: 临时禁用过渡并摘除上次写入的 !important 覆盖，避免读到过渡中间态或旧覆盖色
-    const states = targets.map((el) => {
-      const prevTransition = el.style.transition;
-      el.style.transition = "none";
-      if (el.dataset.ueDark === "1") {
-        for (const p of DARK_PROPS) {
-          if (el.style.getPropertyPriority(p) === "important") {
-            el.style.removeProperty(p);
+  const DARK_SKIP_SELECTOR_RE =
+    /ue-dark-mode|#yzHelper-|\.yz-notify|\.yz-todo-|\.yz-lesson-|#downloadAllButton|#nprogress/;
+
+  function scopeDarkSelector(selectorText) {
+    const scoped = [];
+    for (const raw of splitTopLevelSelectors(selectorText)) {
+      if (!raw || DARK_SKIP_SELECTOR_RE.test(raw)) continue;
+      if (raw === "html" || raw === ":root") {
+        scoped.push("html.ue-dark-mode");
+      } else if (/^html(?=[.#:[\s>+~]|$)/i.test(raw)) {
+        scoped.push(raw.replace(/^html/i, "html.ue-dark-mode"));
+      } else if (/^:root(?=[.#:[\s>+~]|$)/i.test(raw)) {
+        scoped.push(raw.replace(/^:root/i, "html.ue-dark-mode"));
+      } else {
+        scoped.push("html.ue-dark-mode " + raw);
+      }
+    }
+    return scoped.join(", ");
+  }
+
+  function rewriteCssRuleList(rules, out) {
+    if (!rules) return;
+    for (let i = 0; i < rules.length; i++) {
+      const rule = rules[i];
+      if (rule.type === 1 && rule.selectorText && rule.style) {
+        const s = rule.style;
+        const decls = [];
+        if (s.backgroundColor && (!s.backgroundImage || s.backgroundImage === "none")) {
+          const c = parseCssColor(s.backgroundColor);
+          const mapped = c && remapColor(c, "bg");
+          if (mapped) decls.push(`background-color:${mapped}`);
+        }
+        if (s.color) {
+          const c = parseCssColor(s.color);
+          const mapped = c && remapColor(c, "text");
+          if (mapped) decls.push(`color:${mapped}`);
+        }
+        const bTop = s.borderTopColor;
+        const bRight = s.borderRightColor;
+        const bBottom = s.borderBottomColor;
+        const bLeft = s.borderLeftColor;
+        if (bTop && bTop === bRight && bTop === bBottom && bTop === bLeft) {
+          const c = parseCssColor(bTop);
+          const mapped = c && remapColor(c, "border");
+          if (mapped) decls.push(`border-color:${mapped}`);
+        } else {
+          const sides = [
+            ["border-top-color", bTop],
+            ["border-right-color", bRight],
+            ["border-bottom-color", bBottom],
+            ["border-left-color", bLeft],
+          ];
+          for (const [prop, val] of sides) {
+            if (!val) continue;
+            const c = parseCssColor(val);
+            const mapped = c && remapColor(c, "border");
+            if (mapped) decls.push(`${prop}:${mapped}`);
           }
         }
-      }
-      return { el, prevTransition, bg: null, fg: null, bd: null };
-    });
-
-    // Phase 2: 批量读取计算样式并计算目标色
-    for (const st of states) {
-      const cs = getComputedStyle(st.el);
-      if (cs.display === "none") continue;
-      if (cs.backgroundImage === "none") {
-        const bg = parseRGB(cs.backgroundColor);
-        if (bg && bg.a > 0) st.bg = remapColor(bg, "bg");
-      }
-      const fg = parseRGB(cs.color);
-      if (fg) st.fg = remapColor(fg, "text");
-      const bd = parseRGB(cs.borderTopColor);
-      if (bd && bd.a > 0) st.bd = remapColor(bd, "border");
-    }
-
-    // Phase 3: 批量写回并恢复过渡
-    for (const st of states) {
-      const { el } = st;
-      if (st.bg) el.style.setProperty("background-color", st.bg, "important");
-      if (st.fg) el.style.setProperty("color", st.fg, "important");
-      if (st.bd) el.style.setProperty("border-color", st.bd, "important");
-      el.style.transition = st.prevTransition;
-      el.dataset.ueDark = "1";
-    }
-  }
-
-  function clearDynamicDarkTheme() {
-    document.querySelectorAll('[data-ue-dark="1"]').forEach((el) => {
-      for (const p of DARK_PROPS) {
-        if (el.style.getPropertyPriority(p) === "important") {
-          el.style.removeProperty(p);
+        if (decls.length) {
+          const sel = scopeDarkSelector(rule.selectorText);
+          if (sel) out.push(`${sel}{${decls.join(";")}}`);
+        }
+      } else if (rule.type === 4 && rule.cssRules) {
+        // @media
+        const inner = [];
+        rewriteCssRuleList(rule.cssRules, inner);
+        if (inner.length) {
+          out.push(`@media ${rule.conditionText || rule.media.mediaText}{${inner.join("")}}`);
+        }
+      } else if (rule.type === 12 && rule.cssRules) {
+        // @supports
+        const inner = [];
+        rewriteCssRuleList(rule.cssRules, inner);
+        if (inner.length) {
+          out.push(`@supports ${rule.conditionText}{${inner.join("")}}`);
         }
       }
-      delete el.dataset.ueDark;
-    });
+    }
   }
 
-  let darkThemeObserver = null;
+  const darkProcessedSheets = new WeakSet();
+  let darkHeadObserver = null;
+
+  function shouldSkipStyleSheet(sheet) {
+    const owner = sheet && sheet.ownerNode;
+    if (!owner) return false;
+    if (owner.dataset && owner.dataset.ueDarkSheet === "1") return true;
+    if (owner.tagName === "STYLE") {
+      const txt = owner.textContent || "";
+      if (
+        txt.includes("#yzHelper-") ||
+        txt.includes(".yz-notify") ||
+        txt.includes("html.ue-dark-mode") ||
+        txt.includes("#nprogress")
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  function processDarkStyleSheet(sheet) {
+    if (!sheet || darkProcessedSheets.has(sheet) || shouldSkipStyleSheet(sheet)) return;
+    let rules;
+    try {
+      rules = sheet.cssRules;
+    } catch (e) {
+      // 跨域样式表（如 CDN 字体/第三方）跳过即可
+      darkProcessedSheets.add(sheet);
+      return;
+    }
+    darkProcessedSheets.add(sheet);
+    if (!rules || !rules.length) return;
+    const out = [];
+    rewriteCssRuleList(rules, out);
+    if (!out.length || !document.head) return;
+    const styleEl = document.createElement("style");
+    styleEl.dataset.ueDarkSheet = "1";
+    styleEl.textContent = out.join("\n");
+    // 插在手写精调样式之前，保证手写现代色板优先级高于自动重映射
+    const handTuned = document.getElementById("ue-dark-handtuned");
+    if (handTuned && handTuned.parentNode === document.head) {
+      document.head.insertBefore(styleEl, handTuned);
+    } else {
+      document.head.appendChild(styleEl);
+    }
+  }
+
+  function scanDarkStyleSheets() {
+    if (!document.styleSheets) return;
+    for (let i = 0; i < document.styleSheets.length; i++) {
+      processDarkStyleSheet(document.styleSheets[i]);
+    }
+  }
 
   // 自动深色：开关开启且系统为深色外观时才生效，系统切换时即时响应
   const darkMediaQuery =
@@ -492,91 +632,202 @@
   const systemPrefersDark = () => !!(darkMediaQuery && darkMediaQuery.matches);
   const isDarkActive = () => !!settings.system.darkMode && systemPrefersDark();
 
-  function applyDynamicDarkTheme() {
-    if (darkThemeObserver) {
-      darkThemeObserver.disconnect();
-      darkThemeObserver = null;
-    }
-    if (!document.body) return;
-    if (!isDarkActive()) {
-      clearDynamicDarkTheme();
-      return;
-    }
-    darkenElements(document.querySelectorAll("html, body, body *"));
-    // SPA 动态渲染的元素在 MutationObserver 回调内同步批量处理：
-    // 回调运行在 DOM 变更之后、浏览器绘制之前，处理完才绘制，从原理上消除闪白
-    darkThemeObserver = new MutationObserver((records) => {
-      const batch = new Set();
-      for (const r of records) {
-        for (const node of r.addedNodes) {
-          if (node.nodeType !== Node.ELEMENT_NODE) continue;
-          batch.add(node);
-          node.querySelectorAll("*").forEach((child) => batch.add(child));
+  function ensureDarkEngine() {
+    if (!isDarkActive() || !document.head) return;
+    scanDarkStyleSheets();
+    if (!darkHeadObserver) {
+      // 仅监听 <head> 直接子节点的新增 <style>/<link>（懒加载分包），整个会话仅触发数次
+      darkHeadObserver = new MutationObserver((records) => {
+        if (!isDarkActive()) return;
+        for (const r of records) {
+          for (const node of r.addedNodes) {
+            if (node.nodeType !== Node.ELEMENT_NODE) continue;
+            if (node.dataset && node.dataset.ueDarkSheet === "1") continue;
+            if (node.tagName === "STYLE") {
+              requestAnimationFrame(() => {
+                if (node.sheet) processDarkStyleSheet(node.sheet);
+              });
+            } else if (node.tagName === "LINK" && node.rel === "stylesheet") {
+              if (node.sheet) processDarkStyleSheet(node.sheet);
+              else {
+                node.addEventListener(
+                  "load",
+                  () => node.sheet && processDarkStyleSheet(node.sheet),
+                  { once: true }
+                );
+              }
+            }
+          }
         }
-      }
-      if (batch.size) darkenElements(batch);
-    });
-    darkThemeObserver.observe(document.body, { childList: true, subtree: true });
-  }
-
-  // 悬停处理：hover 是 CSS 伪类改变计算样式，MutationObserver 感知不到；
-  // 在 pointerover 时对目标及少量祖先链当场重跑映射（此刻读到的即悬停色），
-  // pointerout 后延迟重跑恢复常态
-  function buildAncestorChain(el) {
-    const chain = [];
-    let node = el;
-    for (let i = 0; node && node !== document.body && i < 6; i++) {
-      chain.push(node);
-      node = node.parentElement;
+      });
+      darkHeadObserver.observe(document.head, { childList: true });
     }
-    return chain;
-  }
-
-  function installHoverHandler() {
-    document.addEventListener(
-      "pointerover",
-      (e) => {
-        if (!isDarkActive() || !e.target || e.target === document)
-          return;
-        // 悬停发生的瞬间批量处理目标及其祖先链，此刻读到的即悬停色
-        darkenElements(buildAncestorChain(e.target));
-      },
-      true
-    );
-    document.addEventListener(
-      "pointerout",
-      (e) => {
-        if (!isDarkActive() || !e.target || e.target === document)
-          return;
-        const chain = buildAncestorChain(e.target);
-        // 鼠标只是移入链内子元素：交给后续 pointerover，此处不处理
-        if (e.relatedTarget && chain.includes(e.relatedTarget)) return;
-        // 真正离开：延迟重映射恢复正常态；双保险覆盖 hover 状态更新与残余动画时序
-        setTimeout(() => {
-          if (isDarkActive()) darkenElements(chain);
-        }, 80);
-        setTimeout(() => {
-          if (isDarkActive()) darkenElements(chain);
-        }, 320);
-      },
-      true
-    );
   }
 
   function applyDarkMode() {
-    document.documentElement.classList.toggle("ue-dark-mode", isDarkActive());
-    applyDynamicDarkTheme();
+    const active = isDarkActive();
+    document.documentElement.classList.toggle("ue-dark-mode", active);
+    if (active) ensureDarkEngine();
   }
 
+  // 手写现代深色色板精调层：对齐工作台（#0f1117 / #171a21 / #1f242d），覆盖 Element UI 与高频容器
   const DARK_MODE_CSS = `
-    html.ue-dark-mode, html.ue-dark-mode body { background: ${DARK_CANVAS} !important; }
-    /* SPA 路由切换时新容器先于引擎处理渲染，静态深色兜底消除白屏闪烁 */
+    html.ue-dark-mode {
+      color-scheme: dark;
+      background-color: ${DARK_CANVAS} !important;
+      color: #e6edf3;
+    }
+    html.ue-dark-mode body,
+    html.ue-dark-mode #app,
     html.ue-dark-mode #layout-container,
     html.ue-dark-mode .main-content,
-    html.ue-dark-mode .router-container { background-color: ${DARK_CANVAS} !important; }
+    html.ue-dark-mode .router-container,
+    html.ue-dark-mode .el-main {
+      background-color: ${DARK_CANVAS} !important;
+      color: #e6edf3;
+    }
+    /* 卡片、弹窗、下拉浮层：统一至工作台 Surface (#171a21) */
+    html.ue-dark-mode .home-card,
+    html.ue-dark-mode .el-card,
+    html.ue-dark-mode .el-dialog,
+    html.ue-dark-mode .el-drawer,
+    html.ue-dark-mode .el-message-box,
+    html.ue-dark-mode .el-popover,
+    html.ue-dark-mode .el-dropdown-menu,
+    html.ue-dark-mode .el-select-dropdown,
+    html.ue-dark-mode .el-picker-panel,
+    html.ue-dark-mode .el-tabs--border-card {
+      background-color: #171a21 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+      color: #e6edf3 !important;
+    }
+    html.ue-dark-mode .el-dialog__title,
+    html.ue-dark-mode .el-message-box__title,
+    html.ue-dark-mode .el-card__header {
+      color: #e6edf3 !important;
+      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    }
+    html.ue-dark-mode .el-dropdown-menu__item:hover,
+    html.ue-dark-mode .el-select-dropdown__item.hover,
+    html.ue-dark-mode .el-select-dropdown__item:hover {
+      background-color: #1f242d !important;
+      color: #60a5fa !important;
+    }
+    /* 导航菜单与页签 */
+    html.ue-dark-mode .el-menu {
+      background-color: #171a21 !important;
+      border-color: rgba(255, 255, 255, 0.08) !important;
+    }
+    html.ue-dark-mode .el-menu-item,
+    html.ue-dark-mode .el-submenu__title {
+      color: #c9d1d9 !important;
+    }
+    html.ue-dark-mode .el-menu-item:hover,
+    html.ue-dark-mode .el-submenu__title:hover {
+      background-color: #1f242d !important;
+      color: #e6edf3 !important;
+    }
+    html.ue-dark-mode .el-menu-item.is-active {
+      background-color: rgba(59, 130, 246, 0.16) !important;
+      color: #60a5fa !important;
+    }
+    html.ue-dark-mode .el-tabs__item { color: #9aa4b2 !important; }
+    html.ue-dark-mode .el-tabs__item.is-active,
+    html.ue-dark-mode .el-tabs__item:hover { color: #60a5fa !important; }
+    html.ue-dark-mode .el-tabs__nav-wrap::after,
+    html.ue-dark-mode .el-tabs--card > .el-tabs__header,
+    html.ue-dark-mode .el-tabs--card > .el-tabs__header .el-tabs__nav,
+    html.ue-dark-mode .el-tabs--card > .el-tabs__header .el-tabs__item {
+      border-color: rgba(255, 255, 255, 0.08) !important;
+    }
+    /* 表格：表头、斑马纹、悬停行层次分明 */
+    html.ue-dark-mode .el-table,
+    html.ue-dark-mode .el-table__expanded-cell {
+      background-color: #171a21 !important;
+      color: #e6edf3 !important;
+    }
+    html.ue-dark-mode .el-table th.el-table__cell {
+      background-color: #1f242d !important;
+      color: #9aa4b2 !important;
+      border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+    }
+    html.ue-dark-mode .el-table tr,
+    html.ue-dark-mode .el-table td.el-table__cell {
+      background-color: #171a21 !important;
+      border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+      color: #e6edf3 !important;
+    }
+    html.ue-dark-mode .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+      background-color: #1b1f28 !important;
+    }
+    html.ue-dark-mode .el-table--enable-row-hover .el-table__body tr:hover > td.el-table__cell {
+      background-color: #222834 !important;
+    }
+    html.ue-dark-mode .el-table::before { background-color: rgba(255, 255, 255, 0.08) !important; }
+    /* 输入框、按钮、分页 */
+    html.ue-dark-mode .el-input__inner,
+    html.ue-dark-mode .el-textarea__inner {
+      background-color: #1f242d !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+      color: #e6edf3 !important;
+    }
+    html.ue-dark-mode .el-input__inner:focus,
+    html.ue-dark-mode .el-textarea__inner:focus {
+      border-color: #3b82f6 !important;
+    }
+    html.ue-dark-mode .el-button--default {
+      background-color: #1f242d !important;
+      border-color: rgba(255, 255, 255, 0.12) !important;
+      color: #e6edf3 !important;
+    }
+    html.ue-dark-mode .el-button--default:hover {
+      background-color: #28303d !important;
+      border-color: rgba(96, 165, 250, 0.5) !important;
+      color: #93c5fd !important;
+    }
+    html.ue-dark-mode .el-pagination.is-background .el-pager li:not(.disabled),
+    html.ue-dark-mode .el-pagination.is-background .btn-prev,
+    html.ue-dark-mode .el-pagination.is-background .btn-next {
+      background-color: #1f242d !important;
+      color: #c9d1d9 !important;
+    }
+    html.ue-dark-mode .el-pagination.is-background .el-pager li:not(.disabled).active {
+      background-color: #2563eb !important;
+      color: #ffffff !important;
+    }
+    /* Quill 富文本编辑器与作业富文本内联白底/黑字兜底 */
+    html.ue-dark-mode .ql-toolbar.ql-snow {
+      background-color: #1f242d !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+    }
+    html.ue-dark-mode .ql-toolbar.ql-snow .ql-stroke { stroke: #c9d1d9 !important; }
+    html.ue-dark-mode .ql-toolbar.ql-snow .ql-fill { fill: #c9d1d9 !important; }
+    html.ue-dark-mode .ql-toolbar.ql-snow .ql-picker { color: #c9d1d9 !important; }
+    html.ue-dark-mode .ql-container.ql-snow {
+      background-color: #171a21 !important;
+      border-color: rgba(255, 255, 255, 0.1) !important;
+      color: #e6edf3 !important;
+    }
+    html.ue-dark-mode .ql-editor,
+    html.ue-dark-mode #assignment-info [style*="background-color: rgb(255, 255, 255)"],
+    html.ue-dark-mode #assignment-info [style*="background: rgb(255, 255, 255)"],
+    html.ue-dark-mode #assignment-info [style*="background-color:#fff"],
+    html.ue-dark-mode #assignment-info [style*="background:#fff"] {
+      background-color: transparent !important;
+    }
+    html.ue-dark-mode #assignment-info [style*="color: rgb(0, 0, 0)"],
+    html.ue-dark-mode #assignment-info [style*="color:#000"],
+    html.ue-dark-mode #assignment-info [style*="color: black"],
+    html.ue-dark-mode .ql-editor [style*="color: rgb(0, 0, 0)"] {
+      color: #e6edf3 !important;
+    }
   `;
-  // document-start 阶段先铺画布色，DOM 就绪后由引擎做完整处理（见 initializeExtension）
-  GM_addStyle(DARK_MODE_CSS);
+  // document-start 阶段即注入手写精调深色层，并打标避免被 CSSOM 重写器二次处理
+  const handTunedDarkStyle = GM_addStyle(DARK_MODE_CSS);
+  if (handTunedDarkStyle) {
+    handTunedDarkStyle.id = "ue-dark-handtuned";
+    handTunedDarkStyle.dataset.ueDarkSheet = "1";
+  }
 
   // 辅助变量
   let sumBytes = 0,
@@ -619,8 +870,9 @@
 
     addFunctionalCSS();
     installBackButtonFix();
-    applyDynamicDarkTheme();
-    installHoverHandler();
+    // DOM 就绪后扫描已加载样式表并开启 <head> 新样式监听（不再遍历 body 或监听 pointerover）
+    ensureDarkEngine();
+    window.addEventListener("load", () => ensureDarkEngine(), { once: true });
     setTimeout(main, 100);
 
     if (settings.system.autoUpdate) {
