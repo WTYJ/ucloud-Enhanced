@@ -1090,13 +1090,18 @@ function escapeHtml(text) {
   });
 
   // ===== 修复 SSO ticket 跳转循环与残留（document-start 阶段即介入）=====
-  // 1) 平台登录页用 n.substring(0, n.lastIndexOf("#")) 截取 ticket，URL 缺少 # 时会被截成空串导致循环报错
-  // 2) 登录成功后平台只切换 hash，不清理 location.search 里的 ?ticket=，过期刷新时会重放旧票
-  // 3) 不做定时硬跳转，避免打断 /ykt-basics/oauth/token 正常换票
-  function ensureTicketHash(urlStr) {
+  // 实测根因：
+  // 1) /uclass 前端写死了 service=http://ucloud.bupt.edu.cn/uclass，后端 oauth/token 拒绝该 service 签发的 ticket，
+  //    导致 /uclass/?ticket=ST-xxx 报 "ticket获取用户账号失败" 并无限循环跳回统一认证。
+  // 2) 根路径 https://ucloud.bupt.edu.cn/ 走的才是后端认可的 CAS service；但根路径路由器没有 #/index（补 #/index 会 404）。
+  // 3) 根路径换票成功写入 iClass-token 后，自动跳回 /uclass/#/student/homePage（或教师主页）即可无缝进入。
+  function ensureUclassTicketHash(urlStr) {
     try {
       const u = new URL(urlStr);
-      if (!u.searchParams.has("ticket") || u.hash) return null;
+      // 仅对 /uclass 路径补 #/index，绝不碰根路径 "/"（根路径无 #/index 路由，补了会 404）
+      if (!u.pathname.startsWith("/uclass") || !u.searchParams.has("ticket") || u.hash) {
+        return null;
+      }
       return u.pathname + u.search + "#/index";
     } catch (e) {
       return null;
@@ -1120,12 +1125,60 @@ function escapeHtml(text) {
     return !h || h === "#" || h === "#/" || h.startsWith("#/index");
   }
 
+  function getUclassHomeUrl() {
+    const role = getRoleAliase();
+    const view = role === "JS004" || role === "JS006" ? "teacher" : "student";
+    return `https://ucloud.bupt.edu.cn/uclass/#/${view}/homePage`;
+  }
+
+  function recordUclassTicketAttempt(nowMs = Date.now()) {
+    const KEY = "ue_uclass_ticket_loop";
+    try {
+      const raw = sessionStorage.getItem(KEY) || "";
+      const [cntStr, tsStr] = raw.split("|");
+      const prevCnt = parseInt(cntStr, 10) || 0;
+      const prevTs = parseInt(tsStr, 10) || 0;
+      const nextCnt = nowMs - prevTs < 15000 ? prevCnt + 1 : 1;
+      sessionStorage.setItem(KEY, `${nextCnt}|${nowMs}`);
+      return nextCnt;
+    } catch (e) {
+      return 1;
+    }
+  }
+
+  function clearUclassTicketAttempt() {
+    try {
+      sessionStorage.removeItem("ue_uclass_ticket_loop");
+    } catch (e) {}
+  }
+
   function installTicketRedirectFix() {
     if (!settings.system.fixTicketBug) return;
     if (!new URLSearchParams(location.search).has("ticket")) return;
 
-    // (1) 若 URL 含 ticket 但缺少 #，在平台 app.js 解析前补齐 #/index，防止 lastIndexOf("#") 截空
-    const patchedWithHash = ensureTicketHash(location.href);
+    const isUclass = location.pathname.startsWith("/uclass");
+
+    // 场景 A：根路径 https://ucloud.bupt.edu.cn/?ticket=...（有效 SSO 落地页）
+    // 不补 #/index（避免 404），等待根页面完成换票写入 iClass-token 后自动跳回 /uclass 主页
+    if (!isUclass) {
+      clearUclassTicketAttempt();
+      if (window !== window.parent) return;
+      const startAt = Date.now();
+      const waitToken = setInterval(() => {
+        if (getCookie("iClass-token")) {
+          clearInterval(waitToken);
+          location.replace(getUclassHomeUrl());
+          return;
+        }
+        if (Date.now() - startAt > 15000) {
+          clearInterval(waitToken);
+        }
+      }, 150);
+      return;
+    }
+
+    // 场景 B：/uclass 路径带 ?ticket=
+    const patchedWithHash = ensureUclassTicketHash(location.href);
     if (patchedWithHash) {
       try {
         history.replaceState(null, "", patchedWithHash);
@@ -1138,6 +1191,7 @@ function escapeHtml(text) {
     const cleanIfLoggedIn = () => {
       if (!new URLSearchParams(location.search).has("ticket")) return true;
       if (isTicketLoginRoute(location.hash)) return false;
+      clearUclassTicketAttempt();
       const cleanUrl = stripTicketFromUrl(location.href);
       if (cleanUrl) {
         try {
@@ -1147,10 +1201,19 @@ function escapeHtml(text) {
       return true;
     };
 
-    // (2) 若当前已在业务路由（如 #/student/homePage）且地址栏残留旧 ticket，立即无刷新剥离
+    // 若已在业务路由（如 #/student/homePage）残留旧 ticket，立即无刷新剥离
     if (cleanIfLoggedIn()) return;
 
-    // (3) 正在登录页换票：等待平台完成登录并跳转离开 #/index 后，无刷新剥离 ?ticket=
+    // 15 秒内第 2 次带着 ticket 回到 /uclass 登录页 → 确认命中 service=http://.../uclass 死循环，
+    // 立即跳往根路径 https://ucloud.bupt.edu.cn/ 走正确的 CAS service 完成无感登录
+    const attempts = recordUclassTicketAttempt();
+    if (attempts >= 2) {
+      clearUclassTicketAttempt();
+      location.replace("https://ucloud.bupt.edu.cn/");
+      return;
+    }
+
+    // 首次落地 /uclass 登录页：等待平台换票离开 #/index 后无刷新剥离 ?ticket=
     let done = false;
     let pollTimer = null;
     const finish = () => {
