@@ -4018,7 +4018,7 @@ function escapeHtml(text) {
       --wb-accent: #2962ff;
       --wb-accent-soft: rgba(41, 98, 255, 0.1);
       --wb-accent-text: #2563eb;
-      --wb-shadow: 0 24px 64px rgba(15, 23, 42, 0.24), 0 0 0 1px rgba(15, 23, 42, 0.06);
+      --wb-shadow: 0 18px 36px rgba(15, 23, 42, 0.22), 0 0 0 1px rgba(15, 23, 42, 0.06);
       --wb-card-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
       --wb-card-hover-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
       --wb-tab-active-bg: #ffffff;
@@ -4043,7 +4043,7 @@ function escapeHtml(text) {
       --wb-accent: #3b82f6;
       --wb-accent-soft: rgba(59, 130, 246, 0.18);
       --wb-accent-text: #93c5fd;
-      --wb-shadow: 0 28px 80px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.08);
+      --wb-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.08);
       --wb-card-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
       --wb-card-hover-shadow: 0 12px 28px rgba(0, 0, 0, 0.36);
       --wb-tab-active-bg: #262c36;
@@ -4057,13 +4057,12 @@ function escapeHtml(text) {
     .wb-mask {
       position: fixed;
       inset: 0;
-      background: rgba(0, 0, 0, 0.46);
-      backdrop-filter: blur(6px);
-      -webkit-backdrop-filter: blur(6px);
+      background: rgba(0, 0, 0, 0.52);
       opacity: 0;
       transition: opacity 0.2s ease;
     }
     :host(.wb-open) .wb-mask { opacity: 1; }
+    :host(.wb-full) .wb-mask { display: none; }
 
     .wb-panel {
       position: fixed;
@@ -4094,6 +4093,7 @@ function escapeHtml(text) {
       max-width: none;
       max-height: none;
       border-radius: 0;
+      box-shadow: none;
       transform: scale(0.99);
     }
     :host(.wb-full.wb-open) .wb-panel { transform: none; }
@@ -4207,6 +4207,7 @@ function escapeHtml(text) {
       padding: 22px 24px 32px;
       background: var(--wb-canvas);
       box-sizing: border-box;
+      contain: layout style paint;
       scrollbar-width: thin;
       scrollbar-color: var(--wb-scroll) transparent;
     }
@@ -4284,6 +4285,7 @@ function escapeHtml(text) {
       padding: 15px 18px 15px 21px;
       margin-bottom: 12px;
       cursor: pointer;
+      contain: layout style;
       box-shadow: var(--wb-card-shadow);
       transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
     }
@@ -4423,6 +4425,7 @@ function escapeHtml(text) {
       border-radius: 14px;
       padding: 15px 16px;
       cursor: pointer;
+      contain: layout style;
       box-shadow: var(--wb-card-shadow);
       transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
     }
@@ -4502,6 +4505,7 @@ function escapeHtml(text) {
       padding: 15px 18px;
       margin-bottom: 12px;
       background: var(--wb-surface-muted);
+      contain: layout style;
       box-shadow: var(--wb-card-shadow);
       transition: background 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
     }
