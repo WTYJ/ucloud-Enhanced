@@ -1125,12 +1125,6 @@ function escapeHtml(text) {
     return !h || h === "#" || h === "#/" || h.startsWith("#/index");
   }
 
-  function getUclassHomeUrl() {
-    const role = getRoleAliase();
-    const view = role === "JS004" || role === "JS006" ? "teacher" : "student";
-    return `https://ucloud.bupt.edu.cn/uclass/#/${view}/homePage`;
-  }
-
   function recordUclassTicketAttempt(nowMs = Date.now()) {
     const KEY = "ue_uclass_ticket_loop";
     try {
@@ -1159,7 +1153,9 @@ function escapeHtml(text) {
     const isUclass = location.pathname.startsWith("/uclass");
 
     // 场景 A：根路径 https://ucloud.bupt.edu.cn/?ticket=...（有效 SSO 落地页）
-    // 不补 #/index（避免 404），等待根页面完成换票写入 iClass-token 后自动跳回 /uclass 主页
+    // 不补 #/index（避免 404）；等待根页面换票写入 iClass-token 后，跳到 /uclass/#/index（不带 ?ticket=），
+    // 让 /uclass 登录页走 else { this.checkRole() } 补齐 iClass-user-role / user-info 后再进入主页，
+    // 避免直跳 #/student/homePage 跳过角色初始化导致「没有访问权限」
     if (!isUclass) {
       clearUclassTicketAttempt();
       if (window !== window.parent) return;
@@ -1167,7 +1163,9 @@ function escapeHtml(text) {
       const waitToken = setInterval(() => {
         if (getCookie("iClass-token")) {
           clearInterval(waitToken);
-          location.replace(getUclassHomeUrl());
+          setTimeout(() => {
+            location.replace("https://ucloud.bupt.edu.cn/uclass/#/index");
+          }, 300);
           return;
         }
         if (Date.now() - startAt > 15000) {
