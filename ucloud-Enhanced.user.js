@@ -613,7 +613,14 @@ function escapeHtml(text) {
             ? " !important"
             : "";
         const decls = [];
-        if (s.backgroundColor && (!s.backgroundImage || s.backgroundImage === "none")) {
+        const bgImg = (s.backgroundImage || "").trim().toLowerCase();
+        const hasNoBgImage =
+          !bgImg ||
+          bgImg === "none" ||
+          bgImg === "initial" ||
+          bgImg === "unset" ||
+          bgImg === "revert";
+        if (s.backgroundColor && hasNoBgImage) {
           const c = parseCssColor(s.backgroundColor);
           const mapped = c && remapColor(c, "bg");
           if (mapped) decls.push(`background-color:${mapped}${pri("background-color")}`);
@@ -923,6 +930,16 @@ function escapeHtml(text) {
     html.ue-dark-mode #assignment-info [style*="color: black"],
     html.ue-dark-mode .ql-editor [style*="color: rgb(0, 0, 0)"] {
       color: #e6edf3 !important;
+    }
+    /* 教学云平台一级主页精调（Logo 提亮、白边渐变去除、导航高亮下划线保留） */
+    html.ue-dark-mode .header .left-bg {
+      filter: brightness(1.75) saturate(1.1);
+    }
+    html.ue-dark-mode .layout .banner-box .banner-bg {
+      background: transparent !important;
+    }
+    html.ue-dark-mode .tab-box .tab .tab-item .tab-text .tab-bar {
+      background-color: #60a5fa !important;
     }
   `;
   // document-start 阶段即注入手写精调深色层，并打标避免被 CSSOM 重写器二次处理
