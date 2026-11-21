@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
-// @version      2.5.12
+// @version      2.6.0
 // @description  独立工作台（待办/课程/通知/资源一站式管理），自动深色模式，修复 ticket 跳转循环，Office 365 与浏览器原生 PDF 预览，作业所属课程直达，解除复制限制，课件下载增强，优化页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
