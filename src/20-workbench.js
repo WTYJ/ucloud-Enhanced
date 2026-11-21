@@ -2220,7 +2220,7 @@
         `<button class="wb-primary-btn"><span>去原页提交 / 查看</span>${WB_ICONS.external}</button>`;
       bar.querySelector(".wb-back-btn").addEventListener("click", () => wbSwitchTab(returnTab));
       bar.querySelector(".wb-primary-btn").addEventListener("click", () => {
-        if (!settings.home.openInNewTab) wbClose();
+        wbClose();
         openTaskUrl(nativeUrl);
       });
       inner.appendChild(bar);
@@ -2424,7 +2424,7 @@
         `</div>${wbEmptyHtml("加载作业详情失败，请重试或直接打开原页面")}</div>`;
       pane.querySelector(".wb-back-btn")?.addEventListener("click", () => wbSwitchTab(returnTab));
       pane.querySelector(".wb-primary-btn")?.addEventListener("click", () => {
-        if (!settings.home.openInNewTab) wbClose();
+        wbClose();
         openTaskUrl(nativeUrl);
       });
     }
@@ -2547,7 +2547,7 @@
         `<button class="wb-primary-btn"><span>打开原课程主页</span>${WB_ICONS.external}</button>`;
       bar.querySelector(".wb-back-btn").addEventListener("click", () => wbSwitchTab("course"));
       bar.querySelector(".wb-primary-btn").addEventListener("click", () => {
-        if (!settings.home.openInNewTab) wbClose();
+        wbClose();
         openCoursePage(course);
       });
       inner.appendChild(bar);
@@ -2789,7 +2789,7 @@
           card.addEventListener("click", () => {
             const examId = exam.id || exam.examId || exam.activityId;
             if (!examId) return;
-            if (!settings.home.openInNewTab) wbClose();
+            wbClose();
             openTaskUrl("course.html#/answer?id=" + encodeURIComponent(examId));
           });
           subExam.appendChild(card);
@@ -2805,7 +2805,7 @@
         `</div>${wbEmptyHtml("加载课程空间失败，请重试或直接打开原课程主页")}</div>`;
       pane.querySelector(".wb-back-btn")?.addEventListener("click", () => wbSwitchTab("course"));
       pane.querySelector(".wb-primary-btn")?.addEventListener("click", () => {
-        if (!settings.home.openInNewTab) wbClose();
+        wbClose();
         openCoursePage(course);
       });
     }

@@ -37,13 +37,6 @@
           description: '增大个人主页翻页按钮的尺寸和点击区域，提升操作便捷性。',
           defaultValue: true
         },
-        openInNewTab: {
-          type: 'checkbox',
-          quick: true,
-          label: '在新标签中打开详情页',
-          description: '工作台跳原页/课程主页以及个人主页的详情链接将在新标签页中打开，方便多任务处理。',
-          defaultValue: false
-        },
         useWheelPageTurner: {
           type: 'checkbox',
           label: '使用鼠标滚轮翻页',
@@ -72,12 +65,6 @@
           type: 'checkbox',
           label: '使用浏览器原生阅读器预览 PDF 文件',
           description: '使用系统（浏览器）原生的阅读器预览PDF文档，提供更好的浏览体验。移动端及部分平板可能不支持。',
-          defaultValue: true
-        },
-        autoSwitchImg: {
-          type: 'checkbox',
-          label: '使用内置阅读器预览图片文件',
-          description: '使用脚本内置的阅读器预览图片，支持缩放、旋转与下载。',
           defaultValue: true
         },
         autoDownload: {
@@ -1917,7 +1904,6 @@
       ["workbench", "autoOpen"],
       ["workbench", "fullscreen"],
       ["system", "darkMode"],
-      ["home", "openInNewTab"],
     ];
 
     function buildQuickPanel() {
@@ -2049,10 +2035,6 @@
               ["workbench", "entry"],
             ],
           },
-          {
-            title: "跳转方式",
-            items: [["home", "openInNewTab"]],
-          },
         ],
       },
       {
@@ -2066,7 +2048,6 @@
             items: [
               ["preview", "autoSwitchOffice"],
               ["preview", "autoSwitchPdf"],
-              ["preview", "autoSwitchImg"],
             ],
           },
           {
@@ -2333,37 +2314,6 @@
         checkUpdateBtn.textContent = originalText;
       });
     });
-
-    let ulObserverTimer = null;
-    const ul_observer = new MutationObserver(() => {
-      const dropdownMenus = document.querySelectorAll(
-        'ul.el-dropdown-menu.el-popper.dropdown-info[id*="dropdown-menu"]'
-      );
-
-      if (dropdownMenus.length > 0) {
-        dropdownMenus.forEach((menu) => {
-          if (!menu.querySelector(".plugin-settings-item")) {
-            const settingsItem = document.createElement("li");
-            settingsItem.setAttribute("tabindex", "-1");
-            settingsItem.classList.add(
-              "el-dropdown-menu__item",
-              "plugin-settings-item"
-            );
-            settingsItem.innerHTML = "<!---->插件设置";
-            settingsItem.addEventListener("click", toggleSettingsPanel);
-            menu.appendChild(settingsItem);
-          }
-        });
-        ul_observer.disconnect();
-        clearTimeout(ulObserverTimer);
-      }
-    });
-    ul_observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
-    // 在无顶栏菜单的页面（登录页、预览页等）15 秒后自动断开，避免永久监听整棵 DOM
-    ulObserverTimer = setTimeout(() => ul_observer.disconnect(), 15000);
   }
 
   function getCookie(name) {
@@ -2791,14 +2741,10 @@
     return "";
   }
 
-  // 按“在新标签页打开”设置跳转
+  // 跳转任务/课程详情页
   function openTaskUrl(url) {
     if (!url) return;
-    if (settings.home.openInNewTab) {
-      window.open(url, "_blank");
-    } else {
-      location.href = url;
-    }
+    location.href = url;
   }
 
   const CACHE_STORAGE_KEY = "zzxw";

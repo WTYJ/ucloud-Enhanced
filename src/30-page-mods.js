@@ -191,39 +191,6 @@
     return null;
   }
 
-  // 首页"本学期课程"：课程搜索框
-
-  function findLessonSection() {
-    const sections = document.querySelectorAll(
-      "#layout-container .teacher-home-page .home-left-container .my-lesson-section"
-    );
-    let fallback = null;
-    for (const section of sections) {
-      const label = section.querySelector(".my-lesson-header .header-label");
-      const text = label ? label.textContent.trim() : "";
-      if (text === "本学期课程") return section;
-      if (
-        !fallback &&
-        (text === "我的主讲课程" || text === "我担任助教的课堂") &&
-        section.querySelector(".my-lesson-banner")
-      ) {
-        fallback = section;
-      }
-    }
-    return fallback;
-  }
-
-  async function waitForLessonSection(timeout = 15000) {
-    const start = Date.now();
-    while (Date.now() - start < timeout) {
-      const section = findLessonSection();
-      if (section) return section;
-      await sleep(200);
-    }
-    return null;
-  }
-
-
   // 启用文本选择、页面美化与按需功能样式（合并为单次 GM_addStyle 注入）
   function addFunctionalCSS() {
     const cssParts = [
@@ -348,8 +315,7 @@
       }
       .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item,
       .teacher-home-page .home-left-container .in-progress-section .in-progress-body .in-progress-item,
-      .teacher-home-page .home-right-container .my-need-section .my-need-body .my-need-item,
-      .yz-todo-item {
+      .teacher-home-page .home-right-container .my-need-section .my-need-body .my-need-item {
         border-radius: 16px !important;
       }
       .teacher-home-page .home-left-container .my-lesson-section .my-lesson-body .my-lesson-banner .my-lesson-group .my-lesson-item .my-lesson-post {
