@@ -2698,6 +2698,9 @@
           info.attachments = d.assignmentResource.length;
         }
         if (Number(d.isOpenEvaluation) === 1) info.evaluation = true;
+        if (d.isOvertimeCommit !== undefined && d.isOvertimeCommit !== null) {
+          info.noLateSubmit = Number(d.isOvertimeCommit) === 1;
+        }
         return Object.keys(info).length ? info : null;
       })
       .catch(() => null);

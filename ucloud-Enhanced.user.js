@@ -2796,6 +2796,9 @@ function escapeHtml(text) {
           info.attachments = d.assignmentResource.length;
         }
         if (Number(d.isOpenEvaluation) === 1) info.evaluation = true;
+        if (d.isOvertimeCommit !== undefined && d.isOvertimeCommit !== null) {
+          info.noLateSubmit = Number(d.isOvertimeCommit) === 1;
+        }
         return Object.keys(info).length ? info : null;
       })
       .catch(() => null);
@@ -3521,6 +3524,46 @@ function escapeHtml(text) {
       background: var(--wb-accent-soft);
       color: var(--wb-accent-text);
       font-weight: 500;
+    }
+
+    /* 已过期且不可补交折叠区 */
+    .wb-expired-box {
+      margin-top: 18px;
+      border: 1px dashed var(--wb-border);
+      border-radius: 14px;
+      background: var(--wb-surface-muted);
+      padding: 10px 14px;
+    }
+    .wb-expired-summary {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--wb-text-2);
+    }
+    .wb-expired-summary::-webkit-details-marker { display: none; }
+    .wb-expired-summary::before {
+      content: "▸";
+      font-size: 12px;
+      color: var(--wb-text-3);
+      transition: transform 0.16s ease;
+    }
+    .wb-expired-box[open] > .wb-expired-summary::before {
+      transform: rotate(90deg);
+    }
+    .wb-expired-summary:hover { color: var(--wb-text); }
+    .wb-expired-list {
+      margin-top: 12px;
+    }
+    .wb-expired-list .wb-card {
+      opacity: 0.78;
+    }
+    .wb-expired-list .wb-card:hover {
+      opacity: 1;
     }
 
     /* 课程搜索与卡片网格 */
@@ -4387,6 +4430,9 @@ function escapeHtml(text) {
       const rem = formatRemain(d - Date.now());
       card.dataset.urgency = rem.cls;
       meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
+      if (rem.cls === "overdue" && info && info.noLateSubmit) {
+        meta.insertAdjacentHTML("beforeend", '<span class="wb-chip">不可补交</span>');
+      }
     } else {
       card.dataset.urgency = "later";
     }
@@ -4466,7 +4512,15 @@ function escapeHtml(text) {
   }
 
   function wbAttachCourseFilter(filterBar, cardsList, totalCount, courseCounts) {
-    if (!filterBar.isConnected || courseCounts.size <= 1) return;
+    if (!filterBar.isConnected) return;
+    if (courseCounts.size <= 1) {
+      filterBar.innerHTML = "";
+      filterBar.hidden = true;
+      cardsList.forEach(({ card }) => {
+        card.hidden = false;
+      });
+      return;
+    }
     filterBar.innerHTML = "";
     let activeCourse = "";
     const applyFilter = (courseName) => {
@@ -4521,10 +4575,11 @@ function escapeHtml(text) {
       subBar.className = "wb-subtabs-bar";
       subBar.innerHTML = `
         <div class="wb-subtabs">
-          <button class="wb-subtab" data-sub="pending">待完成<span class="wb-subtab-num">${tasks.length}</span></button>
+          <button class="wb-subtab" data-sub="pending">待完成<span class="wb-subtab-num" data-pending-num>${tasks.length}</span></button>
           <button class="wb-subtab" data-sub="submitted">已提交<span class="wb-subtab-num" data-submitted-num>…</span></button>
         </div>`;
       inner.appendChild(subBar);
+      const pendingNumEl = subBar.querySelector("[data-pending-num]");
       const submittedNumEl = subBar.querySelector("[data-submitted-num]");
 
       const subPending = document.createElement("div");
@@ -4560,8 +4615,63 @@ function escapeHtml(text) {
         filterBar.hidden = true;
         subPending.appendChild(filterBar);
 
+        const activeListEl = document.createElement("div");
+        subPending.appendChild(activeListEl);
+
+        const activeEmptyEl = document.createElement("div");
+        activeEmptyEl.innerHTML = wbEmptyHtml("当前没有可提交的待办事项");
+        activeEmptyEl.hidden = true;
+        subPending.appendChild(activeEmptyEl);
+
+        const expiredBox = document.createElement("details");
+        expiredBox.className = "wb-expired-box";
+        expiredBox.hidden = true;
+        expiredBox.innerHTML =
+          '<summary class="wb-expired-summary"></summary><div class="wb-expired-list"></div>';
+        const expiredSummary = expiredBox.querySelector(".wb-expired-summary");
+        const expiredListEl = expiredBox.querySelector(".wb-expired-list");
+        subPending.appendChild(expiredBox);
+
         const cards = {};
         const taskCourses = new Map();
+        const expiredIds = new Set();
+        let coursesResolved = false;
+
+        const syncPendingViews = () => {
+          if (seq !== wbTodoLoadSeq) return;
+          const activeItems = wbTodoCards.filter(({ task }) => !expiredIds.has(task.activityId || task.id));
+          const activeCount = activeItems.length;
+          const expiredCount = expiredIds.size;
+
+          wbSetTabCount("todo", activeCount);
+          if (pendingNumEl) pendingNumEl.textContent = String(activeCount);
+          activeEmptyEl.hidden = activeCount > 0;
+          expiredBox.hidden = expiredCount === 0;
+          if (expiredCount > 0) {
+            expiredSummary.textContent = `已过期 · 不可补交 (${expiredCount})`;
+          }
+
+          if (coursesResolved) {
+            const courseCounts = new Map();
+            const pendingById = new Map();
+            activeItems.forEach(({ card, task }) => {
+              const tid = task.activityId || task.id;
+              const info = taskCourses.get(tid);
+              if (info && info.id !== undefined && info.id !== null) {
+                const cid = String(info.id);
+                pendingById.set(cid, (pendingById.get(cid) || 0) + 1);
+              }
+              const courseName = info ? info.name : "未知课程";
+              if (card && card.isConnected) {
+                courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
+              }
+            });
+            wbCoursePendingCounts = pendingById;
+            if (wbCourseGridRerender) wbCourseGridRerender();
+            wbAttachCourseFilter(filterBar, activeItems, activeCount, courseCounts);
+          }
+        };
+
         tasks.forEach((task) => {
           const tid = task.activityId || task.id;
           const card = document.createElement("div");
@@ -4583,7 +4693,7 @@ function escapeHtml(text) {
               }
             }
           });
-          subPending.appendChild(card);
+          activeListEl.appendChild(card);
           cards[tid] = card;
           wbTodoCards.push({ card: card, task: task });
         });
@@ -4592,19 +4702,12 @@ function escapeHtml(text) {
         searchCourses(ids)
           .then((infos) => {
             if (seq !== wbTodoLoadSeq) return;
-            const courseCounts = new Map();
-            const pendingById = new Map();
+            coursesResolved = true;
             tasks.forEach((task) => {
               const tid = task.activityId || task.id;
               const card = cards[tid];
               const info = infos[tid];
-              if (info) {
-                taskCourses.set(tid, info);
-                if (info.id !== undefined && info.id !== null) {
-                  const cid = String(info.id);
-                  pendingById.set(cid, (pendingById.get(cid) || 0) + 1);
-                }
-              }
+              if (info) taskCourses.set(tid, info);
               const courseName = info ? info.name : "未知课程";
               if (card && card.isConnected) {
                 card.dataset.course = courseName;
@@ -4617,19 +4720,26 @@ function escapeHtml(text) {
                   tSpan.textContent = " · " + info.teachers;
                   courseEl.appendChild(tSpan);
                 }
-                courseCounts.set(courseName, (courseCounts.get(courseName) || 0) + 1);
               }
             });
-            wbCoursePendingCounts = pendingById;
-            if (wbCourseGridRerender) wbCourseGridRerender();
-            wbAttachCourseFilter(filterBar, wbTodoCards, tasks.length, courseCounts);
+            syncPendingViews();
           })
           .catch(() => {});
         tasks.forEach((task) => {
           fetchAssignmentInfo(task).then((info) => {
             if (seq !== wbTodoLoadSeq) return;
-            const card = cards[task.activityId || task.id];
-            if (card && card.isConnected && info) wbRenderTodoMeta(card, task, info);
+            const tid = task.activityId || task.id;
+            const card = cards[tid];
+            if (!card || !card.isConnected || !info) return;
+            wbRenderTodoMeta(card, task, info);
+            const d = parseDeadline(task.endTime);
+            const isExpiredLocked = !!(info.noLateSubmit && d && d.getTime() <= Date.now());
+            if (isExpiredLocked && !expiredIds.has(tid)) {
+              expiredIds.add(tid);
+              card.hidden = false;
+              expiredListEl.appendChild(card);
+              syncPendingViews();
+            }
           });
         });
       }
