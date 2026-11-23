@@ -1,7 +1,7 @@
 # ucloud-Enhanced
 
 <p align="center">
-  <img src="https://img.shields.io/badge/版本-2.6.5-blue" alt="版本">
+  <img src="https://img.shields.io/badge/版本-2.7.0-blue" alt="版本">
   <a href="https://opensource.org/licenses/MIT"><img src="https://img.shields.io/badge/License-MIT-yellow.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/平台-北邮云邮教学空间-4A90D9" alt="平台">
 </p>
