@@ -1420,6 +1420,15 @@
     }, 220);
   }
 
+  function wbFormatTeachers(teachers) {
+    const names = String(teachers || "")
+      .split(/[,，、;；]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length <= 2) return names.join("、");
+    return names.slice(0, 2).join("、") + ` 等${names.length}人`;
+  }
+
   function pickTaskTypeLabel(type) {
     const t = Number(type);
     if (t === 1) return "💬 讨论";
@@ -1453,11 +1462,8 @@
     }
     const mode = (info && info.mode) || pickModeName(task.assignmentType);
     const typeLabel = pickTaskTypeLabel(task.type);
-    if (mode) {
-      tags.insertAdjacentHTML(
-        "beforeend",
-        `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
-      );
+    if (mode === "小组作业") {
+      tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">👥 小组作业</span>');
     } else if (typeLabel) {
       tags.insertAdjacentHTML("beforeend", `<span class="wb-mode">${typeLabel}</span>`);
     }
@@ -1732,7 +1738,7 @@
                 if (info && info.teachers) {
                   const tSpan = document.createElement("span");
                   tSpan.className = "wb-course-teacher";
-                  tSpan.textContent = " · " + info.teachers;
+                  tSpan.textContent = " · " + wbFormatTeachers(info.teachers);
                   courseEl.appendChild(tSpan);
                 }
               }
@@ -1795,7 +1801,7 @@
             if (course && course.teachers) {
               const tSpan = document.createElement("span");
               tSpan.className = "wb-course-teacher";
-              tSpan.textContent = " · " + course.teachers;
+              tSpan.textContent = " · " + wbFormatTeachers(course.teachers);
               courseEl.appendChild(tSpan);
             }
 
@@ -1803,11 +1809,8 @@
             const meta = card.querySelector(".wb-meta");
             tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
             const mode = pickModeName(work.assignmentType);
-            if (mode) {
-              tags.insertAdjacentHTML(
-                "beforeend",
-                `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
-              );
+            if (mode === "小组作业") {
+              tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">👥 小组作业</span>');
             }
             const status = wbPickWorkStatus(work);
             if (status) {
@@ -2127,7 +2130,10 @@
           avatar.style.setProperty("--tone-bg-d", tone[2]);
           avatar.style.setProperty("--tone-fg-d", tone[3]);
           item.querySelector(".wb-course-title").textContent = titleText;
-          item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
+          item.querySelector(".wb-course-meta").textContent = [
+            course.teachers ? wbFormatTeachers(course.teachers) : "",
+            course.department,
+          ]
             .filter(Boolean)
             .join(" · ");
           item.querySelector(".wb-pin-btn").addEventListener("click", (e) => {
@@ -2945,11 +2951,8 @@
             tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
           }
           const mode = pickModeName(work.assignmentType);
-          if (mode) {
-            tags.insertAdjacentHTML(
-              "beforeend",
-              `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
-            );
+          if (mode === "小组作业") {
+            tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">👥 小组作业</span>');
           }
           if (status) {
             meta.insertAdjacentHTML(

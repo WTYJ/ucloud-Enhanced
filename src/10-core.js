@@ -2739,9 +2739,10 @@
 
   function fmtDeadline(d, withWeekday = false, now = new Date()) {
     const pad = (n) => String(n).padStart(2, "0");
-    const base =
-      d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-      " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    const datePart =
+      (d.getFullYear() === now.getFullYear() ? "" : d.getFullYear() + "-") +
+      pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    const base = datePart + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
     if (!withWeekday) return base;
     const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const target0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();

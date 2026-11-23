@@ -2834,9 +2834,10 @@ function escapeHtml(text) {
 
   function fmtDeadline(d, withWeekday = false, now = new Date()) {
     const pad = (n) => String(n).padStart(2, "0");
-    const base =
-      d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-      " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    const datePart =
+      (d.getFullYear() === now.getFullYear() ? "" : d.getFullYear() + "-") +
+      pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+    const base = datePart + " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
     if (!withWeekday) return base;
     const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const target0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
@@ -4473,6 +4474,15 @@ function escapeHtml(text) {
     }, 220);
   }
 
+  function wbFormatTeachers(teachers) {
+    const names = String(teachers || "")
+      .split(/[,，、;；]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (names.length <= 2) return names.join("、");
+    return names.slice(0, 2).join("、") + ` 等${names.length}人`;
+  }
+
   function pickTaskTypeLabel(type) {
     const t = Number(type);
     if (t === 1) return "💬 讨论";
@@ -4506,11 +4516,8 @@ function escapeHtml(text) {
     }
     const mode = (info && info.mode) || pickModeName(task.assignmentType);
     const typeLabel = pickTaskTypeLabel(task.type);
-    if (mode) {
-      tags.insertAdjacentHTML(
-        "beforeend",
-        `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
-      );
+    if (mode === "小组作业") {
+      tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">👥 小组作业</span>');
     } else if (typeLabel) {
       tags.insertAdjacentHTML("beforeend", `<span class="wb-mode">${typeLabel}</span>`);
     }
@@ -4785,7 +4792,7 @@ function escapeHtml(text) {
                 if (info && info.teachers) {
                   const tSpan = document.createElement("span");
                   tSpan.className = "wb-course-teacher";
-                  tSpan.textContent = " · " + info.teachers;
+                  tSpan.textContent = " · " + wbFormatTeachers(info.teachers);
                   courseEl.appendChild(tSpan);
                 }
               }
@@ -4848,7 +4855,7 @@ function escapeHtml(text) {
             if (course && course.teachers) {
               const tSpan = document.createElement("span");
               tSpan.className = "wb-course-teacher";
-              tSpan.textContent = " · " + course.teachers;
+              tSpan.textContent = " · " + wbFormatTeachers(course.teachers);
               courseEl.appendChild(tSpan);
             }
 
@@ -4856,11 +4863,8 @@ function escapeHtml(text) {
             const meta = card.querySelector(".wb-meta");
             tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
             const mode = pickModeName(work.assignmentType);
-            if (mode) {
-              tags.insertAdjacentHTML(
-                "beforeend",
-                `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
-              );
+            if (mode === "小组作业") {
+              tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">👥 小组作业</span>');
             }
             const status = wbPickWorkStatus(work);
             if (status) {
@@ -5180,7 +5184,10 @@ function escapeHtml(text) {
           avatar.style.setProperty("--tone-bg-d", tone[2]);
           avatar.style.setProperty("--tone-fg-d", tone[3]);
           item.querySelector(".wb-course-title").textContent = titleText;
-          item.querySelector(".wb-course-meta").textContent = [course.teachers, course.department]
+          item.querySelector(".wb-course-meta").textContent = [
+            course.teachers ? wbFormatTeachers(course.teachers) : "",
+            course.department,
+          ]
             .filter(Boolean)
             .join(" · ");
           item.querySelector(".wb-pin-btn").addEventListener("click", (e) => {
@@ -5998,11 +6005,8 @@ function escapeHtml(text) {
             tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
           }
           const mode = pickModeName(work.assignmentType);
-          if (mode) {
-            tags.insertAdjacentHTML(
-              "beforeend",
-              `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`
-            );
+          if (mode === "小组作业") {
+            tags.insertAdjacentHTML("beforeend", '<span class="wb-mode">👥 小组作业</span>');
           }
           if (status) {
             meta.insertAdjacentHTML(
