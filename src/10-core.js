@@ -1289,11 +1289,14 @@
           gap: 6px;
       }
       #yzHelper-quick .quick-all {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
           background: var(--ue-accent-weak);
           color: var(--ue-accent);
           border: none;
           border-radius: 8px;
-          padding: 6px 11px;
+          padding: 6px 10px;
           font-size: 12px;
           font-weight: 600;
           cursor: pointer;
@@ -1885,6 +1888,8 @@
       });
     }
 
+    const SETTINGS_ICON_SVG =
+      '<svg class="ue-btn-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>';
     const UPDATE_ICON_SVG =
       '<svg class="ue-btn-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>';
 
@@ -1924,7 +1929,7 @@
         ${rows.join("")}
         <div class="quick-footer">
           <div class="quick-footer-btns">
-            <button class="quick-all" id="yzHelper-quick-all">⚙ 全部设置</button>
+            <button class="quick-all" id="yzHelper-quick-all">${SETTINGS_ICON_SVG}<span>全部设置</span></button>
             <button class="quick-check-btn" id="yzHelper-quick-update" title="立即检查新版本">${UPDATE_ICON_SVG}<span>检查更新</span></button>
           </div>
           <span class="quick-ver">v${GM_info.script.version}</span>
