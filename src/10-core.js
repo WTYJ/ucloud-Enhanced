@@ -1056,6 +1056,8 @@
     );
   }
 
+  const UPDATE_IGNORE_SESSION_KEY = "ue_ignored_update_ver";
+
   function showUpdateNotification(newVersion) {
     const { el, close } = createNotify(`
       <div class="notify-title"><span class="notify-dot"></span>发现新版本 v${escapeHtml(newVersion)}</div>
@@ -1063,13 +1065,18 @@
       <div class="notify-actions">
         <button class="notify-btn primary" data-act="update">立即更新</button>
         <button class="notify-btn ghost" data-act="notes">查看日志</button>
-        <button class="notify-btn ghost" data-act="later">稍后提醒</button>
+        <button class="notify-btn ghost" data-act="ignore">暂时忽略</button>
       </div>
     `);
     el.addEventListener("click", (e) => {
       const act = e.target.dataset && e.target.dataset.act;
       if (act === "update") openTab(GM_info.script.downloadURL, { active: true });
       else if (act === "notes") openTab("https://github.com/WTYJ/ucloud-Enhanced/releases", { active: true });
+      else if (act === "ignore") {
+        try {
+          sessionStorage.setItem(UPDATE_IGNORE_SESSION_KEY, String(newVersion));
+        } catch (err) {}
+      }
       if (act) close();
     });
   }
@@ -1120,7 +1127,13 @@
             return false;
           };
           if (isNewer(latestVersion, currentVersion)) {
-            showUpdateNotification(latestVersion);
+            let ignoredVer = "";
+            try {
+              ignoredVer = sessionStorage.getItem(UPDATE_IGNORE_SESSION_KEY) || "";
+            } catch (err) {}
+            if (force || ignoredVer !== latestVersion) {
+              showUpdateNotification(latestVersion);
+            }
           } else if (force) {
             showNotification("已是最新版本", "当前版本 v" + currentVersion);
           }
