@@ -1155,6 +1155,7 @@
       /* ===== 设计变量：品牌蓝主色，亮/暗双主题（独立于页面深色引擎） ===== */
       #yzHelper-ball, #yzHelper-quick, #yzHelper-settings {
           --ue-accent: #2962ff;
+          --ue-accent-text: #2962ff;
           --ue-accent-weak: rgba(41, 98, 255, 0.12);
           --ue-bg: #ffffff;
           --ue-bg-2: #f5f7fa;
@@ -1167,6 +1168,8 @@
       html.ue-dark-mode #yzHelper-ball,
       html.ue-dark-mode #yzHelper-quick,
       html.ue-dark-mode #yzHelper-settings {
+          --ue-accent-text: #93c5fd;
+          --ue-accent-weak: rgba(59, 130, 246, 0.2);
           --ue-bg: #202325;
           --ue-bg-2: #2a2e31;
           --ue-text: #e8eaed;
@@ -1293,16 +1296,17 @@
           align-items: center;
           gap: 4px;
           background: var(--ue-accent-weak);
-          color: var(--ue-accent);
-          border: none;
+          color: var(--ue-accent-text);
+          border: 1px solid rgba(96, 165, 250, 0.25);
           border-radius: 8px;
-          padding: 6px 10px;
+          padding: 5px 10px;
           font-size: 12px;
           font-weight: 600;
           cursor: pointer;
       }
       #yzHelper-quick .quick-all:hover {
           background: var(--ue-accent);
+          border-color: var(--ue-accent);
           color: #fff;
       }
       #yzHelper-quick .quick-check-btn {
