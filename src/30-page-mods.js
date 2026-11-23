@@ -895,7 +895,15 @@
                           await downloadFile(
                             await getPreviewURL(file.id),
                             file.name,
-                            () => !downloading
+                            () => !downloading,
+                            (pct) => {
+                              if (downloading && btn.isConnected) {
+                                btn.textContent =
+                                  pct === null
+                                    ? "取消下载 " + shortName + " (" + (index + 1) + "/" + totalCount + ")"
+                                    : "取消下载 " + shortName + " (" + (index + 1) + "/" + totalCount + " · " + pct + "%)";
+                              }
+                            }
                           );
                         } catch (err) {
                           console.warn("[ucloud-Enhanced] 批量下载单文件失败:", file.name, err);

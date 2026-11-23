@@ -9,12 +9,9 @@
 // @match        https://ucloud.bupt.edu.cn/uclass/*
 // @match        https://ucloud.bupt.edu.cn/office/*
 // @icon         https://ucloud.bupt.edu.cn/favicon.ico
-// @require      https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/nprogress/0.2.0/nprogress.min.js#sha512-bUg5gaqBVaXIJNuebamJ6uex//mjxPk8kljQTdM1SwkNrQD7pjS+PerntUSD+QRWPNJ0tq54/x4zRV8bLrLhZg==
-// @resource     NPROGRESS_CSS https://mirrors.sustech.edu.cn/cdnjs/ajax/libs/nprogress/0.2.0/nprogress.min.css#sha512-42kB9yDlYiCEfx2xVwq0q7hT4uf26FUgSIZBK8uiaEnTdShXjwr8Ip1V4xGJMg3mHkUt9nNuTDxunHF0/EgxLQ==
 // @connect      github.com
 // @connect      raw.githubusercontent.com
 // @connect      cdn.jsdelivr.net
-// @grant        GM_getResourceText
 // @grant        GM_addStyle
 // @grant        GM_setValue
 // @grant        GM_getValue
@@ -583,7 +580,7 @@ function escapeHtml(text) {
   }
 
   const DARK_SKIP_SELECTOR_RE =
-    /ue-dark-mode|#yzHelper-|\.yz-notify|#downloadAllButton|#nprogress/;
+    /ue-dark-mode|#yzHelper-|\.yz-notify|#downloadAllButton/;
 
   function scopeDarkSelector(selectorText) {
     const scoped = [];
@@ -693,8 +690,7 @@ function escapeHtml(text) {
       if (
         txt.includes("#yzHelper-") ||
         txt.includes(".yz-notify") ||
-        txt.includes("html.ue-dark-mode") ||
-        txt.includes("#nprogress")
+        txt.includes("html.ue-dark-mode")
       ) {
         return true;
       }
@@ -950,9 +946,7 @@ function escapeHtml(text) {
   }
 
   // 辅助变量
-  let sumBytes = 0,
-    loadedBytes = 0,
-    downloading = false;
+  let downloading = false;
   let gpage = -1;
   let glist = null;
   let onlinePreview = null;
@@ -962,9 +956,6 @@ function escapeHtml(text) {
     // 注册菜单命令
     registerMenuCommands();
     setupWorkbench();
-
-    const nprogressCSS = GM_getResourceText("NPROGRESS_CSS");
-    GM_addStyle(nprogressCSS);
 
     loadui();
 
@@ -2474,14 +2465,11 @@ function escapeHtml(text) {
     return json;
   }
 
-  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调/进度回调与异常时安全回收进度计数）
+  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调与进度回调）
   async function downloadFile(url, filename, shouldCancel, onProgress) {
     console.debug("Call download");
     const isCancelled = () =>
       typeof shouldCancel === "function" ? !!shouldCancel() : false;
-    NProgress.configure({ trickle: false, speed: 0 });
-    let addedTotal = 0;
-    let addedLoaded = 0;
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -2491,10 +2479,9 @@ function escapeHtml(text) {
       const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
       let blob;
       if (contentLength > 0 && response.body && response.body.getReader) {
-        addedTotal = contentLength;
-        sumBytes += addedTotal;
         const reader = response.body.getReader();
         const chunks = [];
+        let loaded = 0;
         let lastPct = -1;
         while (true) {
           const { done, value } = await reader.read();
@@ -2504,11 +2491,9 @@ function escapeHtml(text) {
             return;
           }
           chunks.push(value);
-          addedLoaded += value.length;
-          loadedBytes += value.length;
-          if (sumBytes > 0) NProgress.set(Math.min(0.99, loadedBytes / sumBytes));
+          loaded += value.length;
           if (typeof onProgress === "function") {
-            const pct = Math.min(99, Math.floor((addedLoaded / contentLength) * 100));
+            const pct = Math.min(99, Math.floor((loaded / contentLength) * 100));
             if (pct !== lastPct) {
               lastPct = pct;
               onProgress(pct);
@@ -2518,7 +2503,6 @@ function escapeHtml(text) {
         blob = new Blob(chunks);
       } else {
         // 服务器未返回 Content-Length 或不支持流式读取时，降级为整块 Blob 下载
-        NProgress.start();
         if (typeof onProgress === "function") onProgress(null);
         blob = await response.blob();
         if (isCancelled()) return;
@@ -2536,10 +2520,6 @@ function escapeHtml(text) {
     } catch (error) {
       console.error("Download failed:", error);
       throw error;
-    } finally {
-      sumBytes = Math.max(0, sumBytes - addedTotal);
-      loadedBytes = Math.max(0, loadedBytes - addedLoaded);
-      if (sumBytes === 0 || isCancelled()) NProgress.done();
     }
   }
 
@@ -2809,12 +2789,17 @@ function escapeHtml(text) {
   // ===== 共享格式化、路由导航、课程列表与资源预览工具（供工作台与原页面模块共用）=====
   const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-  function fmtDeadline(d, withWeekday = false) {
+  function fmtDeadline(d, withWeekday = false, now = new Date()) {
     const pad = (n) => String(n).padStart(2, "0");
     const base =
       d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
       " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
-    return withWeekday ? base + " " + WEEKDAY_NAMES[d.getDay()] : base;
+    if (!withWeekday) return base;
+    const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const target0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const dayDiff = Math.round((target0 - today0) / 86400000);
+    const suffix = dayDiff === 0 ? "今天" : dayDiff === 1 ? "明天" : WEEKDAY_NAMES[d.getDay()];
+    return base + " " + suffix;
   }
 
   // 生成待办详情地址（供工作台与卡片共用；tabOverride 可指定落点页签如 "second" 直达提交页）
@@ -5781,7 +5766,19 @@ function escapeHtml(text) {
             try {
               const url = await getPreviewURL(f.resourceId);
               if (job.cancelled) break;
-              await downloadFile(url, f.resourceName, () => job.cancelled);
+              await downloadFile(
+                url,
+                f.resourceName,
+                () => job.cancelled,
+                (pct) => {
+                  if (!job.cancelled && spanEl.isConnected) {
+                    spanEl.textContent =
+                      pct === null
+                        ? `取消下载 (${i + 1}/${files.length})`
+                        : `取消下载 (${i + 1}/${files.length} · ${pct}%)`;
+                  }
+                }
+              );
             } catch (e) {
               console.warn("[ucloud-Enhanced] 批量下载单文件失败:", f.resourceName, e);
             }
@@ -6946,7 +6943,15 @@ function escapeHtml(text) {
                           await downloadFile(
                             await getPreviewURL(file.id),
                             file.name,
-                            () => !downloading
+                            () => !downloading,
+                            (pct) => {
+                              if (downloading && btn.isConnected) {
+                                btn.textContent =
+                                  pct === null
+                                    ? "取消下载 " + shortName + " (" + (index + 1) + "/" + totalCount + ")"
+                                    : "取消下载 " + shortName + " (" + (index + 1) + "/" + totalCount + " · " + pct + "%)";
+                              }
+                            }
                           );
                         } catch (err) {
                           console.warn("[ucloud-Enhanced] 批量下载单文件失败:", file.name, err);

@@ -485,7 +485,7 @@
   }
 
   const DARK_SKIP_SELECTOR_RE =
-    /ue-dark-mode|#yzHelper-|\.yz-notify|#downloadAllButton|#nprogress/;
+    /ue-dark-mode|#yzHelper-|\.yz-notify|#downloadAllButton/;
 
   function scopeDarkSelector(selectorText) {
     const scoped = [];
@@ -595,8 +595,7 @@
       if (
         txt.includes("#yzHelper-") ||
         txt.includes(".yz-notify") ||
-        txt.includes("html.ue-dark-mode") ||
-        txt.includes("#nprogress")
+        txt.includes("html.ue-dark-mode")
       ) {
         return true;
       }
@@ -852,9 +851,7 @@
   }
 
   // 辅助变量
-  let sumBytes = 0,
-    loadedBytes = 0,
-    downloading = false;
+  let downloading = false;
   let gpage = -1;
   let glist = null;
   let onlinePreview = null;
@@ -864,9 +861,6 @@
     // 注册菜单命令
     registerMenuCommands();
     setupWorkbench();
-
-    const nprogressCSS = GM_getResourceText("NPROGRESS_CSS");
-    GM_addStyle(nprogressCSS);
 
     loadui();
 
@@ -2376,14 +2370,11 @@
     return json;
   }
 
-  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调/进度回调与异常时安全回收进度计数）
+  // 文件下载相关函数（支持无 Content-Length 降级、可选取消回调与进度回调）
   async function downloadFile(url, filename, shouldCancel, onProgress) {
     console.debug("Call download");
     const isCancelled = () =>
       typeof shouldCancel === "function" ? !!shouldCancel() : false;
-    NProgress.configure({ trickle: false, speed: 0 });
-    let addedTotal = 0;
-    let addedLoaded = 0;
     try {
       const response = await fetch(url);
       if (!response.ok) {
@@ -2393,10 +2384,9 @@
       const contentLength = parseInt(response.headers.get("content-length") || "0", 10);
       let blob;
       if (contentLength > 0 && response.body && response.body.getReader) {
-        addedTotal = contentLength;
-        sumBytes += addedTotal;
         const reader = response.body.getReader();
         const chunks = [];
+        let loaded = 0;
         let lastPct = -1;
         while (true) {
           const { done, value } = await reader.read();
@@ -2406,11 +2396,9 @@
             return;
           }
           chunks.push(value);
-          addedLoaded += value.length;
-          loadedBytes += value.length;
-          if (sumBytes > 0) NProgress.set(Math.min(0.99, loadedBytes / sumBytes));
+          loaded += value.length;
           if (typeof onProgress === "function") {
-            const pct = Math.min(99, Math.floor((addedLoaded / contentLength) * 100));
+            const pct = Math.min(99, Math.floor((loaded / contentLength) * 100));
             if (pct !== lastPct) {
               lastPct = pct;
               onProgress(pct);
@@ -2420,7 +2408,6 @@
         blob = new Blob(chunks);
       } else {
         // 服务器未返回 Content-Length 或不支持流式读取时，降级为整块 Blob 下载
-        NProgress.start();
         if (typeof onProgress === "function") onProgress(null);
         blob = await response.blob();
         if (isCancelled()) return;
@@ -2438,10 +2425,6 @@
     } catch (error) {
       console.error("Download failed:", error);
       throw error;
-    } finally {
-      sumBytes = Math.max(0, sumBytes - addedTotal);
-      loadedBytes = Math.max(0, loadedBytes - addedLoaded);
-      if (sumBytes === 0 || isCancelled()) NProgress.done();
     }
   }
 
@@ -2711,12 +2694,17 @@
   // ===== 共享格式化、路由导航、课程列表与资源预览工具（供工作台与原页面模块共用）=====
   const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
 
-  function fmtDeadline(d, withWeekday = false) {
+  function fmtDeadline(d, withWeekday = false, now = new Date()) {
     const pad = (n) => String(n).padStart(2, "0");
     const base =
       d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
       " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
-    return withWeekday ? base + " " + WEEKDAY_NAMES[d.getDay()] : base;
+    if (!withWeekday) return base;
+    const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const target0 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+    const dayDiff = Math.round((target0 - today0) / 86400000);
+    const suffix = dayDiff === 0 ? "今天" : dayDiff === 1 ? "明天" : WEEKDAY_NAMES[d.getDay()];
+    return base + " " + suffix;
   }
 
   // 生成待办详情地址（供工作台与卡片共用；tabOverride 可指定落点页签如 "second" 直达提交页）

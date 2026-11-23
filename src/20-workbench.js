@@ -2756,7 +2756,19 @@
             try {
               const url = await getPreviewURL(f.resourceId);
               if (job.cancelled) break;
-              await downloadFile(url, f.resourceName, () => job.cancelled);
+              await downloadFile(
+                url,
+                f.resourceName,
+                () => job.cancelled,
+                (pct) => {
+                  if (!job.cancelled && spanEl.isConnected) {
+                    spanEl.textContent =
+                      pct === null
+                        ? `取消下载 (${i + 1}/${files.length})`
+                        : `取消下载 (${i + 1}/${files.length} · ${pct}%)`;
+                  }
+                }
+              );
             } catch (e) {
               console.warn("[ucloud-Enhanced] 批量下载单文件失败:", f.resourceName, e);
             }
