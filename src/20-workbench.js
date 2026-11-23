@@ -785,7 +785,44 @@
       flex-wrap: wrap;
       align-items: center;
       gap: 8px;
+      margin-top: 12px;
+    }
+    .wb-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px 24px;
       margin-top: 14px;
+      padding-top: 14px;
+      border-top: 1px solid var(--wb-border);
+    }
+    .wb-detail-field {
+      display: flex;
+      align-items: baseline;
+      gap: 10px;
+      font-size: 13px;
+      line-height: 1.5;
+      min-width: 0;
+    }
+    .wb-detail-field.is-wide { grid-column: 1 / -1; }
+    .wb-detail-k {
+      flex: none;
+      width: 56px;
+      font-size: 12px;
+      color: var(--wb-text-3);
+    }
+    .wb-detail-v {
+      color: var(--wb-text);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+      word-break: break-word;
+    }
+    .wb-detail-v.is-muted { color: var(--wb-text-2); font-weight: 400; }
+    .wb-detail-v.is-ok { color: #16a34a; }
+    :host(.wb-dark) .wb-detail-v.is-ok { color: #4ade80; }
+    .wb-detail-v.is-warn { color: #dc2626; }
+    :host(.wb-dark) .wb-detail-v.is-warn { color: #f87171; }
+    @media (max-width: 560px) {
+      .wb-detail-grid { grid-template-columns: 1fr; }
     }
     .wb-progress-wrap {
       margin-top: 16px;
@@ -2371,6 +2408,10 @@
         hero.appendChild(courseBtn);
       }
 
+      const isValidScore = (v) =>
+        v !== undefined && v !== null && v !== "" && !isNaN(Number(v)) && Number(v) >= 0;
+
+      // 核心状态行（仅放高优先级徽章：状态、倒计时、作业模式）
       const meta = document.createElement("div");
       meta.className = "wb-detail-meta";
       const endTimeStr = d.assignmentEndTime || d.endTime || task.endTime;
@@ -2392,35 +2433,59 @@
             `<span class="wb-chip">${wbFormatSubmittedRemain(endDate)}</span>`
           );
         }
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
-      }
-      const beginDate = parseDeadline(beginTimeStr);
-      if (beginDate) {
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">开始 ${fmtDeadline(beginDate)}</span>`);
       }
       const mode = pickModeName(d.assignmentType !== undefined ? d.assignmentType : task.assignmentType);
       if (mode) {
         meta.insertAdjacentHTML("beforeend", `<span class="wb-mode">${mode === "小组作业" ? "👥" : "👤"} ${mode}</span>`);
       }
-      const fullScore = d.assignmentScore ?? d.fullScore ?? d.score;
-      if (fullScore !== undefined && fullScore !== null && fullScore !== "") {
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">满分 ${escapeHtml(fullScore)}</span>`);
+      if (meta.children.length) hero.appendChild(meta);
+
+      // 结构化属性网格（时间、满分、逾期补交、互评、关联章节）
+      const fields = [];
+      if (endDate) {
+        fields.push({ k: "截止时间", v: fmtDeadline(endDate, true) });
       }
-      const chapterName = (d.chapterName || task.chapterName || "").trim();
-      if (chapterName) {
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">章节：${escapeHtml(chapterName)}</span>`);
+      const beginDate = parseDeadline(beginTimeStr);
+      if (beginDate) {
+        fields.push({ k: "开始时间", v: fmtDeadline(beginDate), cls: "is-muted" });
+      }
+      const fullMark = d.fullMark ?? d.fullScore;
+      if (isValidScore(fullMark)) {
+        fields.push({ k: "作业满分", v: `${fullMark} 分` });
       }
       if (d.isOvertimeCommit !== undefined && d.isOvertimeCommit !== null) {
         const allowLate = Number(d.isOvertimeCommit) === 0;
-        meta.insertAdjacentHTML(
-          "beforeend",
-          `<span class="wb-chip">${allowLate ? "允许逾期补交" : "不可逾期补交"}</span>`
-        );
+        fields.push({
+          k: "逾期补交",
+          v: allowLate ? "允许补交" : "不可补交",
+          cls: allowLate ? "is-ok" : "is-warn",
+        });
       }
       if (Number(d.isOpenEvaluation) === 1) {
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">支持互评</span>`);
+        fields.push({ k: "作业互评", v: "支持互评" });
       }
-      hero.appendChild(meta);
+      const chapterName = (d.chapterName || task.chapterName || "").trim();
+      if (chapterName) {
+        fields.push({ k: "关联章节", v: chapterName, wide: true });
+      }
+      if (fields.length) {
+        const grid = document.createElement("div");
+        grid.className = "wb-detail-grid";
+        fields.forEach(({ k, v, cls, wide }) => {
+          const item = document.createElement("div");
+          item.className = "wb-detail-field" + (wide ? " is-wide" : "");
+          const kEl = document.createElement("span");
+          kEl.className = "wb-detail-k";
+          kEl.textContent = k;
+          const vEl = document.createElement("span");
+          vEl.className = "wb-detail-v" + (cls ? " " + cls : "");
+          vEl.textContent = String(v);
+          item.appendChild(kEl);
+          item.appendChild(vEl);
+          grid.appendChild(item);
+        });
+        hero.appendChild(grid);
+      }
 
       const stat = normalizeStat(d.totalNum, d.noSubmitNum);
       if (stat) {
@@ -2443,8 +2508,8 @@
         const subSt = wbParseWorkStatus(sub);
         const subScore = sub.assignmentScore;
         const groupScore = sub.groupScore;
-        const hasScore = subScore !== undefined && subScore !== null && subScore !== "";
-        const hasGroupScore = groupScore !== undefined && groupScore !== null && groupScore !== "";
+        const hasScore = isValidScore(subScore);
+        const hasGroupScore = isValidScore(groupScore);
         const hasComment = !!(sub.assignmentComment && String(sub.assignmentComment).trim());
         const hasContent = !!(sub.assignmentContent && String(sub.assignmentContent).trim());
         const attIds = Array.isArray(sub.attachmentIds) ? sub.attachmentIds.filter(Boolean) : [];
