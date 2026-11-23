@@ -149,7 +149,7 @@
         autoUpdate: {
           type: 'checkbox',
           label: '自动检查更新',
-          description: '每 2 小时自动检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
+          description: '每次打开页面启动时自动检查一次新版本，发现更新时弹窗提醒（油猴的原生更新是静默的，弹窗能让你感知版本变化）。',
           defaultValue: true
         },
         showConfigButton: {
@@ -870,7 +870,7 @@
     window.addEventListener("load", () => ensureDarkEngine(), { once: true });
     setTimeout(main, 100);
 
-    if (settings.system.autoUpdate) {
+    if (settings.system.autoUpdate && window === window.parent) {
       checkForUpdates();
     }
 
@@ -1082,16 +1082,7 @@
   ];
 
   function checkForUpdates(force = false, onDone) {
-    const lastCheckTime = GM_getValue("lastUpdateCheck", 0);
-    const now = Date.now();
-    const CHECK_INTERVAL = 2 * 60 * 60 * 1000; // 2 小时自动检查间隔
-
-    if (!force && now - lastCheckTime <= CHECK_INTERVAL) {
-      if (onDone) onDone();
-      return;
-    }
-
-    const bustParam = "_t=" + Math.floor(now / 60000);
+    const bustParam = "_t=" + Math.floor(Date.now() / 60000);
     const trySource = (index) => {
       if (index >= UPDATE_CHECK_SOURCES.length) {
         if (force) {
@@ -1116,8 +1107,6 @@
             trySource(index + 1);
             return;
           }
-          // 仅在成功解析到版本号后才写入检查时间戳，避免网络失败锁死冷却期
-          GM_setValue("lastUpdateCheck", now);
           const latestVersion = versionMatch[1];
           const currentVersion = GM_info.script.version;
           // 逐段按数值比较，避免 "1.10" < "1.9" 这类字符串比较误判
@@ -2167,7 +2156,7 @@
 
             <div class="about-update-row">
               <button id="yzHelper-check-update" class="about-btn">立即检查更新</button>
-              <span class="about-update-tip">每 2 小时自动检查一次，也可手动检查</span>
+              <span class="about-update-tip">每次打开页面启动时自动检查，也可手动检查</span>
             </div>
 
             <p class="feedback-note">
