@@ -2500,7 +2500,7 @@
           "beforeend",
           `<div class="wb-progress-wrap">
             <div class="wb-progress-head">
-              <span>班级提交进度（${stat.submitted} / ${stat.total} 人）</span>
+              <span>已交 ${stat.submitted} / ${stat.total} 人</span>
               <span class="wb-progress-pct">${pct}%</span>
             </div>
             <div class="wb-progress-track"><div class="wb-progress-fill" style="width:${pct}%"></div></div>
