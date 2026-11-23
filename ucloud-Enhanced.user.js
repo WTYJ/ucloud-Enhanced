@@ -1346,22 +1346,16 @@ function escapeHtml(text) {
           flex: 1;
           cursor: pointer;
       }
-      #yzHelper-quick .quick-wb-box {
-          margin: 4px 6px 8px;
-          padding: 8px;
-          border-radius: 12px;
-          background: var(--ue-bg-2);
-          border: 1px solid var(--ue-border);
-      }
       #yzHelper-quick .quick-workbench {
           display: flex;
           align-items: center;
           justify-content: center;
           gap: 6px;
-          width: 100%;
+          width: calc(100% - 12px);
+          margin: 4px 6px 8px;
           padding: 9px 12px;
           border: none;
-          border-radius: 9px;
+          border-radius: 10px;
           background: linear-gradient(135deg, #3d7bff, #2962ff);
           color: #fff;
           font-size: 13px;
@@ -1372,28 +1366,6 @@ function escapeHtml(text) {
       }
       #yzHelper-quick .quick-workbench:hover {
           filter: brightness(1.06);
-      }
-      #yzHelper-quick .quick-wb-tabs {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 6px;
-          margin-top: 7px;
-      }
-      #yzHelper-quick .quick-wb-tab {
-          border: 1px solid var(--ue-border);
-          background: var(--ue-bg);
-          color: var(--ue-text-2);
-          border-radius: 7px;
-          padding: 5px 0;
-          font-size: 12px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.15s ease;
-      }
-      #yzHelper-quick .quick-wb-tab:hover {
-          border-color: var(--ue-accent);
-          color: var(--ue-accent);
-          background: var(--ue-accent-weak);
       }
       #yzHelper-quick .quick-footer {
           display: flex;
@@ -2016,14 +1988,7 @@ function escapeHtml(text) {
         `;
       });
       const wbBoxHtml = settings.workbench.entry
-        ? `<div class="quick-wb-box">
-            <button class="quick-workbench" data-wb-open="todo">🧩 打开工作台</button>
-            <div class="quick-wb-tabs">
-              <button class="quick-wb-tab" data-wb-open="todo">待办</button>
-              <button class="quick-wb-tab" data-wb-open="course">课程</button>
-              <button class="quick-wb-tab" data-wb-open="notice">通知</button>
-            </div>
-          </div>`
+        ? `<button class="quick-workbench" data-wb-open="todo">🧩 打开工作台</button>`
         : "";
       quickPanel.innerHTML = `
         ${wbBoxHtml}
