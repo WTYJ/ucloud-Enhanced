@@ -2406,6 +2406,17 @@
       if (fullScore !== undefined && fullScore !== null && fullScore !== "") {
         meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">满分 ${escapeHtml(fullScore)}</span>`);
       }
+      const chapterName = (d.chapterName || task.chapterName || "").trim();
+      if (chapterName) {
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">章节：${escapeHtml(chapterName)}</span>`);
+      }
+      if (d.isOvertimeCommit !== undefined && d.isOvertimeCommit !== null) {
+        const allowLate = Number(d.isOvertimeCommit) === 0;
+        meta.insertAdjacentHTML(
+          "beforeend",
+          `<span class="wb-chip">${allowLate ? "允许逾期补交" : "不可逾期补交"}</span>`
+        );
+      }
       if (Number(d.isOpenEvaluation) === 1) {
         meta.insertAdjacentHTML("beforeend", `<span class="wb-chip">支持互评</span>`);
       }
