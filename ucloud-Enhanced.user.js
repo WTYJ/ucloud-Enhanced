@@ -1629,19 +1629,13 @@ function escapeHtml(text) {
       }
 
       #yzHelper-settings .section-head {
-          margin-bottom: 16px;
+          margin-bottom: 14px;
       }
       #yzHelper-settings .section-title {
           font-size: 16px;
           font-weight: 700;
           color: var(--ue-text);
           letter-spacing: -0.01em;
-      }
-      #yzHelper-settings .section-subtitle {
-          margin-top: 4px;
-          font-size: 12px;
-          line-height: 1.55;
-          color: var(--ue-text-2);
       }
 
       #yzHelper-settings .section-group {
@@ -2291,7 +2285,6 @@ function escapeHtml(text) {
 
     function generateNavSection(sec, isActive = false) {
       const activeClass = isActive ? "active" : "";
-      const subtitleHtml = sec.note ? `<div class="section-subtitle">${sec.note}</div>` : "";
       const groupsHtml = sec.groups
         .map((g) => {
           const titleHtml = g.title ? `<div class="section-group-title">${g.title}</div>` : "";
@@ -2309,7 +2302,6 @@ function escapeHtml(text) {
         <div class="settings-section ${activeClass}" id="section-${sec.id}">
           <div class="section-head">
             <div class="section-title">${sec.title}</div>
-            ${subtitleHtml}
           </div>
           ${groupsHtml}
         </div>
@@ -2346,7 +2338,6 @@ function escapeHtml(text) {
         <div class="settings-section" id="section-about">
           <div class="section-head">
             <div class="section-title">关于助手</div>
-            <div class="section-subtitle">ucloud-Enhanced v${GM_info.script.version} · 以独立工作台为核心的北邮云邮教学空间增强脚本</div>
           </div>
           <div class="about-content">
             <div class="about-card">
@@ -2433,6 +2424,8 @@ function escapeHtml(text) {
           this.classList.add("active");
           const sectionId = "section-" + this.getAttribute("data-section");
           document.getElementById(sectionId).classList.add("active");
+          const contentEl = document.getElementById("yzHelper-settings-content");
+          if (contentEl) contentEl.scrollTop = 0;
         });
       });
 
