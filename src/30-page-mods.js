@@ -1,4 +1,16 @@
   // 仅注入课程名（不改版待办，供“待办显示所属课程”开关使用）
+  function queryTodoCardNodes() {
+    let nodes = Array.from(
+      document.querySelectorAll(".in-progress-section .in-progress-body .in-progress-item")
+    );
+    if (!nodes.length) {
+      nodes = $x(
+        '//*[@id="layout-container"]/div[2]/div[2]/div/div[2]/div[1]/div[3]/div[2]/div/div'
+      );
+    }
+    return nodes;
+  }
+
   async function injectTodoCourseNames(list) {
     if (!list || !list.length) return;
     const ids = list.map((x) => x.activityId).filter(Boolean);
@@ -9,13 +21,14 @@
     } catch (e) {
       return;
     }
-    let nodes = Array.from(
-      document.querySelectorAll(".in-progress-section .in-progress-body .in-progress-item")
-    );
+    let nodes = queryTodoCardNodes();
     if (!nodes.length) {
-      nodes = $x(
-        '//*[@id="layout-container"]/div[2]/div[2]/div/div[2]/div[1]/div[3]/div[2]/div/div'
-      );
+      // 命中本地课程缓存时可能快于平台 Vue 渲染，等待待办卡片挂载后再注入
+      nodes =
+        (await wait(() => {
+          const cur = queryTodoCardNodes();
+          return cur.length ? cur : null;
+        }, 8000, 150)) || [];
     }
     if (!nodes.length) return;
     const byTitle = new Map();
@@ -29,6 +42,7 @@
       const task = byTitle.get(title);
       const info = task && infos[task.activityId];
       const host = node.children && node.children[1];
+      node.dataset.yzCourseDone = "1";
       if (!host || !info) return;
       let el = host.querySelector(".yz-course-line");
       if (!el) {
@@ -646,6 +660,7 @@
           glist = list;
 
           let pageCheckTimer = null;
+          let todoInjecting = false;
           if (homePageObserver) {
             homePageObserver.disconnect();
             homePageObserver = null;
@@ -656,19 +671,28 @@
             // 防抖：任何 DOM 变动都会触发回调，集中处理避免重复解析
             clearTimeout(pageCheckTimer);
             pageCheckTimer = setTimeout(async () => {
+              if (todoInjecting) return;
               const pageElement = document.querySelector(pageIndicatorSelector);
-              if (!pageElement) return;
-
-              // 解析页码
-              const currentPage = parseInt(
-                pageElement.innerHTML.trim().split("/")[0]
+              let pageChanged = false;
+              if (pageElement) {
+                const currentPage = parseInt(
+                  pageElement.innerHTML.trim().split("/")[0]
+                );
+                if (!isNaN(currentPage) && currentPage !== gpage) {
+                  gpage = currentPage;
+                  pageChanged = true;
+                }
+              }
+              const hasUnprocessed = queryTodoCardNodes().some(
+                (n) => !n.querySelector(".yz-course-line") && n.dataset.yzCourseDone !== "1"
               );
-              if (isNaN(currentPage)) return;
-
-              // 页码变化则更新显示
-              if (currentPage !== gpage) {
-                gpage = currentPage;
-                await updateAssignmentDisplay(list);
+              if (pageChanged || hasUnprocessed) {
+                todoInjecting = true;
+                try {
+                  await updateAssignmentDisplay(list);
+                } finally {
+                  todoInjecting = false;
+                }
               }
             }, 120);
           });
