@@ -321,6 +321,7 @@
     .wb-body {
       flex: 1;
       overflow-y: auto;
+      scrollbar-gutter: stable;
       padding: 22px 24px 32px;
       background: var(--wb-canvas);
       box-sizing: border-box;
