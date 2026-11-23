@@ -1213,8 +1213,8 @@
           </div>
           <div class="wb-actions">
             <button class="wb-icon-btn wb-settings" title="助手设置">${WB_ICONS.settings}</button>
-            <button class="wb-icon-btn wb-fullscreen" title="全屏显示">${WB_ICONS.expand}</button>
             <button class="wb-icon-btn wb-refresh" title="刷新当前页签">${WB_ICONS.refresh}</button>
+            <button class="wb-icon-btn wb-fullscreen" title="全屏显示">${WB_ICONS.expand}</button>
             <button class="wb-icon-btn wb-close" title="关闭 (Esc)">${WB_ICONS.close}</button>
           </div>
         </div>
