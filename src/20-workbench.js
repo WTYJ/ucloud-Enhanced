@@ -1466,7 +1466,7 @@
     if (info && info.stat) {
       meta.insertAdjacentHTML(
         "beforeend",
-        `<span class="wb-chip blue">班级已交 ${info.stat.submitted} / ${info.stat.total} 人</span>`
+        `<span class="wb-chip blue">已交 ${info.stat.submitted} / ${info.stat.total} 人</span>`
       );
     }
   }
