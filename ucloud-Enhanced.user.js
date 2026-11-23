@@ -1393,6 +1393,21 @@ function escapeHtml(text) {
           font-size: 12px;
           font-weight: 500;
           cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+      }
+      @keyframes ueSpin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+      }
+      #yzHelper-quick .quick-check-btn .ue-btn-ico,
+      #section-about .about-btn .ue-btn-ico {
+          flex-shrink: 0;
+      }
+      #yzHelper-quick .quick-check-btn.is-loading .ue-btn-ico,
+      #section-about .about-btn.is-loading .ue-btn-ico {
+          animation: ueSpin 0.8s linear infinite;
       }
       #yzHelper-quick .quick-check-btn:hover {
           color: var(--ue-text);
@@ -1615,6 +1630,9 @@ function escapeHtml(text) {
           margin-top: 10px;
       }
       #section-about .about-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
           background: var(--ue-accent);
           color: #fff;
           border: none;
@@ -1949,6 +1967,9 @@ function escapeHtml(text) {
       });
     }
 
+    const UPDATE_ICON_SVG =
+      '<svg class="ue-btn-ico" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><polyline points="21 3 21 9 15 9"/></svg>';
+
     // ===== 快捷面板：工作台直达置顶 + 核心高频开关 =====
     const quickPanel = document.createElement("div");
     quickPanel.id = "yzHelper-quick";
@@ -1986,7 +2007,7 @@ function escapeHtml(text) {
         <div class="quick-footer">
           <div class="quick-footer-btns">
             <button class="quick-all" id="yzHelper-quick-all">⚙ 全部设置</button>
-            <button class="quick-check-btn" id="yzHelper-quick-update" title="立即检查新版本">检查更新</button>
+            <button class="quick-check-btn" id="yzHelper-quick-update" title="立即检查新版本">${UPDATE_ICON_SVG}<span>检查更新</span></button>
           </div>
           <span class="quick-ver">v${GM_info.script.version}</span>
         </div>
@@ -2040,12 +2061,15 @@ function escapeHtml(text) {
       }
       const updBtn = e.target.closest("#yzHelper-quick-update");
       if (updBtn && !updBtn.disabled) {
+        const updLabel = updBtn.querySelector("span");
         updBtn.disabled = true;
-        updBtn.textContent = "检查中…";
+        updBtn.classList.add("is-loading");
+        if (updLabel) updLabel.textContent = "检查中…";
         checkForUpdates(true, () => {
           if (updBtn.isConnected) {
             updBtn.disabled = false;
-            updBtn.textContent = "检查更新";
+            updBtn.classList.remove("is-loading");
+            if (updLabel) updLabel.textContent = "检查更新";
           }
         });
       }
@@ -2250,7 +2274,7 @@ function escapeHtml(text) {
             </p>
 
             <div class="about-update-row">
-              <button id="yzHelper-check-update" class="about-btn">立即检查更新</button>
+              <button id="yzHelper-check-update" class="about-btn">${UPDATE_ICON_SVG}<span>立即检查更新</span></button>
               <span class="about-update-tip">每次打开页面启动时自动检查，也可手动检查</span>
             </div>
 
@@ -2351,15 +2375,18 @@ function escapeHtml(text) {
     // 主面板设置项即改即存
     bindAutoSave(document.getElementById("yzHelper-settings-content"));
 
-    // 关于页：立即检查更新（强制绕过每日一次的节流）
+    // 关于页：立即检查更新
     const checkUpdateBtn = document.getElementById("yzHelper-check-update");
     checkUpdateBtn.addEventListener("click", () => {
+      const labelEl = checkUpdateBtn.querySelector("span");
       checkUpdateBtn.disabled = true;
-      const originalText = checkUpdateBtn.textContent;
-      checkUpdateBtn.textContent = "检查中…";
+      checkUpdateBtn.classList.add("is-loading");
+      const originalText = labelEl ? labelEl.textContent : "立即检查更新";
+      if (labelEl) labelEl.textContent = "检查中…";
       checkForUpdates(true, () => {
         checkUpdateBtn.disabled = false;
-        checkUpdateBtn.textContent = originalText;
+        checkUpdateBtn.classList.remove("is-loading");
+        if (labelEl) labelEl.textContent = originalText;
       });
     });
   }
