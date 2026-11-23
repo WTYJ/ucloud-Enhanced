@@ -2709,12 +2709,14 @@
   }
 
   // ===== 共享格式化、路由导航、课程列表与资源预览工具（供工作台与原页面模块共用）=====
-  function fmtDeadline(d) {
+  const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+  function fmtDeadline(d, withWeekday = false) {
     const pad = (n) => String(n).padStart(2, "0");
-    return (
+    const base =
       d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-      " " + pad(d.getHours()) + ":" + pad(d.getMinutes())
-    );
+      " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    return withWeekday ? base + " " + WEEKDAY_NAMES[d.getDay()] : base;
   }
 
   // 生成待办详情地址（供工作台与卡片共用；tabOverride 可指定落点页签如 "second" 直达提交页）

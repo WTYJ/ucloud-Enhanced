@@ -1403,7 +1403,7 @@
     }
     const d = parseDeadline(task.endTime);
     if (d) {
-      tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(d)}</span>`);
+      tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(d, true)}</span>`);
       const rem = formatRemain(d - Date.now());
       card.dataset.urgency = rem.cls;
       meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
@@ -1763,7 +1763,7 @@
 
             const tags = card.querySelector(".wb-card-tags");
             const meta = card.querySelector(".wb-meta");
-            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
             const mode = pickModeName(work.assignmentType);
             if (mode) {
               tags.insertAdjacentHTML(
@@ -2391,7 +2391,7 @@
             `<span class="wb-chip">${wbFormatSubmittedRemain(endDate)}</span>`
           );
         }
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
       }
       const beginDate = parseDeadline(beginTimeStr);
       if (beginDate) {
@@ -2853,7 +2853,7 @@
           const tags = card.querySelector(".wb-card-tags");
           const meta = card.querySelector(".wb-meta");
           if (endDate) {
-            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
           }
           const mode = pickModeName(work.assignmentType);
           if (mode) {
@@ -2907,7 +2907,7 @@
           const meta = card.querySelector(".wb-meta");
           const hasScore = exam.score !== undefined && exam.score !== null && exam.score !== "";
           if (endDate) {
-            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
             if (!hasScore) {
               const rem = formatRemain(endDate - Date.now());
               if (rem.cls !== "overdue") {

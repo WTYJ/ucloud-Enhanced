@@ -2807,12 +2807,14 @@ function escapeHtml(text) {
   }
 
   // ===== 共享格式化、路由导航、课程列表与资源预览工具（供工作台与原页面模块共用）=====
-  function fmtDeadline(d) {
+  const WEEKDAY_NAMES = ["周日", "周一", "周二", "周三", "周四", "周五", "周六"];
+
+  function fmtDeadline(d, withWeekday = false) {
     const pad = (n) => String(n).padStart(2, "0");
-    return (
+    const base =
       d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate()) +
-      " " + pad(d.getHours()) + ":" + pad(d.getMinutes())
-    );
+      " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
+    return withWeekday ? base + " " + WEEKDAY_NAMES[d.getDay()] : base;
   }
 
   // 生成待办详情地址（供工作台与卡片共用；tabOverride 可指定落点页签如 "second" 直达提交页）
@@ -4426,7 +4428,7 @@ function escapeHtml(text) {
     }
     const d = parseDeadline(task.endTime);
     if (d) {
-      tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(d)}</span>`);
+      tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(d, true)}</span>`);
       const rem = formatRemain(d - Date.now());
       card.dataset.urgency = rem.cls;
       meta.insertAdjacentHTML("beforeend", `<span class="wb-badge ${rem.cls}">${rem.text}</span>`);
@@ -4786,7 +4788,7 @@ function escapeHtml(text) {
 
             const tags = card.querySelector(".wb-card-tags");
             const meta = card.querySelector(".wb-meta");
-            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
             const mode = pickModeName(work.assignmentType);
             if (mode) {
               tags.insertAdjacentHTML(
@@ -5414,7 +5416,7 @@ function escapeHtml(text) {
             `<span class="wb-chip">${wbFormatSubmittedRemain(endDate)}</span>`
           );
         }
-        meta.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+        meta.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
       }
       const beginDate = parseDeadline(beginTimeStr);
       if (beginDate) {
@@ -5876,7 +5878,7 @@ function escapeHtml(text) {
           const tags = card.querySelector(".wb-card-tags");
           const meta = card.querySelector(".wb-meta");
           if (endDate) {
-            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
           }
           const mode = pickModeName(work.assignmentType);
           if (mode) {
@@ -5930,7 +5932,7 @@ function escapeHtml(text) {
           const meta = card.querySelector(".wb-meta");
           const hasScore = exam.score !== undefined && exam.score !== null && exam.score !== "";
           if (endDate) {
-            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate)}</span>`);
+            tags.insertAdjacentHTML("beforeend", `<span class="wb-deadline">截止 ${fmtDeadline(endDate, true)}</span>`);
             if (!hasScore) {
               const rem = formatRemain(endDate - Date.now());
               if (rem.cls !== "overdue") {
