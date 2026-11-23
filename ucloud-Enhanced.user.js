@@ -1247,30 +1247,34 @@ function escapeHtml(text) {
 
   function loadui() {
     GM_addStyle(`
-      /* ===== 设计变量：品牌蓝主色，亮/暗双主题（独立于页面深色引擎） ===== */
+      /* ===== 设计变量：品牌蓝主色，亮/暗双主题（与工作台冷石板色系对齐） ===== */
       #yzHelper-ball, #yzHelper-quick, #yzHelper-settings {
           --ue-accent: #2962ff;
-          --ue-accent-text: #2962ff;
-          --ue-accent-weak: rgba(41, 98, 255, 0.12);
+          --ue-accent-text: #2563eb;
+          --ue-accent-weak: rgba(41, 98, 255, 0.1);
           --ue-bg: #ffffff;
-          --ue-bg-2: #f5f7fa;
-          --ue-text: #1f2329;
-          --ue-text-2: #646a73;
-          --ue-border: rgba(31, 35, 41, 0.09);
-          --ue-shadow: 0 10px 34px rgba(31, 35, 41, 0.18);
-          font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+          --ue-bg-2: #f4f6fa;
+          --ue-sidebar: #f7f8fb;
+          --ue-card: #ffffff;
+          --ue-text: #111827;
+          --ue-text-2: #64748b;
+          --ue-border: rgba(15, 23, 42, 0.08);
+          --ue-shadow: 0 16px 48px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(15, 23, 42, 0.05);
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
       }
       html.ue-dark-mode #yzHelper-ball,
       html.ue-dark-mode #yzHelper-quick,
       html.ue-dark-mode #yzHelper-settings {
           --ue-accent-text: #93c5fd;
-          --ue-accent-weak: rgba(59, 130, 246, 0.2);
-          --ue-bg: #202325;
-          --ue-bg-2: #2a2e31;
-          --ue-text: #e8eaed;
-          --ue-text-2: #9aa0a6;
-          --ue-border: rgba(232, 234, 237, 0.12);
-          --ue-shadow: 0 10px 34px rgba(0, 0, 0, 0.55);
+          --ue-accent-weak: rgba(59, 130, 246, 0.18);
+          --ue-bg: #111318;
+          --ue-bg-2: #181c24;
+          --ue-sidebar: #14171f;
+          --ue-card: #181c24;
+          --ue-text: #eef1f6;
+          --ue-text-2: #8e96a6;
+          --ue-border: rgba(255, 255, 255, 0.08);
+          --ue-shadow: 0 20px 56px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.06);
       }
 
       /* ===== 悬浮球 ===== */
@@ -1452,34 +1456,17 @@ function escapeHtml(text) {
           box-shadow: var(--ue-shadow);
           border-radius: 16px;
           z-index: 2147483500;
-          width: 580px;
-          height: 500px;
+          width: 640px;
+          max-width: calc(100vw - 32px);
+          height: 530px;
+          max-height: calc(100vh - 32px);
           color: var(--ue-text);
           overflow: hidden;
           flex-direction: column;
           display: none;
           opacity: 0;
           transform: translateY(10px) scale(0.98);
-          transition: opacity 0.25s ease, transform 0.25s ease;
-      }
-      #yzHelper-settings .section-note {
-          font-size: 12px;
-          line-height: 1.55;
-          color: var(--ue-text-2);
-          background: var(--ue-accent-weak);
-          border-radius: 10px;
-          padding: 8px 12px;
-          margin-bottom: 12px;
-      }
-      #yzHelper-settings .section-group-title {
-          font-size: 12px;
-          font-weight: 700;
-          color: var(--ue-text-2);
-          letter-spacing: 0.04em;
-          margin: 14px 4px 8px;
-      }
-      #yzHelper-settings .section-group-title:first-child {
-          margin-top: 2px;
+          transition: opacity 0.22s ease, transform 0.22s ease;
       }
       #yzHelper-settings.visible {
           opacity: 1;
@@ -1491,45 +1478,52 @@ function escapeHtml(text) {
           align-items: center;
           gap: 10px;
           padding: 13px 16px;
+          background: var(--ue-bg);
           border-bottom: 1px solid var(--ue-border);
       }
       #yzHelper-header .hd-title {
-          font-size: 15px;
+          font-size: 14.5px;
           font-weight: 700;
           flex: 1;
           display: flex;
           align-items: center;
           gap: 9px;
+          letter-spacing: -0.01em;
       }
       #yzHelper-header .hd-logo {
-          width: 22px;
-          height: 22px;
+          width: 24px;
+          height: 24px;
           border-radius: 7px;
           background: linear-gradient(135deg, #3d7bff, #2962ff);
           color: #fff;
-          display: flex;
+          display: inline-flex;
           align-items: center;
           justify-content: center;
-          font-size: 13px;
+          box-shadow: 0 2px 8px rgba(41, 98, 255, 0.35);
       }
       #yzHelper-header .hd-version {
           font-size: 11px;
-          color: var(--ue-accent);
+          color: var(--ue-accent-text);
           background: var(--ue-accent-weak);
-          padding: 2px 9px;
+          border: 1px solid rgba(96, 165, 250, 0.22);
+          padding: 1px 8px;
           border-radius: 99px;
           font-weight: 600;
+          font-variant-numeric: tabular-nums;
       }
       #yzHelper-header .hd-close {
           border: none;
           background: transparent;
           color: var(--ue-text-2);
-          font-size: 17px;
+          font-size: 15px;
           cursor: pointer;
           width: 28px;
           height: 28px;
           border-radius: 8px;
-          line-height: 1;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          transition: background 0.15s, color 0.15s;
       }
       #yzHelper-header .hd-close:hover {
           background: var(--ue-bg-2);
@@ -1543,54 +1537,87 @@ function escapeHtml(text) {
       }
 
       #yzHelper-settings-sidebar {
-          width: 148px;
-          background: var(--ue-bg-2);
-          padding: 10px 8px;
+          width: 168px;
+          flex-shrink: 0;
+          background: var(--ue-sidebar);
+          padding: 12px 10px;
           border-right: 1px solid var(--ue-border);
           overflow-y: auto;
           display: flex;
           flex-direction: column;
-          gap: 2px;
+          gap: 3px;
           box-sizing: border-box;
       }
 
       #yzHelper-settings-sidebar .menu-item {
-          padding: 9px 10px;
+          position: relative;
+          padding: 8px 10px 8px 12px;
           cursor: pointer;
           font-size: 13px;
+          font-weight: 500;
           color: var(--ue-text-2);
           display: flex;
           align-items: center;
-          gap: 8px;
+          gap: 9px;
           border-radius: 9px;
-          transition: background 0.15s, color 0.15s;
+          user-select: none;
+          transition: background 0.15s ease, color 0.15s ease;
       }
 
       #yzHelper-settings-sidebar .menu-item:hover {
+          background: rgba(148, 163, 184, 0.1);
           color: var(--ue-text);
       }
 
       #yzHelper-settings-sidebar .menu-item.active {
-          background: var(--ue-bg);
-          color: var(--ue-accent);
-          font-weight: 600;
-          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
-      }
-
-      html.ue-dark-mode #yzHelper-settings-sidebar .menu-item.active {
           background: var(--ue-accent-weak);
-          box-shadow: none;
+          color: var(--ue-accent-text);
+          font-weight: 600;
       }
 
-      #yzHelper-settings-sidebar .emoji {
-          font-size: 15px;
+      #yzHelper-settings-sidebar .menu-item.active::before {
+          content: "";
+          position: absolute;
+          left: 0;
+          top: 7px;
+          bottom: 7px;
+          width: 3px;
+          border-radius: 0 3px 3px 0;
+          background: var(--ue-accent);
+      }
+
+      #yzHelper-settings-sidebar .menu-item.is-bottom {
+          margin-top: auto;
+      }
+
+      #yzHelper-settings-sidebar .menu-sep {
+          margin: auto 4px 6px;
+          height: 1px;
+          background: var(--ue-border);
+      }
+
+      #yzHelper-settings-sidebar .nav-ico {
+          width: 15px;
+          height: 15px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          opacity: 0.85;
+      }
+      #yzHelper-settings-sidebar .menu-item.active .nav-ico {
+          opacity: 1;
       }
 
       #yzHelper-settings-content {
           flex: 1;
-          padding: 16px 18px;
+          padding: 18px 22px 24px;
           overflow-y: auto;
+          scrollbar-gutter: stable;
+          scrollbar-width: thin;
           position: relative;
+          background: var(--ue-bg);
+          box-sizing: border-box;
       }
 
       #yzHelper-settings-content .settings-section {
@@ -1601,41 +1628,135 @@ function escapeHtml(text) {
           display: block;
       }
 
-      #section-about .about-content {
-          line-height: 1.7;
+      #yzHelper-settings .section-head {
+          margin-bottom: 16px;
+      }
+      #yzHelper-settings .section-title {
+          font-size: 16px;
+          font-weight: 700;
+          color: var(--ue-text);
+          letter-spacing: -0.01em;
+      }
+      #yzHelper-settings .section-subtitle {
+          margin-top: 4px;
+          font-size: 12px;
+          line-height: 1.55;
+          color: var(--ue-text-2);
+      }
+
+      #yzHelper-settings .section-group {
+          margin-bottom: 16px;
+      }
+      #yzHelper-settings .section-group:last-child {
+          margin-bottom: 0;
+      }
+      #yzHelper-settings .section-group-title {
+          font-size: 11.5px;
+          font-weight: 600;
+          color: var(--ue-text-2);
+          letter-spacing: 0.03em;
+          margin: 0 4px 7px;
+      }
+      #yzHelper-settings .setting-group-card {
+          background: var(--ue-card);
+          border: 1px solid var(--ue-border);
+          border-radius: 12px;
+          overflow: hidden;
+      }
+
+      #yzHelper-settings .setting-item {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 14px;
+          padding: 11px 14px;
+          transition: background 0.14s ease;
+      }
+      #yzHelper-settings .setting-item + .setting-item {
+          border-top: 1px solid var(--ue-border);
+      }
+      #yzHelper-settings .setting-item:hover {
+          background: rgba(148, 163, 184, 0.05);
+      }
+      #yzHelper-settings .setting-info {
+          flex: 1;
+          min-width: 0;
+          cursor: pointer;
+      }
+      #yzHelper-settings .setting-label {
+          display: block;
           font-size: 13.5px;
+          font-weight: 500;
+          color: var(--ue-text);
+          line-height: 1.35;
+      }
+      #yzHelper-settings .setting-desc {
+          display: block;
+          margin-top: 3px;
+          font-size: 11.5px;
+          line-height: 1.45;
+          color: var(--ue-text-2);
+      }
+
+      #section-about .about-content {
+          line-height: 1.68;
+          font-size: 13px;
+          color: var(--ue-text);
+      }
+
+      #section-about .about-card {
+          background: var(--ue-card);
+          border: 1px solid var(--ue-border);
+          border-radius: 12px;
+          padding: 14px 16px;
+          margin-bottom: 12px;
       }
 
       #section-about h4 {
-          margin: 16px 0 8px;
-          font-size: 14.5px;
+          margin: 0 0 8px;
+          font-size: 13px;
+          font-weight: 700;
+          color: var(--ue-text);
       }
 
       #section-about ul {
-          margin: 8px 0;
-          padding-left: 20px;
+          margin: 0;
+          padding-left: 18px;
+          color: var(--ue-text-2);
       }
 
       #section-about li {
-          margin-bottom: 4px;
+          margin-bottom: 5px;
+      }
+      #section-about li strong {
+          color: var(--ue-text);
+          font-weight: 600;
+      }
+
+      #section-about .about-actions {
+          display: flex;
+          flex-wrap: wrap;
+          align-items: center;
+          gap: 8px;
       }
 
       #section-about .github-link {
           display: inline-flex;
           align-items: center;
           padding: 7px 13px;
-          background: var(--ue-bg-2);
+          background: var(--ue-bg);
           border: 1px solid var(--ue-border);
           border-radius: 8px;
           color: var(--ue-text);
           text-decoration: none;
+          font-size: 12.5px;
           font-weight: 500;
-          transition: border-color 0.2s;
+          transition: border-color 0.15s, color 0.15s;
       }
 
       #section-about .github-link:hover {
           border-color: var(--ue-accent);
-          color: var(--ue-accent);
+          color: var(--ue-accent-text);
       }
 
       #section-about .github-icon {
@@ -1643,12 +1764,6 @@ function escapeHtml(text) {
           fill: currentColor;
       }
 
-      #section-about .about-update-row {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-top: 10px;
-      }
       #section-about .about-btn {
           display: inline-flex;
           align-items: center;
@@ -1671,56 +1786,23 @@ function escapeHtml(text) {
           cursor: default;
       }
       #section-about .about-update-tip {
+          margin-top: 8px;
+          font-size: 11.5px;
+          color: var(--ue-text-2);
+      }
+
+      #section-about .feedback-note {
+          margin: 10px 0 0;
           font-size: 12px;
           color: var(--ue-text-2);
       }
 
-
-      #section-about .feedback-note {
-          margin-top: 14px;
-          border-top: 1px solid var(--ue-border);
-          padding-top: 14px;
-          font-size: 13px;
-          color: var(--ue-text-2);
-      }
-
       #section-about a {
-          color: var(--ue-accent);
+          color: var(--ue-accent-text);
+          text-decoration: none;
       }
-
-      #section-about code {
-          background: var(--ue-bg-2);
-          color: var(--ue-text);
-          padding: 0.2em 0.4em;
-          border-radius: 6px;
-          font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, Liberation Mono, monospace;
-          font-size: 85%;
-      }
-
-      #yzHelper-settings .setting-item {
-          margin-bottom: 10px;
-          background: var(--ue-bg-2);
-          border: 1px solid transparent;
-          border-radius: 12px;
-          padding: 10px 12px;
-          transition: border-color 0.15s;
-      }
-      #yzHelper-settings .setting-item:hover {
-          border-color: var(--ue-border);
-      }
-      #yzHelper-settings .setting-toggle {
-          display: flex;
-          align-items: center;
-      }
-      #yzHelper-settings .setting-toggle .switch {
-          order: 2;
-          margin-left: auto;
-      }
-      #yzHelper-settings .setting-label {
-          flex: 1;
-          font-size: 13.5px;
-          font-weight: 500;
-          cursor: pointer;
+      #section-about a:hover {
+          text-decoration: underline;
       }
 
       /* ===== 开关（设置面板与快捷面板共用） ===== */
@@ -1728,8 +1810,8 @@ function escapeHtml(text) {
       #yzHelper-quick .switch {
           position: relative;
           display: inline-block;
-          width: 40px;
-          height: 22px;
+          width: 38px;
+          height: 21px;
           flex-shrink: 0;
       }
       #yzHelper-settings .switch input,
@@ -1746,20 +1828,20 @@ function escapeHtml(text) {
           left: 0;
           right: 0;
           bottom: 0;
-          background-color: rgba(128, 134, 142, 0.4);
-          transition: 0.25s;
+          background-color: rgba(148, 163, 184, 0.35);
+          transition: 0.22s;
           border-radius: 22px;
       }
       #yzHelper-settings .slider:before,
       #yzHelper-quick .slider:before {
           position: absolute;
           content: "";
-          height: 16px;
-          width: 16px;
+          height: 15px;
+          width: 15px;
           left: 3px;
           bottom: 3px;
           background-color: #fff;
-          transition: 0.25s;
+          transition: 0.22s;
           border-radius: 50%;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
       }
@@ -1773,33 +1855,10 @@ function escapeHtml(text) {
       }
       #yzHelper-settings input:checked + .slider:before,
       #yzHelper-quick input:checked + .slider:before {
-          transform: translateX(18px);
+          transform: translateX(17px);
       }
 
-      #yzHelper-settings .setting-description {
-          display: block;
-          margin-left: 0;
-          margin-top: 8px;
-          font-size: 12px;
-          line-height: 1.6;
-          color: var(--ue-text-2);
-          background: transparent;
-          border-left: 3px solid var(--ue-accent);
-          border-radius: 0 6px 6px 0;
-          max-height: 0;
-          overflow: hidden;
-          opacity: 0;
-          transition: all 0.25s ease;
-          padding: 0 12px;
-      }
-
-      #yzHelper-settings .setting-description.visible {
-          max-height: 120px;
-          opacity: 1;
-          padding: 6px 12px;
-      }
-
-      #yzHelper-settings .setting-item .setting-toggle:has(input:disabled) {
+      #yzHelper-settings .setting-item:has(input:disabled) {
           opacity: 0.55;
       }
 
@@ -2111,13 +2170,25 @@ function escapeHtml(text) {
       true
     );
 
-    // ===== 设置中心：以工作台为主导的 5 分类收敛视图（底层 category_key 存储完全兼容）=====
+    // ===== 设置中心：现代冷石板分组卡片视图（底层 category_key 存储完全兼容）=====
+    const SETTINGS_NAV_ICONS = {
+      workbench:
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+      preview:
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>',
+      system:
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>',
+      pagemods:
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
+      about:
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+    };
+
     const SETTINGS_NAV_SECTIONS = [
       {
         id: "workbench",
-        emoji: "🧩",
         title: "工作台与导航",
-        note: "工作台提供独立的待办（含已提交未截止）、课程空间、作业详情（含批改透视）与通知中心。",
+        note: "独立待办（含已提交未截止）、课程空间、作业批改透视与通知中心。",
         groups: [
           {
             title: "工作台体验",
@@ -2131,9 +2202,8 @@ function escapeHtml(text) {
       },
       {
         id: "preview",
-        emoji: "🖼️",
         title: "课件与预览",
-        note: "同时作用于「工作台 → 课程空间 / 作业详情」与平台原网页的课件、附件预览。",
+        note: "同时作用于工作台课程空间 / 作业详情与平台原网页的课件预览。",
         groups: [
           {
             title: "预览引擎",
@@ -2154,8 +2224,8 @@ function escapeHtml(text) {
       },
       {
         id: "system",
-        emoji: "⚙️",
         title: "外观与系统",
+        note: "全局深色模式、悬浮球入口、自动更新与基础体验增强。",
         groups: [
           {
             title: "外观与入口",
@@ -2177,9 +2247,8 @@ function escapeHtml(text) {
       },
       {
         id: "pagemods",
-        emoji: "📄",
         title: "原页面增强",
-        note: "以下开关仅增强云邮平台原网页（不影响独立工作台）。",
+        note: "以下开关仅作用于云邮平台原网页，不影响独立工作台。",
         groups: [
           {
             title: "原页个人主页与作业详情",
@@ -2208,23 +2277,21 @@ function escapeHtml(text) {
       const checkedAttr = value ? "checked" : "";
       return `
         <div class="setting-item">
-          <div class="setting-toggle">
-            <label class="switch">
-              <input type="checkbox" id="${settingId}" ${checkedAttr} ${disabledAttr}>
-              <span class="slider"></span>
-            </label>
-            <span class="setting-label" data-for="description-${settingId}">${item.label}</span>
-          </div>
-          <div class="setting-description" id="description-${settingId}">
-            ${item.description}
-          </div>
+          <label class="setting-info" for="${settingId}">
+            <span class="setting-label">${item.label}</span>
+            <span class="setting-desc">${item.description}</span>
+          </label>
+          <label class="switch">
+            <input type="checkbox" id="${settingId}" ${checkedAttr} ${disabledAttr}>
+            <span class="slider"></span>
+          </label>
         </div>
       `;
     }
 
     function generateNavSection(sec, isActive = false) {
       const activeClass = isActive ? "active" : "";
-      const noteHtml = sec.note ? `<div class="section-note">${sec.note}</div>` : "";
+      const subtitleHtml = sec.note ? `<div class="section-subtitle">${sec.note}</div>` : "";
       const groupsHtml = sec.groups
         .map((g) => {
           const titleHtml = g.title ? `<div class="section-group-title">${g.title}</div>` : "";
@@ -2234,13 +2301,16 @@ function escapeHtml(text) {
               return item ? generateSettingItem(cat, key, item) : "";
             })
             .join("");
-          return titleHtml + itemsHtml;
+          return `<div class="section-group">${titleHtml}<div class="setting-group-card">${itemsHtml}</div></div>`;
         })
         .join("");
 
       return `
         <div class="settings-section ${activeClass}" id="section-${sec.id}">
-          ${noteHtml}
+          <div class="section-head">
+            <div class="section-title">${sec.title}</div>
+            ${subtitleHtml}
+          </div>
           ${groupsHtml}
         </div>
       `;
@@ -2252,14 +2322,15 @@ function escapeHtml(text) {
           const activeClass = index === 0 ? "active" : "";
           return `
             <div class="menu-item ${activeClass}" data-section="${sec.id}">
-              <span class="emoji">${sec.emoji}</span>
+              <span class="nav-ico">${SETTINGS_NAV_ICONS[sec.id] || ""}</span>
               <span>${sec.title}</span>
             </div>
           `;
         }).join("") +
         `
+        <div class="menu-sep"></div>
         <div class="menu-item" data-section="about">
-          <span class="emoji">ℹ️</span>
+          <span class="nav-ico">${SETTINGS_NAV_ICONS.about}</span>
           <span>关于助手</span>
         </div>
       `
@@ -2273,38 +2344,40 @@ function escapeHtml(text) {
 
       sectionsHTML += `
         <div class="settings-section" id="section-about">
+          <div class="section-head">
+            <div class="section-title">关于助手</div>
+            <div class="section-subtitle">ucloud-Enhanced v${GM_info.script.version} · 以独立工作台为核心的北邮云邮教学空间增强脚本</div>
+          </div>
           <div class="about-content">
-            <p><strong>ucloud-Enhanced</strong> 是一款以「独立工作台」为核心的北邮云邮教学空间增强脚本。</p>
-
-            <h4>🚀 核心功能</h4>
-            <ul>
-              <li>🧩 <strong>独立工作台</strong> - 待办（待完成 / 已提交未截止）、课程、通知三合一，支持快捷键与滚动记忆</li>
-              <li>📝 <strong>作业详情与批改透视</strong> - 直接查看要求、附件、班级进度及「我的得分 / 教师评语 / 已交附件」</li>
-              <li>📚 <strong>课程空间</strong> - 课件按章节分组搜索、在线预览、按章节或整课批量下载，本课作业与测试一览</li>
-              <li>🌓 <strong>自动深色模式</strong> - 跟随系统外观即时切换，工作台与原网页亮/暗双主题适配</li>
-              <li>📄 <strong>课件预览与原页增强</strong> - Office365 / 原生 PDF / 内置图片阅读器、解除复制限制与标题优化</li>
-            </ul>
-
-            <h4>🔗 相关链接</h4>
-            <p>
-              <a href="https://github.com/WTYJ/ucloud-Enhanced/" target="_blank" class="github-link">
-                <svg class="github-icon" height="16" width="16" viewBox="0 0 16 16" aria-hidden="true">
-                  <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path>
-                </svg>
-                <span>GitHub 项目主页</span>
-              </a>
-            </p>
-
-            <div class="about-update-row">
-              <button id="yzHelper-check-update" class="about-btn">${UPDATE_ICON_SVG}<span>立即检查更新</span></button>
-              <span class="about-update-tip">每次打开页面启动时自动检查，也可手动检查</span>
+            <div class="about-card">
+              <h4>核心功能</h4>
+              <ul>
+                <li><strong>独立工作台</strong>：待办（待完成 / 已提交 / 折叠过期不可补交）、课程、通知三合一，支持全屏与滚动记忆</li>
+                <li><strong>作业详情与批改透视</strong>：直接查看要求、附件、班级进度及得分、评语与已交附件</li>
+                <li><strong>课程空间</strong>：课件按章节搜索、在线预览与单文件/批量实时进度下载，本课作业与测试一览</li>
+                <li><strong>自动深色模式</strong>：CSSOM 引擎跟随系统即时切换，覆盖一级平台与二级云邮空间</li>
+                <li><strong>预览与原页增强</strong>：Office 365 / 浏览器原生 PDF 预览、解除复制限制与标题优化</li>
+              </ul>
             </div>
 
-            <p class="feedback-note">
-              如有问题或建议，请通过
-              <a href="https://github.com/WTYJ/ucloud-Enhanced/issues" target="_blank">GitHub Issues</a>
-              提交反馈。
-            </p>
+            <div class="about-card">
+              <h4>更新与反馈</h4>
+              <div class="about-actions">
+                <button id="yzHelper-check-update" class="about-btn">${UPDATE_ICON_SVG}<span>立即检查更新</span></button>
+                <a href="https://github.com/WTYJ/ucloud-Enhanced/" target="_blank" class="github-link">
+                  <svg class="github-icon" height="15" width="15" viewBox="0 0 16 16" aria-hidden="true">
+                    <path d="M8 0c4.42 0 8 3.58 8 8a8.013 8.013 0 0 1-5.45 7.59c-.4.08-.55-.17-.55-.38 0-.27.01-1.13.01-2.2 0-.75-.25-1.23-.54-1.48 1.78-.2 3.65-.88 3.65-3.95 0-.88-.31-1.59-.82-2.15.08-.2.36-1.02-.08-2.12 0 0-.67-.22-2.2.82-.64-.18-1.32-.27-2-.27-.68 0-1.36.09-2 .27-1.53-1.03-2.2-.82-2.2-.82-.44 1.1-.16 1.92-.08 2.12-.51.56-.82 1.28-.82 2.15 0 3.06 1.86 3.75 3.64 3.95-.23.2-.44.55-.51 1.07-.46.21-1.61.55-2.33-.66-.15-.24-.6-.83-1.23-.82-.67.01-.27.38.01.53.34.19.73.9.82 1.13.16.45.68 1.31 2.69.94 0 .67.01 1.3.01 1.49 0 .21-.15.45-.55.38A7.995 7.995 0 0 1 0 8c0-4.42 3.58-8 8-8Z"></path>
+                  </svg>
+                  <span>GitHub 主页</span>
+                </a>
+              </div>
+              <div class="about-update-tip">每次打开页面启动时自动检查，也可随时手动检查</div>
+              <p class="feedback-note">
+                遇到问题或有新建议，欢迎前往
+                <a href="https://github.com/WTYJ/ucloud-Enhanced/issues" target="_blank">GitHub Issues</a>
+                提交反馈。
+              </p>
+            </div>
           </div>
         </div>
       `;
@@ -2318,7 +2391,7 @@ function escapeHtml(text) {
     const header = `
       <div id="yzHelper-header">
         <div class="hd-title">
-          <span class="hd-logo">⚙</span>
+          <span class="hd-logo">${SETTINGS_ICON_SVG}</span>
           <span>云邮教学空间助手</span>
           <span class="hd-version">v${GM_info.script.version}</span>
         </div>
@@ -2346,7 +2419,6 @@ function escapeHtml(text) {
       .querySelectorAll("#yzHelper-settings-sidebar .menu-item")
       .forEach((item) => {
         item.addEventListener("click", function () {
-          // 移除所有菜单项的活动状态
           document
             .querySelectorAll("#yzHelper-settings-sidebar .menu-item")
             .forEach((i) => {
@@ -2361,33 +2433,8 @@ function escapeHtml(text) {
           this.classList.add("active");
           const sectionId = "section-" + this.getAttribute("data-section");
           document.getElementById(sectionId).classList.add("active");
-
-          // 隐藏所有设置描述
-          document.querySelectorAll(".setting-description").forEach((desc) => {
-            desc.classList.remove("visible");
-          });
         });
       });
-
-    // 设置描述显示/隐藏功能
-    document.querySelectorAll("#yzHelper-settings .setting-label").forEach((label) => {
-      label.addEventListener("click", function () {
-        const descriptionId = this.getAttribute("data-for");
-        if (!descriptionId) return;
-        const description = document.getElementById(descriptionId);
-        if (!description) return;
-
-        // 隐藏所有其他描述
-        document.querySelectorAll(".setting-description").forEach((desc) => {
-          if (desc.id !== descriptionId) {
-            desc.classList.remove("visible");
-          }
-        });
-
-        // 切换当前描述的可见性
-        description.classList.toggle("visible");
-      });
-    });
 
     // 主面板关闭按钮
     document
