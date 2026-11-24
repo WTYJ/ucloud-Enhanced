@@ -1041,7 +1041,7 @@
           justify-content: center;
           font-size: 20px;
           cursor: pointer;
-          z-index: 10000;
+          z-index: 2147483200;
           box-shadow: 0 4px 14px rgba(41, 98, 255, 0.42);
           opacity: 0.72;
           transition: opacity 0.2s, transform 0.2s;
@@ -1070,7 +1070,7 @@
           border: 1px solid var(--ue-border);
           border-radius: 14px;
           box-shadow: var(--ue-shadow);
-          z-index: 10000;
+          z-index: 2147483300;
           padding: 10px;
           display: none;
           color: var(--ue-text);
@@ -1823,8 +1823,11 @@
           </div>
         `;
       });
+      const isWbOpen = typeof wbState !== "undefined" && wbState.open;
       const wbBoxHtml = settings.workbench.entry
-        ? `<button class="quick-workbench" data-wb-open="todo">🧩 打开工作台</button>`
+        ? `<button class="quick-workbench" data-wb-open="${isWbOpen ? "close" : "todo"}">${
+            isWbOpen ? "🧩 关闭工作台" : "🧩 打开工作台"
+          }</button>`
         : "";
       quickPanel.innerHTML = `
         ${wbBoxHtml}
@@ -1877,7 +1880,8 @@
       if (wbBtn) {
         const targetTab = wbBtn.getAttribute("data-wb-open") || "todo";
         closeQuickPanel();
-        wbOpen(targetTab);
+        if (targetTab === "close") wbClose();
+        else wbOpen(targetTab);
         return;
       }
       if (e.target.closest("#yzHelper-quick-all")) {

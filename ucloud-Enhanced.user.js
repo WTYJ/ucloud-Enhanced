@@ -1136,7 +1136,7 @@ function escapeHtml(text) {
           justify-content: center;
           font-size: 20px;
           cursor: pointer;
-          z-index: 10000;
+          z-index: 2147483200;
           box-shadow: 0 4px 14px rgba(41, 98, 255, 0.42);
           opacity: 0.72;
           transition: opacity 0.2s, transform 0.2s;
@@ -1165,7 +1165,7 @@ function escapeHtml(text) {
           border: 1px solid var(--ue-border);
           border-radius: 14px;
           box-shadow: var(--ue-shadow);
-          z-index: 10000;
+          z-index: 2147483300;
           padding: 10px;
           display: none;
           color: var(--ue-text);
@@ -1918,8 +1918,11 @@ function escapeHtml(text) {
           </div>
         `;
       });
+      const isWbOpen = typeof wbState !== "undefined" && wbState.open;
       const wbBoxHtml = settings.workbench.entry
-        ? `<button class="quick-workbench" data-wb-open="todo">🧩 打开工作台</button>`
+        ? `<button class="quick-workbench" data-wb-open="${isWbOpen ? "close" : "todo"}">${
+            isWbOpen ? "🧩 关闭工作台" : "🧩 打开工作台"
+          }</button>`
         : "";
       quickPanel.innerHTML = `
         ${wbBoxHtml}
@@ -1972,7 +1975,8 @@ function escapeHtml(text) {
       if (wbBtn) {
         const targetTab = wbBtn.getAttribute("data-wb-open") || "todo";
         closeQuickPanel();
-        wbOpen(targetTab);
+        if (targetTab === "close") wbClose();
+        else wbOpen(targetTab);
         return;
       }
       if (e.target.closest("#yzHelper-quick-all")) {
@@ -2973,8 +2977,6 @@ function escapeHtml(text) {
       '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
     star:
       '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>',
-    settings:
-      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
     empty:
       '<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M8 15s1.5-2 4-2 4 2 4 2"/><line x1="9" y1="9" x2="9.01" y2="9"/><line x1="15" y1="9" x2="15.01" y2="9"/></svg>',
   };
@@ -4149,7 +4151,6 @@ function escapeHtml(text) {
             <button class="wb-tab" data-tab="notice">通知<span class="wb-tab-count"></span></button>
           </div>
           <div class="wb-actions">
-            <button class="wb-icon-btn wb-settings" title="助手设置">${WB_ICONS.settings}</button>
             <button class="wb-icon-btn wb-refresh" title="刷新当前页签">${WB_ICONS.refresh}</button>
             <button class="wb-icon-btn wb-fullscreen" title="全屏显示">${WB_ICONS.expand}</button>
             <button class="wb-icon-btn wb-close" title="关闭 (Esc)">${WB_ICONS.close}</button>
@@ -4166,7 +4167,6 @@ function escapeHtml(text) {
     document.body.appendChild(wbHost);
     wbRoot.querySelector(".wb-mask").addEventListener("click", wbClose);
     wbRoot.querySelector(".wb-close").addEventListener("click", wbClose);
-    wbRoot.querySelector(".wb-settings").addEventListener("click", toggleSettingsPanel);
     wbRoot.querySelector(".wb-fullscreen").addEventListener("click", () => {
       const next = !settings.workbench.fullscreen;
       settings.workbench.fullscreen = next;
@@ -5955,6 +5955,11 @@ function escapeHtml(text) {
         const settingsEl = document.getElementById("yzHelper-settings");
         if (settingsEl && settingsEl.classList.contains("visible")) {
           toggleSettingsPanel();
+          return;
+        }
+        const quickEl = document.getElementById("yzHelper-quick");
+        if (quickEl && quickEl.classList.contains("visible")) {
+          quickEl.classList.remove("visible");
           return;
         }
       }
