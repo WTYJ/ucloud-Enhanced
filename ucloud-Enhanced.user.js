@@ -2,7 +2,7 @@
 // @name         ucloud-Enhanced
 // @namespace    https://github.com/WTYJ/ucloud-Enhanced
 // @version      2.7.3
-// @description  独立工作台（待办/课程/通知/资源一站式管理），自动深色模式，修复 ticket 跳转循环，Office 365 与浏览器原生 PDF 预览，作业所属课程直达，解除复制限制，课件下载增强，优化页面标题
+// @description  独立工作台（待办/课程/通知/资源一站式管理），自动深色模式，Office 365 与浏览器原生 PDF 预览，作业所属课程直达，解除复制限制，课件下载增强，优化页面标题
 // @author       WTYJ (基于 uarix/ucloud-Evolved 二次开发)
 // @match        https://ucloud.bupt.edu.cn/*
 // @match        https://ucloud.bupt.edu.cn/uclass/course.html*
@@ -223,12 +223,6 @@ function escapeHtml(text) {
           description: '跟随操作系统的深色外观自动切换（系统切换时即时生效）；关闭后始终使用浅色主题。',
           defaultValue: true
         },
-        fixTicketBug: {
-          type: 'checkbox',
-          label: '修复 ticket 跳转问题',
-          description: '修复登录过期后，重新登录出现"无法获取 ticket"提示的问题。',
-          defaultValue: true
-        },
         betterTitle: {
           type: 'checkbox',
           label: '优化页面标题',
@@ -268,209 +262,6 @@ function escapeHtml(text) {
       settings[category][key] = GM_getValue(settingId, item.defaultValue);
     });
   });
-
-  // ===== 修复 SSO ticket 跳转循环与残留（document-start 阶段即介入）=====
-  // 公开前端源码实锤的两处平台原生 Bug：
-  // 1) 一级主页（根路径 /）：CAS service 正确，但前端用 s.substring(0, s.lastIndexOf("#")) 截取 ticket；
-  //    若回跳 URL（/?ticket=ST-xxx）末尾无 "#"，lastIndexOf("#") 为 -1，ticket 被截成空串导致报
-  //    "ticket获取用户账号失败" / "账号或密码错误"；根路径首页路由为 "#/"（不可补 "#/index"，否则 404）。
-  // 2) 二级主页（/uclass）：前端写死了坏的 service=http://ucloud.bupt.edu.cn/uclass，任何落在 /uclass 的
-  //    ?ticket= 第 1 次即必败；应在 document-start 立刻中止并借道根路径无感换票，拿完 iClass-token 后
-  //    再自动跳回 /uclass/#/index（不带 ?ticket=）走 checkRole() 进入二级主页。
-  function ensureTicketHash(urlStr) {
-    try {
-      const u = new URL(urlStr);
-      if (!u.searchParams.has("ticket") || u.hash) return null;
-      const hash = u.pathname.startsWith("/uclass") ? "#/index" : "#/";
-      return u.pathname + u.search + hash;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function stripTicketFromUrl(urlStr) {
-    try {
-      const u = new URL(urlStr);
-      if (!u.searchParams.has("ticket")) return null;
-      u.searchParams.delete("ticket");
-      const qs = u.searchParams.toString();
-      return u.pathname + (qs ? "?" + qs : "") + u.hash;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  function isTicketLoginRoute(hashStr) {
-    const h = String(hashStr || "");
-    return !h || h === "#" || h === "#/" || h.startsWith("#/index");
-  }
-
-  const UCLASS_RETURN_KEY = "ue_return_to_uclass";
-
-  function markReturnToUclass(nowMs = Date.now()) {
-    try {
-      sessionStorage.setItem(UCLASS_RETURN_KEY, String(nowMs));
-    } catch (e) {}
-  }
-
-  function shouldReturnToUclass(nowMs = Date.now()) {
-    try {
-      const ts = parseInt(sessionStorage.getItem(UCLASS_RETURN_KEY) || "0", 10);
-      return ts > 0 && nowMs - ts < 60000;
-    } catch (e) {
-      return false;
-    }
-  }
-
-  function clearReturnToUclass() {
-    try {
-      sessionStorage.removeItem(UCLASS_RETURN_KEY);
-    } catch (e) {}
-  }
-
-  function recordUclassTicketAttempt(nowMs = Date.now()) {
-    const KEY = "ue_uclass_ticket_loop";
-    try {
-      const raw = sessionStorage.getItem(KEY) || "";
-      const [cntStr, tsStr] = raw.split("|");
-      const prevCnt = parseInt(cntStr, 10) || 0;
-      const prevTs = parseInt(tsStr, 10) || 0;
-      const nextCnt = nowMs - prevTs < 15000 ? prevCnt + 1 : 1;
-      sessionStorage.setItem(KEY, `${nextCnt}|${nowMs}`);
-      return nextCnt;
-    } catch (e) {
-      return 1;
-    }
-  }
-
-  function clearUclassTicketAttempt() {
-    try {
-      sessionStorage.removeItem("ue_uclass_ticket_loop");
-    } catch (e) {}
-  }
-
-  function installTicketRedirectFix() {
-    if (!settings.system.fixTicketBug) return;
-    const hasTicket = new URLSearchParams(location.search).has("ticket");
-    const isUclass = location.pathname.startsWith("/uclass");
-    const needReturn = !isUclass && shouldReturnToUclass();
-    if (!hasTicket && !needReturn) return;
-
-    // 场景 A：一级主页根路径 https://ucloud.bupt.edu.cn/（有效 CAS service 落地页）
-    if (!isUclass) {
-      if (hasTicket) {
-        clearUclassTicketAttempt();
-        // 关键修复：根路径前端用 ticket.substring(0, lastIndexOf("#")) 解析 ticket，
-        // 必须立即补上 "#/"（不能补 "#/index" 否则 404），防止 ticket 被截为空字符串
-        const patched = ensureTicketHash(location.href);
-        if (patched) {
-          try {
-            history.replaceState(null, "", patched);
-          } catch (e) {}
-        }
-      }
-      if (window !== window.parent) return;
-      const startAt = Date.now();
-      const waitToken = setInterval(() => {
-        if (getCookie("iClass-token")) {
-          clearInterval(waitToken);
-          // 无刷新清理根路径地址栏上的 ?ticket=
-          const cleanUrl = stripTicketFromUrl(location.href);
-          if (cleanUrl) {
-            try {
-              history.replaceState(null, "", cleanUrl);
-            } catch (e) {}
-          }
-          // 仅当本次是从 /uclass 借道过来换票时，才自动返回 /uclass/#/index
-          if (shouldReturnToUclass()) {
-            clearReturnToUclass();
-            setTimeout(() => {
-              location.replace("https://ucloud.bupt.edu.cn/uclass/#/index");
-            }, 300);
-          }
-          return;
-        }
-        if (Date.now() - startAt > 15000) {
-          clearInterval(waitToken);
-          if (needReturn) clearReturnToUclass();
-        }
-      }, 150);
-      return;
-    }
-
-    // 场景 B：/uclass 路径带 ?ticket=
-    if (window !== window.parent) {
-      const patched = ensureTicketHash(location.href);
-      if (patched) {
-        try {
-          history.replaceState(null, "", patched);
-        } catch (e) {}
-      }
-      return;
-    }
-
-    const cleanIfLoggedIn = () => {
-      if (!new URLSearchParams(location.search).has("ticket")) return true;
-      if (isTicketLoginRoute(location.hash)) return false;
-      clearUclassTicketAttempt();
-      clearReturnToUclass();
-      const cleanUrl = stripTicketFromUrl(location.href);
-      if (cleanUrl) {
-        try {
-          history.replaceState(null, "", cleanUrl);
-        } catch (e) {}
-      }
-      return true;
-    };
-
-    // 若已在业务路由（如 #/student/homePage）残留旧 ticket，立即无刷新剥离
-    if (cleanIfLoggedIn()) return;
-
-    // 落在 /uclass 登录页且带 ?ticket=：第 1 次即中止加载并借道根路径走正确 CAS service 换票
-    // （15 秒内超过 2 次则熔断，防止极端异常下死循环）
-    const attempts = recordUclassTicketAttempt();
-    if (attempts <= 2) {
-      markReturnToUclass();
-      if (window.stop) {
-        try {
-          window.stop();
-        } catch (e) {}
-      }
-      location.replace("https://ucloud.bupt.edu.cn/");
-      return;
-    }
-
-    // 熔断兜底：补齐 #/index 交由平台自身处理，登录离开登录页后剥离 ?ticket=
-    const patchedWithHash = ensureTicketHash(location.href);
-    if (patchedWithHash) {
-      try {
-        history.replaceState(null, "", patchedWithHash);
-      } catch (e) {}
-    }
-    let done = false;
-    let pollTimer = null;
-    const finish = () => {
-      if (done) return;
-      if (!cleanIfLoggedIn()) return;
-      done = true;
-      window.removeEventListener("hashchange", finish);
-      if (pollTimer) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-      }
-    };
-    window.addEventListener("hashchange", finish);
-    const startAt = Date.now();
-    pollTimer = setInterval(() => {
-      if (done || Date.now() - startAt > 20000) {
-        clearInterval(pollTimer);
-        pollTimer = null;
-        return;
-      }
-      finish();
-    }, 250);
-  }
-  installTicketRedirectFix();
 
   // ===== 深色模式 v2：CSSOM 样式表自动重写（全站兜底）+ 手写现代色板精调（对齐工作台）=====
   // 彻底告别逐 DOM 元素 getComputedStyle 遍历与 pointerover 监听：
@@ -2289,7 +2080,6 @@ function escapeHtml(text) {
             items: [
               ["system", "betterTitle"],
               ["system", "unlockCopy"],
-              ["system", "fixTicketBug"],
             ],
           },
         ],
